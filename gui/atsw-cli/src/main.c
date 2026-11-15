@@ -504,6 +504,46 @@ static int dictamen( const char *path, const char *serie, const char *id )
     return 0;
 }
 
+/* proyecto ruta P SERIE MODELO EXT: la ruta de un fichero del modelo, la que
+   compone lib/proyecto (pr_ruta) y no otra. Es para el extra Python del
+   asistente, que llama a art con rutas: asi la regla de donde vive cada
+   fichero sigue teniendo un solo dueno. MODELO «datos» es el nodo de datos
+   de la serie en esa muestra. EXT es .inp, .pre o .out. No lee ni escribe
+   nada; dice si el fichero existe.                                       */
+static int proyecto_ruta( const char *path, const char *serie, const char *id, const char *ext )
+{
+    char      why[512], r[PR_RUTA];
+    Proyecto *p = abre( path, why, sizeof why );
+    int       hay;
+
+    if ( !p ) return falla( "%s", why );
+    if ( strcmp( ext, ".inp" ) && strcmp( ext, ".pre" ) && strcmp( ext, ".out" ) )
+        { g_free( p ); return falla( "«%s»: la extensión es .inp, .pre o .out.", ext ); }
+    if ( !strcmp( id, "datos" ) )
+        {
+        id = pr_datos_de( p, serie, muestra );
+        if ( !id || !*id ) { g_free( p ); return falla( "%s no tiene datos en esa muestra.", serie ); }
+        }
+    if ( pr_modelo_idx( p, serie, muestra, id ) < 0 )
+        { g_free( p ); return falla( "«%s» no es un modelo de %s en esa muestra.", id, serie ); }
+    if ( pr_ruta( p, serie, muestra, id, ext, r, sizeof r ) != 0 )
+        { g_free( p ); return falla( "No pude componer la ruta." ); }
+    hay = g_file_test( r, G_FILE_TEST_EXISTS );
+    if ( json )
+        {
+        GString *t = g_string_new( "{\"ok\": true, " );
+
+        js_par( t, "modelo", id ); g_string_append( t, ", " );
+        js_par( t, "ruta", r );
+        g_string_append_printf( t, ", \"existe\": %s}\n", hay ? "true" : "false" );
+        fputs( t->str, stdout );
+        g_string_free( t, TRUE );
+        }
+    else printf( "%s\n", r );
+    g_free( p );
+    return hay ? 0 : 1;
+}
+
 /* ------------------------------------------------------------------------ */
 /* ecuacion: el modelo estimado, como lo escribe el motor                   */
 /* ------------------------------------------------------------------------ */
@@ -2527,6 +2567,7 @@ static void uso( FILE *f )
            "  proyecto razon P SERIE MODELO TEXTO\n"
            "  proyecto elige P SERIE MODELO RAZON\n"
            "  proyecto caso-nuevo P SERIE/MODELO SERIE/MODELO...   (la salida primero)\n"
+           "  proyecto ruta P SERIE MODELO|datos .inp|.pre|.out   la ruta del fichero (estado 1 si no existe)\n"
            "  caso-estima P CASO [--enlace E->S:b,r,s]... [--desde cNN] [--diagonal]\n"
            "              [--prever H [--evaluar W]]   drtran sobre el caso\n"
            "  dictamen P SERIE MODELO               la diagnosis del .out\n"
@@ -2631,6 +2672,8 @@ int main( int argc, char **argv )
         return 0;
         }
     if ( ES( 0, "proyecto" ) && ES( 1, "ver" ) && npos == 3 ) return proyecto_ver( pos[2] );
+    if ( ES( 0, "proyecto" ) && ES( 1, "ruta" ) && npos == 6 )
+        return proyecto_ruta( pos[2], pos[3], pos[4], pos[5] );
     if ( ES( 0, "proyecto" ) && ES( 1, "nuevo" ) && npos == 4 )
         return proyecto_deriva( pos[2], pos[3], NULL );
     if ( ES( 0, "proyecto" ) && ES( 1, "itera" ) && npos == 5 )

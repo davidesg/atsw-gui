@@ -80,6 +80,18 @@ mira "version --json" '[ "$("$CLI" --json version | campo "d[\"ok\"]")" = True ]
 mira "proyecto ver --json: cuatro modelos" \
      '[ "$("$CLI" --json proyecto ver "$Y" | campo "len(d[\"modelos\"])")" = 4 ]'
 
+# proyecto ruta: la de lib/proyecto, para el extra Python del asistente
+# (sin comparar la cadena: en Windows el separador de lib/proyecto es otro)
+RUTA=$("$CLI" proyecto ruta "$Y" RIPC m01 .out)
+mira "proyecto ruta: el .out de RIPC/m01, el que hay" \
+     '[ -f "$RUTA" ] && cmp -s "$RUTA" "$P/RIPC/work/RIPC_m01.out" && case "$RUTA" in *RIPC_m01.out) true ;; *) false ;; esac'
+mira "proyecto ruta datos: el nodo de datos de la serie" \
+     '[ "$("$CLI" --json proyecto ruta "$Y" RIPC datos .inp | campo "d[\"modelo\"]")" = m00 ]'
+mira "proyecto ruta de un fichero que no está: estado 1" \
+     '! "$CLI" proyecto ruta "$Y" RIPC m00 .out >/dev/null 2>&1'
+mira "proyecto ruta con otra extensión: no" \
+     '"$CLI" proyecto ruta "$Y" RIPC m01 .csv 2>&1 | grep -q "es .inp, .pre o .out"'
+
 # dictamen: el mismo de la ventana (dx_dictamen sobre el .out)
 J=$("$CLI" --json dictamen "$Y" RIPC m01)
 mira "dictamen --json: se lee y trae sus líneas" \

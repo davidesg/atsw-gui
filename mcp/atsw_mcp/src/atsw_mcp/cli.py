@@ -15,10 +15,12 @@ fase 0):
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from atsw_mcp import comun
@@ -113,3 +115,53 @@ def abre_caso(caso: str, corrida: str = "") -> str:
     if corrida:
         cmd += ["--modelo", comprueba_id("el modelo del caso", corrida)]
     return _aparte(cmd, f"el caso {caso} en drtran_gui")
+
+
+def ruta(serie: str, modelo: str, ext: str, muestra: str = "") -> str:
+    """El fichero de un modelo, como lo compone lib/proyecto (atsw-cli proyecto
+    ruta). Solo para el extra Python, que llama a art con rutas; el asistente
+    nunca las ve. modelo «datos» es el nodo de datos de la serie."""
+    try:
+        return atsw_cli("proyecto", "ruta", serie, modelo, ext, muestra=muestra)
+    except NoSePuede as e:
+        if "no es un modelo" in str(e) or "no tiene datos" in str(e):
+            raise
+        raise NoSePuede(f"{serie}/{modelo} no tiene {ext}: ¿está estimado?") from None
+
+
+def extra(orden: str, args: dict, objeto: str, paso: str, timeout: float | None = None) -> str:
+    """Una herramienta de art-python (el extra [python]) en un proceso aparte,
+    python -m atsw_mcp.extra. Lo que corre queda en costes.csv con via: python,
+    como pide §7.7: el coste de un paso no depende de por donde se dio."""
+    if comun.extra_disponible("art") == "no":
+        raise NoSePuede("esta herramienta es del extra Python, que no está instalado "
+                        "(atsw-gui-mcp[python]: Asistente ▸ «Instalar el asistente…», o "
+                        "uv pip install 'atsw-gui-mcp[python]'). Sin él, sigue con lo que hay en C.")
+    if timeout is None:
+        timeout = float(os.environ.get("ATSW_PLAZO_MOTOR_S", "300") or 300)
+    t0 = time.monotonic()
+    try:
+        r = subprocess.run([sys.executable, "-m", "atsw_mcp.extra", orden, json.dumps(args)],
+                           stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise NoSePuede(f"art no terminó en {timeout:g} s; se ha parado") from None
+    pared = time.monotonic() - t0
+    lineas = [l for l in r.stdout.splitlines() if l.startswith("{")]
+    try:
+        d = json.loads(lineas[-1])
+    except (IndexError, ValueError):
+        raise NoSePuede(f"el proceso de art salió con {r.returncode} sin respuesta: "
+                        f"{(r.stderr or '').strip()[-400:]}") from None
+    try:
+        atsw_cli("coste", "apunta", "--motor", f"art {comun.extra_disponible('art')}",
+                 "--paso", paso, "--cpu", f"{d.get('cpu', 0.0):.3f}", "--pared", f"{pared:.3f}",
+                 "--via", "python", "--objeto", objeto, "--quien", "atsw-mcp", "--por", "asistente")
+    except NoSePuede:
+        pass                    # el coste no para el análisis: se apunta si se puede
+    if "error" in d:
+        raise NoSePuede(f"art: {d['error']}")
+    texto = d.get("texto", "")
+    if texto.startswith("❌ Error:") or texto.startswith("⛔"):
+        raise NoSePuede("art: " + texto.split(":", 1)[-1].strip()[:1500])
+    return texto

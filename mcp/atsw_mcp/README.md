@@ -85,6 +85,23 @@ Como en atsw-us, los nombres son los de drtran en Python.
 
 Prueba: `tests/mt.py`, también en la CI de Linux.
 
+## atsw-sis: los sistemas (VARMA)
+
+`atsw-sis` lleva los casos de SIM (motor drvarma) con lib/sistema —la misma
+orden que arma sim_gui— y lib/outvarma. Primer paso del hito: la parte VARMA.
+
+| herramienta | qué hace | sobre |
+|---|---|---|
+| `guion_map` | las series, sus modelos y los casos | `atsw-cli proyecto ver` |
+| `load_pre` | el caso de SIM, con las series en el orden del sistema (el de Cholesky) | `atsw-cli proyecto caso-nuevo --motor drvarma` |
+| `run_gate` | N1, la puerta del diagonal, y las CCF de sus residuos par a par (N2) | `atsw-cli caso-puerta` |
+| `estimate` | N3/N4, un VARMA como corrida: `p`, `q`, `diagcov`, `links`, `zeros`, `from_run`; la LR, Hosking, JB y la tabla de drvarma | `atsw-cli caso-estima` |
+| `open_case` | el caso en sim_gui | `sim_gui --caso` |
+
+Los nombres son los de sima. El VEC, la simplificación, la estructura, la
+evaluación y la previsión llegan en los pasos siguientes. Prueba:
+`tests/sis.py`, en la CI de Linux.
+
 ## Para la fase 1b: los procesos, con la entrada cerrada
 
 La CI de la fase 0 lo ha medido. **En Windows, un proceso lanzado desde

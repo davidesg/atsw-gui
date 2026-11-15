@@ -428,8 +428,8 @@ mira "formales --familia mal escrita: estado 1, y dice por qué" \
 DRT="$R/engines/drtran/bin/drtran$EXE"
 "$CLI" proyecto caso-nuevo "$YP" ES/m01 WTI/m01 --motor drtran --razon "ES <- WTI" > /dev/null
 "$CLI" proyecto caso-nuevo "$YP" ES/m01 WTI/m01 --motor drvarma --razon "el sistema" > /dev/null
-mira "caso-estima de un caso de SIM: no es de drtran (estado 1)" \
-     '"$CLI" caso-estima "$YP" C2 2>&1 | grep -q "sim_gui"'
+mira "caso-estima de un caso de SIM sin --p --q: un VARMA los lleva (estado 1)" \
+     '"$CLI" caso-estima "$YP" C2 2>&1 | grep -q -- "--p N --q N"'
 mira "caso-estima con un enlace mal escrito: estado 1, y dice cómo es" \
      '"$CLI" caso-estima "$YP" C1 --enlace "WTI-ES:0,0,1" 2>&1 | grep -q "ENTRADA->SALIDA"'
 if [ -x "$DRT" ]; then
@@ -477,6 +477,41 @@ if [ -x "$DRT" ]; then
 fi
 mira "caso-estima --evaluar sin --prever: estado 1, y lo dice" \
      '"$CLI" caso-estima "$YP" C1 --evaluar 150 2>&1 | grep -q "prever H"'
+
+# los casos de SIM (motor drvarma): la puerta y el VARMA, con lib/sistema --la
+# orden de sim_gui-- y lib/outvarma. Sobre una copia de jenkins_alavi, cuyo C1
+# es de SIM. Los numeros son los de drvarma sobre esos .pre: la puerta suma
+# -579.345662, y el VARMA(1,0) completo da -560.335924, LR = 38.0211 con 3 g.l.
+DRV="$R/engines/drvarma/bin/drvarma$EXE"
+PS="$WORK/proy_sis"; cp -R "$R/docs/ejemplos/jenkins_alavi" "$PS"; YS="$PS/proyecto.yaml"; rm -f "$PS/costes.csv"
+mira "caso-estima de SIM sin la puerta: antes, la puerta (estado 1)" \
+     '"$CLI" caso-estima "$YS" C1 --p 1 --q 0 2>&1 | grep -q "caso-puerta"'
+mira "caso-puerta de un caso de MT: no es de SIM (estado 1)" \
+     '"$CLI" caso-puerta "$YP" C1 2>&1 | grep -q "caso-estima"'
+if [ -x "$DRV" ]; then
+    J=$("$CLI" --json caso-puerta "$YS" C1 --por asistente)
+    mira "caso-puerta: pasa, y la suma es la de drvarma C (-579.345662)" \
+         '[ "$(printf "%s\n" "$J" | campo "d[\"pasa\"] and abs(d[\"suma\"] + 579.345662) < 1e-5")" = True ]'
+    mira "caso-puerta: las CCF del par, con los retardos fuera de banda" \
+         '[ "$(printf "%s\n" "$J" | campo "len(d[\"ccf\"]) == 1 and d[\"ccf\"][0][\"k_pos\"] == \"1\"")" = True ]'
+    mira "caso-puerta: un artefacto del caso, no una corrida; su línea en costes.csv" \
+         '[ -f "$PS/_casos/C1/work/C1_puerta.out" ] && ! grep -q "C1/puerta:" "$YS" &&
+          grep -q ",atsw-cli,asistente,C1/puerta,puerta,drvarma" "$PS/costes.csv"'
+    J=$("$CLI" --json caso-estima "$YS" C1 --p 1 --q 0 --razon "el VARMA(1,0)")
+    mira "caso-estima de SIM: c00, el VARMA(1,0), logL -560.335924 y LR 38.0211 (3 g.l.)" \
+         '[ "$(printf "%s\n" "$J" | campo "d[\"corrida\"] == \"c00\" and abs(d[\"logl\"] + 560.335924) < 1e-5 and abs(d[\"lr\"] - 38.0211) < 1e-3 and d[\"lr_df\"] == 3")" = True ]'
+    mira "caso-estima de SIM: la tabla de drvarma, con los cruzados por su nombre" \
+         'printf "%s\n" "$J" | campo "d[\"tabla\"]" | grep -q "AR1\[MINK<-MUSKRAT\]"'
+    J=$("$CLI" --json caso-estima "$YS" C1 --p 1 --q 0 --enlace "MINK<-MUSKRAT" --desde c00 --razon "un enlace")
+    J2=$("$CLI" --json caso-estima "$YS" C1 --p 1 --q 0 --cero "AR1[MUSKRAT<-MINK]" --desde c00 --razon "un cero")
+    mira "caso-estima de SIM: --enlace y --cero dan el mismo modelo (c01 y c02, hijas de c00)" \
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"corrida\"], d[\"padre\"], round(d[\"logl\"], 5))")" = "('"'"'c01'"'"', '"'"'c00'"'"', -564.75446)" ] &&
+          [ "$(printf "%s\n" "$J2" | campo "(d[\"corrida\"], round(d[\"logl\"], 5))")" = "('"'"'c02'"'"', -564.75446)" ]'
+    mira "caso-estima de SIM con un enlace mal escrito: estado 1, y dice cómo es" \
+         '"$CLI" caso-estima "$YS" C1 --p 1 --q 0 --enlace "MINK-MUSKRAT" 2>&1 | grep -q "A<-B"'
+    mira "caso-estima de SIM: el motor es el de C (drvarma 5), no el de Python" \
+         'grep -q "^Program *: drvarma 5" "$PS/_casos/C1/work/C1_c00.out"'
+fi
 
 # formales: los contrastes del modelo estimado, con las mismas funciones que
 # las dos ventanas de la madre (lib/formales). Los numeros son los de art que

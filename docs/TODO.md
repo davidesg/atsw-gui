@@ -832,7 +832,24 @@ afectados.
     `--desde`; el juez es drtran, y si rechaza un nombre su mensaje sale en
     el fallo. `caso-estima` devuelve la tabla de parámetros del `.out` tal
     cual, de donde salen los nombres. En atsw-mt, `estimate(constraints=…)`.
-  - Lo siguiente del bloque: atsw-sis y la fase 2.
+  - **atsw-sis, primer paso: el VARMA (15-nov-2026).** `atsw-cli
+    caso-puerta` (la puerta del diagonal, artefacto del caso, con las CCF de
+    sus residuos par a par) y `caso-estima` de un caso de SIM (`--p --q
+    --diagcov --enlace A<-B --cero`), con lib/sistema y lib/outvarma, como
+    sim_gui; la corrida solo se guarda si drvarma deja resultados. El buscador
+    de motores de atsw-cli mira ya `engines/drvarma` y `engines/drvec`: sin
+    ellos, el PATH daba el drvarma de Python. En atsw-sis, `guion_map`,
+    `load_pre`, `run_gate`, `estimate` y `open_case`, con los nombres de sima,
+    y las instrucciones de sima recortadas a la parte VARMA.
+  - **Lo que falta de atsw-sis, por PR:** (2) el rango y el VEC, con la
+    exogeneidad débil (`rank_test`, `estimate_vec`, `test_restriction`);
+    (3) la simplificación y si es una red (`simplify`, `structure`); (4) la
+    previsión, la evaluación y las bandas (`forecast`, `evaluate`,
+    `impulse_response`, `variance_decomposition`, `irf_bands`). La lógica que
+    hoy vive en los ficheros GTK de sim_gui (la clasificación del ajuste, las
+    LR de la estructura, el emparejamiento de los errores de la evaluación)
+    se mueve a lib/ antes de usarla desde atsw-cli.
+  - Y después, la fase 2.
 
 ---
 

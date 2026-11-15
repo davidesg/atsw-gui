@@ -27,7 +27,7 @@ from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-SERVIDORES = {"atsw-us": "US", "atsw-mt": "MT", "atsw-sis": "VARMA"}
+SERVIDORES = {"atsw-us": "US", "atsw-mt": "MT", "atsw-sis": "SIM"}
 HERRAMIENTAS = {"version", "estado"}
 EXTRA_DE = {"atsw-us": "art", "atsw-mt": "drtran", "atsw-sis": "sima"}
 

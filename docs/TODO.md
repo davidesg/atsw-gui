@@ -827,7 +827,12 @@ afectados.
     La sobreparametrización de art son los pares con |r| ≥ 0,7, y eso ya lo
     da `diagnose` en C. Quedan en art-python, sin portar: verificar un
     óptimo, comparar versiones y `guided_intervention`.
-  - Lo siguiente del bloque: el `.cns` de atsw-mt, atsw-sis y la fase 2.
+  - **El `.cns` de atsw-mt (15-nov-2026):** `atsw-cli caso-estima
+    --restriccion "NOMBRE = VALOR"` (se repite), detrás de las heredadas de
+    `--desde`; el juez es drtran, y si rechaza un nombre su mensaje sale en
+    el fallo. `caso-estima` devuelve la tabla de parámetros del `.out` tal
+    cual, de donde salen los nombres. En atsw-mt, `estimate(constraints=…)`.
+  - Lo siguiente del bloque: atsw-sis y la fase 2.
 
 ---
 

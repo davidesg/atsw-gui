@@ -77,6 +77,14 @@ async def corre(raiz: Path, w: Path) -> None:
             check("C2/c01" in res and "enlaces dados" in res, "estimate: c01, con el enlace dado", res)
             res = await t("estimate", case="C2", reason="con previsión", from_run="c01", horizon=5)
             check("C2/c02" in res and "FORECAST REPORT" in res, "estimate prever: la tabla de la salida", res)
+            res = await t("estimate", case="C2", reason="la covarianza libre", from_run="c01",
+                          constraints=["q[2,1] = free"])
+            check("C2/c03" in res and "q[2,1]" in res and "Log-likelihood" in res,
+                  "estimate constraints: c03, con la covarianza libre en la tabla", res)
+            res = await t("estimate", case="C2", reason="mal", from_run="c01",
+                          constraints=["omega9[1] = 0"])
+            check(res.startswith("No se pudo") and "unknown parameter" in res,
+                  "estimate con un slot que no existe: lo dice drtran", res)
             res = await t("estimate", case="C2", reason="mal", links=["MUSKRAT-MINK:0,0,1"])
             check(res.startswith("No se pudo") and "ENTRADA->SALIDA" in res,
                   "estimate con un enlace mal escrito: lo dice", res)

@@ -36,6 +36,9 @@ EL CAMINO
    from_run: la corrida de la que parte (hereda su red y sus restricciones);
    diagonal: el ajuste sin transferencias, la referencia. Devuelve la
    diagnosis: cuántos contrastes de adecuación y de exogeneidad no pasan.
+   constraints: el .cns, «NOMBRE = VALOR» con los nombres de la tabla
+   (q[2,1] = free libera una covarianza; omega1[1] = 0 fija; a = b
+   comparte); se heredan de from_run y drtran las juzga.
    horizon H: la previsión; window W (con horizon): la evaluación fuera de
    muestra y, frente al diagonal con la misma ventana, el cociente de RMSE y
    Diebold-Mariano por horizonte. Es la prueba de que la transferencia sirve
@@ -46,6 +49,10 @@ EL CAMINO
 LOS NOMBRES
 - Las herramientas y sus argumentos se llaman como sus parejas de drtran
   (en Python): la misma orden hace lo mismo en las dos suites.
+
+CADA CORRIDA devuelve la tabla de parámetros de drtran: preséntala TAL CUAL,
+en un bloque de código; no la rehagas (los retardos del numerador RESTAN:
+w(B) = w0 - w1 B - ...). De ella salen los nombres de las restricciones.
 
 REGLAS
 - Las series y los modelos se dicen como SERIE/MODELO («IPC/m03»).
@@ -113,14 +120,21 @@ def crea():
 
     @app.tool()
     def estimate(case: str, reason: str, links: list[str] | None = None, from_run: str = "",
-                 diagonal: bool = False, horizon: int = 0, window: int = 0) -> str:
+                 diagonal: bool = False, horizon: int = 0, window: int = 0,
+                 constraints: list[str] | None = None) -> str:
         """Una corrida del caso con drtran: con los links «ENTRADA->SALIDA:b,r,s»
         (nombres de serie del proyecto), con la red de la corrida from_run, o sin red
         (con una entrada, drtran identifica b, r y s). diagonal: sin transferencias.
         Si drtran no deja resultados, no queda la corrida. La razón es obligatoria.
         horizon H: la previsión a H pasos; window W (con horizon): la evaluación fuera
         de muestra con una ventana de estimación de W, y frente al diagonal (el cociente
-        de RMSE y Diebold-Mariano por horizonte: ¿mejora la transferencia la previsión?)."""
+        de RMSE y Diebold-Mariano por horizonte: ¿mejora la transferencia la previsión?).
+        constraints: líneas del .cns, «NOMBRE = VALOR», con los nombres de la tabla de
+        parámetros: «q[2,1] = free» (liberar una covarianza, que nacen fijas en cero),
+        «omega1[1] = 0» (fijar), «delta1[1] = delta2[1]» (compartir), productos y
+        combinaciones lineales. Van detrás de las heredadas de from_run, y la última
+        sobre un slot manda. drtran las juzga: un nombre que no tiene no deja corrida.
+        Devuelve la tabla de parámetros del .out, tal cual."""
         def f():
             if not reason.strip():
                 raise cli.NoSePuede("la razón no puede ir vacía")
@@ -135,6 +149,8 @@ def crea():
                 a += ["--prever", str(int(horizon))]
             if window:
                 a += ["--evaluar", str(int(window))]
+            for r in constraints or []:
+                a += ["--restriccion", r]
             a += ["--razon", reason, "--por", "asistente"]
             return cli.atsw_cli(*a)
         return _hazlo(f)

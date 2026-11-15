@@ -78,7 +78,7 @@ drtran_gui.
 | `guion_map` | las series, sus modelos y los casos | `atsw-cli proyecto ver` |
 | `identify_link` | la CCF preblanqueada de cada entrada: b, s, la exogeneidad | `atsw-cli prewhiten` |
 | `load_pre` | el caso: la salida primero, sus entradas, lo que se cruza y su razón | `atsw-cli proyecto caso-nuevo` |
-| `estimate` | una corrida del caso: con `links`, con la red de otra corrida (`from_run`) o sin red; `horizon` y `window`, la previsión y la evaluación frente al diagonal | `atsw-cli caso-estima` |
+| `estimate` | una corrida del caso: con `links`, con la red de otra corrida (`from_run`) o sin red; `constraints`, las líneas del `.cns`; `horizon` y `window`, la previsión y la evaluación frente al diagonal. Devuelve la tabla de parámetros | `atsw-cli caso-estima` |
 | `open_case` | el caso en drtran_gui | `drtran_gui --caso` |
 
 Como en atsw-us, los nombres son los de drtran en Python.

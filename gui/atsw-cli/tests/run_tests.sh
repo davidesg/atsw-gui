@@ -95,9 +95,9 @@ mira "proyecto ruta con otra extensión: no" \
 # dictamen: el mismo de la ventana (dx_dictamen sobre el .out)
 J=$("$CLI" --json dictamen "$Y" RIPC m01)
 mira "dictamen --json: se lee y trae sus líneas" \
-     '[ "$(echo "$J" | campo "d[\"ok\"] and len(d[\"lineas\"]) >= 5")" = True ]'
+     '[ "$(printf "%s\n" "$J" | campo "d[\"ok\"] and len(d[\"lineas\"]) >= 5")" = True ]'
 mira "dictamen: la estimación convergió" \
-     '[ "$(echo "$J" | campo "d[\"lineas\"][0][\"estado\"]")" = cuadra ]'
+     '[ "$(printf "%s\n" "$J" | campo "d[\"lineas\"][0][\"estado\"]")" = cuadra ]'
 
 # ecuacion: el bloque de estimaciones del .out, tal cual, con sus t. Con printf
 # y no echo: el JSON lleva \n escapados, y el echo de sh (dash, macOS) los
@@ -118,17 +118,17 @@ mira "ecuacion de un modelo sin estimar: lo dice" '[ $rc -ne 0 ]'
 # raices: los números de test_raices (art.roots)
 J=$("$CLI" --json raices factores "$Y" en4 m01)
 mira "raices factores: el AR(18) en nueve pares" \
-     '[ "$(echo "$J" | campo "len(d[\"factores\"][0][\"partes\"])")" = 9 ]'
+     '[ "$(printf "%s\n" "$J" | campo "len(d[\"factores\"][0][\"partes\"])")" = 9 ]'
 mira "raices factores: el par más cercano, d = 0.948, periodo 2.40" \
-     '[ "$(echo "$J" | campo "round(d[\"factores\"][0][\"partes\"][0][\"d\"],3) == 0.948 and round(d[\"factores\"][0][\"partes\"][0][\"periodo\"],2) == 2.4")" = True ]'
+     '[ "$(printf "%s\n" "$J" | campo "round(d[\"factores\"][0][\"partes\"][0][\"d\"],3) == 0.948 and round(d[\"factores\"][0][\"partes\"][0][\"periodo\"],2) == 2.4")" = True ]'
 
 # itera: el .pre del padre, byte a byte, al .inp del hijo, con su razón
 J=$("$CLI" --json proyecto itera "$Y" RIPC m01 --razon "seguir desde el óptimo")
-H=$(echo "$J" | campo "d[\"modelo\"]")
+H=$(printf "%s\n" "$J" | campo "d[\"modelo\"]")
 mira "itera: nace m02" '[ "$H" = m02 ]'
 mira "itera: el .inp es el .pre del padre" 'cmp -s "$P/RIPC/work/RIPC_m01.pre" "$P/RIPC/work/RIPC_m02.inp"'
 mira "itera: la ruta del JSON es absoluta y es la del .inp" \
-     '[ -f "$(echo "$J" | campo "d[\"inp\"]")" ]'
+     '[ -f "$(printf "%s\n" "$J" | campo "d[\"inp\"]")" ]'
 V=$("$CLI" --json proyecto ver "$Y")
 mira "itera: el linaje y la razón, en el manifiesto" \
      '[ "$(echo "$V" | campo "[(m[\"padre\"], m[\"razon\"]) for m in d[\"modelos\"] if m[\"serie\"]==\"RIPC\" and m[\"id\"]==\"m02\"][0]")" = "('"'"'m01'"'"', '"'"'seguir desde el óptimo'"'"')" ]'
@@ -149,20 +149,20 @@ mira "elige: uno solo elegido en la serie" \
 
 # caso-nuevo: con el sha256 de cada .pre
 J=$("$CLI" --json proyecto caso-nuevo "$Y" RIPC/m01 en4/m01 --titulo "prueba")
-mira "caso-nuevo: C1" '[ "$(echo "$J" | campo "d[\"caso\"]")" = C1 ]'
+mira "caso-nuevo: C1" '[ "$(printf "%s\n" "$J" | campo "d[\"caso\"]")" = C1 ]'
 SHA=$("$PY" -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$P/RIPC/work/RIPC_m01.pre")
 mira "caso-nuevo: el sha del .pre en el manifiesto" 'grep -q "$SHA" "$Y"'
 mira "caso-nuevo: un modelo sin estimar no entra" \
      '! "$CLI" proyecto caso-nuevo "$Y" RIPC/m03 en4/m01 2>/dev/null'
 J=$("$CLI" --json proyecto caso-nuevo "$Y" RIPC/m01 en4/m01 --motor drvarma --titulo "sistema")
-mira "caso-nuevo --motor drvarma: un caso de SIM" '[ "$(echo "$J" | campo "d[\"motor\"]")" = drvarma ]'
+mira "caso-nuevo --motor drvarma: un caso de SIM" '[ "$(printf "%s\n" "$J" | campo "d[\"motor\"]")" = drvarma ]'
 mira "caso-nuevo --motor: solo drtran o drvarma" \
      '! "$CLI" proyecto caso-nuevo "$Y" RIPC/m01 en4/m01 --motor fue 2>/dev/null'
 
 # raices factorizado: los nueve AR(2), y fue los estima con la misma
 # verosimilitud que el AR(18)
 J=$("$CLI" --json raices factorizado "$Y" en4 m01)
-F=$(echo "$J" | campo "d[\"inp\"]")
+F=$(printf "%s\n" "$J" | campo "d[\"inp\"]")
 mira "raices factorizado: el hijo, con nueve factores AR de orden 2" \
      'grep -A1 "regular AR operators" "$F" | grep -q "^9 2 2 2 2 2 2 2 2 2"'
 if [ -x "$FUE" ]; then
@@ -174,7 +174,7 @@ if [ -x "$FUE" ]; then
          '"$PY" -c "import sys; sys.exit(0 if abs($L1-($L0)) < 1e-4 else 1)"'
 fi
 mira "raices factorizado: el ya factorizado no se vuelve a partir (estado 1)" \
-     '! "$CLI" raices factorizado "$Y" en4 "$(echo "$J" | campo "d[\"modelo\"]")" 2>/dev/null'
+     '! "$CLI" raices factorizado "$Y" en4 "$(printf "%s\n" "$J" | campo "d[\"modelo\"]")" 2>/dev/null'
 
 # prever: fue -f y fuf desde el .pre, sin tocar el modelo (fue -f reestima y
 # reescribia el .out: la C3 de AUDITORIA-procesos). Una serie mensual (RIPC) y
@@ -185,7 +185,7 @@ if [ -x "$FUE" ] && [ -x "$FUF" ]; then
     H=$(cksum < "$PV/RIPC/work/RIPC_m01.out")
     J=$("$CLI" --json prever "$YV" RIPC m01 --por asistente)
     mira "prever: la tabla de fuf, 24 meses desde 6/2008" \
-         '[ "$(echo "$J" | campo "(d[\"origen\"], len(d[\"prevision\"]), d[\"prevision\"][0][\"fecha\"])")" = "('"'"'6/2008'"'"', 24, '"'"'7/2008'"'"')" ]'
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"origen\"], len(d[\"prevision\"]), d[\"prevision\"][0][\"fecha\"])")" = "('"'"'6/2008'"'"', 24, '"'"'7/2008'"'"')" ]'
     mira "prever no toca el modelo: su .out queda igual" '[ "$H" = "$(cksum < "$PV/RIPC/work/RIPC_m01.out")" ]'
     mira "prever deja forecast_RIPC_m01.inp y .out junto al modelo" \
          '[ -f "$PV/RIPC/work/forecast_RIPC_m01.inp" ] && [ -f "$PV/RIPC/work/forecast_RIPC_m01.out" ]'
@@ -194,7 +194,7 @@ if [ -x "$FUE" ] && [ -x "$FUF" ]; then
     PA="$WORK/proy_anual"; cp -R "$R/docs/ejemplos/jenkins_alavi" "$PA"
     J=$("$CLI" --json prever "$PA/proyecto.yaml" MINK m01)
     mira "prever de una serie anual: la fecha es el año, sin columnas anuales" \
-         '[ "$(echo "$J" | campo "(d[\"origen\"], d[\"prevision\"][0][\"fecha\"], d[\"prevision\"][0][\"var_anual\"])")" = "('"'"'1911'"'"', '"'"'1912'"'"', None)" ]'
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"origen\"], d[\"prevision\"][0][\"fecha\"], d[\"prevision\"][0][\"var_anual\"])")" = "('"'"'1911'"'"', '"'"'1912'"'"', None)" ]'
 fi
 mira "prever de un modelo sin estimar: estado 1" '! "$CLI" prever "$Y" RIPC m00 2>/dev/null'
 
@@ -205,12 +205,12 @@ if [ -x "$ART" ]; then
     H=$(cksum < "$Y")
     J=$("$CLI" --json identifica "$Y" RIPC --transformacion 1,0,0)
     mira "identifica: art propone, y su propuesta va la primera" \
-         '[ "$(echo "$J" | campo "len(d[\"candidatos\"]) > 0 and d[\"candidatos\"][0][\"propuesto\"]")" = True ]'
+         '[ "$(printf "%s\n" "$J" | campo "len(d[\"candidatos\"]) > 0 and d[\"candidatos\"][0][\"propuesto\"]")" = True ]'
     mira "identifica: sobre los datos, con la transformación pedida y s = 12" \
-         '[ "$(echo "$J" | campo "(d[\"sobre\"], d[\"lambda\"], d[\"d\"], d[\"D\"], d[\"s\"])")" = "('"'"'datos'"'"', 1, 0, 0, 12)" ]'
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"sobre\"], d[\"lambda\"], d[\"d\"], d[\"D\"], d[\"s\"])")" = "('"'"'datos'"'"', 1, 0, 0, 12)" ]'
     J=$("$CLI" --json identifica "$Y" RIPC --residuos m01)
     mira "identifica --residuos: lo que les falta a los residuos de m01" \
-         '[ "$(echo "$J" | campo "(d[\"sobre\"], d[\"modelo\"], len(d[\"candidatos\"]) > 0)")" = "('"'"'residuos'"'"', '"'"'m01'"'"', True)" ]'
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"sobre\"], d[\"modelo\"], len(d[\"candidatos\"]) > 0)")" = "('"'"'residuos'"'"', '"'"'m01'"'"', True)" ]'
     mira "identifica no escribe nada en el proyecto" '[ "$H" = "$(cksum < "$Y")" ]'
 fi
 mira "identifica con una λ que art no admite: estado 1, y dice cuáles sí" \
@@ -226,8 +226,8 @@ PE="$WORK/proy_especifica"; cp -R "$P" "$PE"; YE="$PE/proyecto.yaml"; rm -f "$PE
 N=$("$CLI" --json proyecto nuevo "$YE" RIPC --por asistente --razon "un AR(2)" | campo "d[\"modelo\"]")
 J=$("$CLI" --json especifica "$YE" RIPC "$N" --transformacion 1,0,0 --arma 2,0,0,0 --media libre)
 mira "especifica: el ARMA queda como se pidió, (2,0)(0,0)" \
-     '[ "$(echo "$J" | campo "d[\"arma\"]")" = "[2, 0, 0, 0]" ]'
-F=$(echo "$J" | campo "d[\"inp\"]")
+     '[ "$(printf "%s\n" "$J" | campo "d[\"arma\"]")" = "[2, 0, 0, 0]" ]'
+F=$(printf "%s\n" "$J" | campo "d[\"inp\"]")
 mira "especifica: fue acepta lo que salió" \
      '[ -n "$F" ] && [ -f "$F" ] && ! ls "$(dirname "$F")" | grep -q "esp[12].tmp"'
 H=$(cksum < "$F")
@@ -248,13 +248,13 @@ mira "especifica --armonicos con D = 1: la estacionalidad ya va en la diferencia
      '"$CLI" especifica "$YE" RIPC "$N2" --transformacion 1,0,1 --armonicos 1 2>&1 | grep -q "D = 1" && [ "$H2" = "$(cksum < "$F2")" ]'
 J=$("$CLI" --json especifica "$YE" RIPC "$N2" --pascua)
 mira "especifica --pascua: easter entra, y fue lo acepta" \
-     '[ "$(echo "$J" | campo "\"easter\" in d[\"cambios\"]")" = True ] && grep -qx "easter" "$F2"'
+     '[ "$(printf "%s\n" "$J" | campo "\"easter\" in d[\"cambios\"]")" = True ] && grep -qx "easter" "$F2"'
 mira "especifica --pascua otra vez: ya la trae (estado 1)" \
      '"$CLI" especifica "$YE" RIPC "$N2" --pascua 2>&1 | grep -q "ya trae Semana Santa"'
 if [ -x "$FUE" ]; then
     J=$("$CLI" --json estima "$YE" RIPC "$N" --por asistente)
     mira "estima: fue termina y trae la log-verosimilitud y el dictamen" \
-         '[ "$(echo "$J" | campo "d[\"estado\"] == 0 and d[\"logelf\"] is not None and d[\"dictamen\"] != \"\"")" = True ]'
+         '[ "$(printf "%s\n" "$J" | campo "d[\"estado\"] == 0 and d[\"logelf\"] is not None and d[\"dictamen\"] != \"\"")" = True ]'
     mira "estima: su línea en costes.csv, por el asistente" \
          'grep -q ",atsw-cli,asistente,RIPC/$N,estimar,fue" "$PE/costes.csv"'
     mira "estima de lo ya estimado: no se reestima (estado 1)" \
@@ -271,7 +271,7 @@ fi
 O="$G/RIPC.2/RIPC.2.out"
 J=$("$CLI" --json anomalos "$Y" RIPC m01 --episodios 1)
 mira "anomalos: un episodio, en 1/2003" \
-     '[ "$(echo "$J" | campo "len(d[\"episodios\"]), d[\"episodios\"][0][\"desde\"]")" = "1 1/2003" ]'
+     '[ "$(printf "%s\n" "$J" | campo "len(d[\"episodios\"]), d[\"episodios\"][0][\"desde\"]")" = "1 1/2003" ]'
 cola() { "$PY" - "$O" "$1" <<'PY'
 import json, re, sys
 t = open(sys.argv[1], errors="replace").read()
@@ -300,9 +300,9 @@ mira "anomalos: la ACF y la PACF de los $NL retardos son las del .out de fue (pe
 mira "anomalos: el Jarque-Bera es el del .out ($JBC y $JBO)" \
      '"$PY" -c "import sys; sys.exit(0 if abs($JBC - $JBO) < 1e-3 * abs($JBO) else 1)"'
 mira "anomalos: sin el episodio, el retardo 13 cambia de lado en la ACF y en la PACF" \
-     '[ "$(echo "$J" | campo "[(x[\"acf\"], x[\"pacf\"]) for x in d[\"calibracion\"] if x[\"lag\"] == 13][0]")" = "('"'"'enmascarada'"'"', '"'"'enmascarada'"'"')" ]'
+     '[ "$(printf "%s\n" "$J" | campo "[(x[\"acf\"], x[\"pacf\"]) for x in d[\"calibracion\"] if x[\"lag\"] == 13][0]")" = "('"'"'enmascarada'"'"', '"'"'enmascarada'"'"')" ]'
 mira "anomalos: tantos residuos como el .out, y uno omitido" \
-     '[ "$(echo "$J" | campo "d[\"residuos\"], d[\"omitidas\"]")" = "78 1" ]'
+     '[ "$(printf "%s\n" "$J" | campo "d[\"residuos\"], d[\"omitidas\"]")" = "78 1" ]'
 mira "anomalos: sin --episodios se omiten todos (lo mismo aquí, que hay uno)" \
      '[ "$("$CLI" --json anomalos "$Y" RIPC m01 | campo "d[\"omitidas\"]")" = 1 ]'
 mira "anomalos --episodios fuera de rango: estado 1, y dice cuáles hay" \
@@ -369,9 +369,9 @@ print(' '.join(mal) if mal else 'bien')"; }
 mira "prewhiten: los números del motor (drtran -p): n, banda, r(k), nu(k) y los negativos" \
      '[ "$(pw)" = bien ]'
 mira "prewhiten: b = 0, el pico en k = 0, y la entrada puede tratarse como exógena" \
-     '[ "$(echo "$J" | campo "(d[\"entradas\"][0][\"b\"], d[\"entradas\"][0][\"kmax\"], d[\"entradas\"][0][\"negativos_fuera\"])")" = "(0, 0, 0)" ]'
+     '[ "$(printf "%s\n" "$J" | campo "(d[\"entradas\"][0][\"b\"], d[\"entradas\"][0][\"kmax\"], d[\"entradas\"][0][\"negativos_fuera\"])")" = "(0, 0, 0)" ]'
 mira "prewhiten: el Hosking sobre los preblanqueados, con 4 x 24 grados de libertad" \
-     '[ "$(echo "$J" | campo "d[\"entradas\"][0][\"gl\"]")" = 96 ]'
+     '[ "$(printf "%s\n" "$J" | campo "d[\"entradas\"][0][\"gl\"]")" = 96 ]'
 mira "prewhiten sin entrada: estado 1" '! "$CLI" prewhiten "$YP" ES/m01 2>/dev/null'
 mira "prewhiten de un modelo sin .pre: estado 1, y dice por qué" \
      '"$CLI" prewhiten "$YP" ES/m00 WTI/m01 2>&1 | grep -q "no tiene .pre"'
@@ -406,15 +406,15 @@ sys.exit(0 if bien else 1)"; }
     mira "formales: la sobrediferenciación, LR 0 (art)" \
          'echo "$J" | cerca sobre 0 1e-6'
     mira "formales: el MEG, ninguna frecuencia estocástica (art)" \
-         '[ "$(echo "$J" | campo "(sum(1 for x in d[\"contrastes\"] if x[\"clave\"] == \"meg\"), sum(1 for x in d[\"contrastes\"] if x[\"clave\"] == \"meg\" and x[\"calculable\"] and x[\"rechaza\"]))")" = "(6, 0)" ]'
+         '[ "$(printf "%s\n" "$J" | campo "(sum(1 for x in d[\"contrastes\"] if x[\"clave\"] == \"meg\"), sum(1 for x in d[\"contrastes\"] if x[\"clave\"] == \"meg\" and x[\"calculable\"] and x[\"rechaza\"]))")" = "(6, 0)" ]'
     mira "formales: lo que no aplica, dicho (sin MA regular, no hay DCD)" \
-         'echo "$J" | campo "d[\"no_aplica\"]" | grep -q "DCD:"'
+         'printf "%s\n" "$J" | campo "d[\"no_aplica\"]" | grep -q "DCD:"'
     mira "formales: cada reestimación, en costes.csv por atsw-cli" \
          '[ "$(grep -c ",atsw-cli,analista,RIPC/m01,contraste," "$PF/costes.csv")" -ge 2 ] &&
           grep -q ",atsw-cli,analista,RIPC/m01,meg," "$PF/costes.csv"'
     J=$("$CLI" --json formales "$YF" RIPC m01 --familia integracion)
     mira "formales --familia integracion: solo los suyos" \
-         '[ "$(echo "$J" | campo "all(x[\"familia\"] == \"integracion\" for x in d[\"contrastes\"]) and len(d[\"contrastes\"]) == 2")" = True ]'
+         '[ "$(printf "%s\n" "$J" | campo "all(x[\"familia\"] == \"integracion\" for x in d[\"contrastes\"]) and len(d[\"contrastes\"]) == 2")" = True ]'
     mira "formales --sub con d = 0: no hay diferencia que cuestionar, y lo dice" \
          '"$CLI" formales "$YF" RIPC m01 --familia integracion --sub 2>&1 >/dev/null | grep -q "d = 0"'
 fi
@@ -435,15 +435,15 @@ mira "caso-estima con un enlace mal escrito: estado 1, y dice cómo es" \
 if [ -x "$DRT" ]; then
     J=$("$CLI" --json caso-estima "$YP" C1 --razon "que drtran identifique" --por asistente)
     mira "caso-estima: la primera corrida, c00, con su .out" \
-         '[ "$(echo "$J" | campo "(d[\"corrida\"], d[\"red\"])")" = "('"'"'c00'"'"', False)" ] && [ -f "$(echo "$J" | campo "d[\"out\"]")" ]'
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"corrida\"], d[\"red\"])")" = "('"'"'c00'"'"', False)" ] && [ -f "$(printf "%s\n" "$J" | campo "d[\"out\"]")" ]'
     mira "caso-estima: su línea en costes.csv, por el asistente" \
          'grep -q ",atsw-cli,asistente,C1/c00,estimar,drtran" "$PW/costes.csv"'
     J=$("$CLI" --json caso-estima "$YP" C1 --enlace "WTI->ES:0,0,1" --desde c00 --razon "un omega más")
     mira "caso-estima --enlace --desde: c01, hija de c00, con su red escrita" \
-         '[ "$(echo "$J" | campo "(d[\"corrida\"], d[\"padre\"], d[\"red\"], d[\"enlaces\"])")" = "('"'"'c01'"'"', '"'"'c00'"'"', True, 1)" ] &&
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"corrida\"], d[\"padre\"], d[\"red\"], d[\"enlaces\"])")" = "('"'"'c01'"'"', '"'"'c00'"'"', True, 1)" ] &&
           grep -q "<- *WTI *0 0 1" "$PW/_casos/C1/work/C1_c01.dag"'
     J=$("$CLI" --json caso-estima "$YP" C1 --diagonal --razon "el diagonal")
-    mira "caso-estima --diagonal: sin red" '[ "$(echo "$J" | campo "(d[\"diagonal\"], d[\"red\"])")" = "(True, False)" ]'
+    mira "caso-estima --diagonal: sin red" '[ "$(printf "%s\n" "$J" | campo "(d[\"diagonal\"], d[\"red\"])")" = "(True, False)" ]'
     H=$(cksum < "$YP")
     mira "caso-estima con una red que drtran rechaza: no queda la corrida" \
          '! "$CLI" caso-estima "$YP" C1 --enlace "WTI->ES:0,0,1" --enlace "ES->WTI:0,0,1" 2>/dev/null &&
@@ -452,13 +452,28 @@ if [ -x "$DRT" ]; then
     # con la misma ventana (lib/fcomp), como la pestaña Prevision de drtran_gui
     J=$("$CLI" --json caso-estima "$YP" C1 --desde c01 --prever 6 --evaluar 180 --razon "con prevision")
     mira "caso-estima --prever: la previsión de las dos series, a 6" \
-         '[ "$(echo "$J" | campo "sorted((x[\"serie\"], x[\"horizonte\"]) for x in d[\"prevision\"])")" = "[('"'"'ES_CPI'"'"', 6), ('"'"'WTI'"'"', 6)]" ]'
+         '[ "$(printf "%s\n" "$J" | campo "sorted((x[\"serie\"], x[\"horizonte\"]) for x in d[\"prevision\"])")" = "[('"'"'ES_CPI'"'"', 6), ('"'"'WTI'"'"', 6)]" ]'
     mira "caso-estima --evaluar: la evaluación de la salida, h = 1..6" \
-         '[ "$(echo "$J" | campo "(d[\"evaluacion\"][\"salida\"], len(d[\"evaluacion\"][\"horizontes\"]))")" = "('"'"'ES_CPI'"'"', 6)" ]'
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"evaluacion\"][\"salida\"], len(d[\"evaluacion\"][\"horizontes\"]))")" = "('"'"'ES_CPI'"'"', 6)" ]'
     mira "caso-estima --evaluar: frente al diagonal, el cociente de RMSE y DM por horizonte" \
-         '[ "$(echo "$J" | campo "len(d[\"frente_al_diagonal\"][\"horizontes\"]) == 6 and d[\"frente_al_diagonal\"][\"horizontes\"][0][\"cociente\"] > 0")" = True ]'
+         '[ "$(printf "%s\n" "$J" | campo "len(d[\"frente_al_diagonal\"][\"horizontes\"]) == 6 and d[\"frente_al_diagonal\"][\"horizontes\"][0][\"cociente\"] > 0")" = True ]'
     mira "caso-estima --evaluar: la corrida del diagonal, en costes.csv como «evaluar»" \
          'grep -q ",atsw-cli,analista,C1/c03,evaluar,drtran" "$PW/costes.csv"'
+    # las restricciones: detras de las heredadas, en el .cns de la corrida, y
+    # el juez es el motor; la tabla de parametros del .out, tal cual
+    J=$("$CLI" --json caso-estima "$YP" C1 --desde c01 --restriccion "omega1[1] = 0" --razon "sin el segundo omega")
+    mira "caso-estima --restriccion: c04, con su .cns y el slot fijo en la tabla" \
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"corrida\"], d[\"restricciones\"])")" = "('"'"'c04'"'"', True)" ] &&
+          grep -qx "omega1\[1\] = 0" "$PW/_casos/C1/work/C1_c04.cns" &&
+          printf "%s\n" "$J" | campo "d[\"tabla\"]" | grep -q "omega1\[1\] .*(fixed)"'
+    mira "caso-estima: la tabla trae la log-verosimilitud y cada slot por su nombre" \
+         '"$CLI" caso-estima "$YP" C1 --desde c04 --razon "otra" | grep -q "Log-likelihood ="'
+    H=$(cksum < "$YP")
+    mira "caso-estima con un slot que no existe: lo dice el motor, y no queda la corrida" \
+         '"$CLI" caso-estima "$YP" C1 --desde c04 --restriccion "omega9[1] = 0" 2>&1 | grep -q "unknown parameter .omega9\[1\]." &&
+          [ "$H" = "$(cksum < "$YP")" ]'
+    mira "caso-estima --restriccion sin =: estado 1, y dice cómo es" \
+         '"$CLI" caso-estima "$YP" C1 --desde c04 --restriccion "omega1" 2>&1 | grep -q "NOMBRE = VALOR"'
 fi
 mira "caso-estima --evaluar sin --prever: estado 1, y lo dice" \
      '"$CLI" caso-estima "$YP" C1 --evaluar 150 2>&1 | grep -q "prever H"'
@@ -491,15 +506,15 @@ sys.exit(0 if bien else 1)"; }
     mira "formales: la sobrediferenciación, LR 0 (art)" \
          'echo "$J" | cerca sobre 0 1e-6'
     mira "formales: el MEG, ninguna frecuencia estocástica (art)" \
-         '[ "$(echo "$J" | campo "(sum(1 for x in d[\"contrastes\"] if x[\"clave\"] == \"meg\"), sum(1 for x in d[\"contrastes\"] if x[\"clave\"] == \"meg\" and x[\"calculable\"] and x[\"rechaza\"]))")" = "(6, 0)" ]'
+         '[ "$(printf "%s\n" "$J" | campo "(sum(1 for x in d[\"contrastes\"] if x[\"clave\"] == \"meg\"), sum(1 for x in d[\"contrastes\"] if x[\"clave\"] == \"meg\" and x[\"calculable\"] and x[\"rechaza\"]))")" = "(6, 0)" ]'
     mira "formales: lo que no aplica, dicho (sin MA regular, no hay DCD)" \
-         'echo "$J" | campo "d[\"no_aplica\"]" | grep -q "DCD:"'
+         'printf "%s\n" "$J" | campo "d[\"no_aplica\"]" | grep -q "DCD:"'
     mira "formales: cada reestimación, en costes.csv por atsw-cli" \
          '[ "$(grep -c ",atsw-cli,analista,RIPC/m01,contraste," "$PF/costes.csv")" -ge 2 ] &&
           grep -q ",atsw-cli,analista,RIPC/m01,meg," "$PF/costes.csv"'
     J=$("$CLI" --json formales "$YF" RIPC m01 --familia integracion)
     mira "formales --familia integracion: solo los suyos" \
-         '[ "$(echo "$J" | campo "all(x[\"familia\"] == \"integracion\" for x in d[\"contrastes\"]) and len(d[\"contrastes\"]) == 2")" = True ]'
+         '[ "$(printf "%s\n" "$J" | campo "all(x[\"familia\"] == \"integracion\" for x in d[\"contrastes\"]) and len(d[\"contrastes\"]) == 2")" = True ]'
     mira "formales --sub con d = 0: no hay diferencia que cuestionar, y lo dice" \
          '"$CLI" formales "$YF" RIPC m01 --familia integracion --sub 2>&1 >/dev/null | grep -q "d = 0"'
 fi
@@ -526,7 +541,7 @@ mira "coste apunta: quien atsw-cli y por analista, si no se dice" \
      'sed -n 3p "$C" | grep -q ",atsw-cli,analista,en4/m01,meg,"'
 J=$("$CLI" --json coste resumen "$Y" --por-que serie)
 mira "coste resumen por serie: RIPC y en4, con sus tiempos" \
-     '[ "$(echo "$J" | campo "[(g[\"clave\"], g[\"corridas\"], g[\"cpu_s\"]) for g in d[\"grupos\"]]")" = "[('"'"'RIPC'"'"', 1, 1.5), ('"'"'en4'"'"', 1, 0.5)]" ]'
+     '[ "$(printf "%s\n" "$J" | campo "[(g[\"clave\"], g[\"corridas\"], g[\"cpu_s\"]) for g in d[\"grupos\"]]")" = "[('"'"'RIPC'"'"', 1, 1.5), ('"'"'en4'"'"', 1, 0.5)]" ]'
 mira "coste resumen total: dos corridas, 2 s de CPU" \
      '[ "$("$CLI" --json coste resumen "$Y" | campo "d[\"grupos\"][0][\"corridas\"] == 2 and d[\"grupos\"][0][\"cpu_s\"] == 2")" = True ]'
 mira "coste apunta: una energía sin su método no se apunta (estado 1)" \
@@ -702,7 +717,7 @@ done
 # los errores
 J=$("$CLI" --json dictamen "$Y" RIPC m99 2>/dev/null); rc=$?
 mira "un modelo que no está: estado 1 y {ok: false} con el porqué" \
-     '[ $rc = 1 ] && [ "$(echo "$J" | campo "d[\"ok\"]")" = False ]'
+     '[ $rc = 1 ] && [ "$(printf "%s\n" "$J" | campo "d[\"ok\"]")" = False ]'
 "$CLI" proyecto bla >/dev/null 2>&1; rc=$?
 mira "una orden mal escrita: estado 2" '[ $rc = 2 ]'
 "$CLI" --nada version >/dev/null 2>&1; rc=$?

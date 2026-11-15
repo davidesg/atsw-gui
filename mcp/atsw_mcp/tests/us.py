@@ -61,7 +61,7 @@ async def corre(raiz: Path, w: Path) -> None:
             ts = {t.name for t in (await s.list_tools()).tools}
             quiero = {"guion_map", "identification_analysis", "new_version", "write_inp",
                       "estimate_and_diagnose", "diagnose", "formal_tests", "residual_outlier_scan",
-                      "ar_factorization", "factorized_model", "full_report", "guion_annotate", "guion_adopt", "plot",
+                      "ar_factorization", "factorized_model", "model_equation_display", "full_report", "guion_annotate", "guion_adopt", "plot",
                       "generate_forecast"}
             check(quiero <= ts, "las herramientas del camino en C", str(sorted(ts)))
 
@@ -94,6 +94,9 @@ async def corre(raiz: Path, w: Path) -> None:
             res = await t("write_inp", series="MINK", model="m02", arma="2,0,0,0")
             check(res.startswith("No se pudo"), "lo estimado no se reescribe", res)
 
+            res = await t("model_equation_display", series="MINK", model="m02")
+            check("MODELO ESTIMADO: MINK/m02" in res and "t =" in res and "log-verosimilitud" in res,
+                  "model_equation_display: el bloque del .out con sus t", res)
             res = await t("diagnose", series="MINK", model="m02")
             check("Diagnosis de MINK/m02" in res, "diagnose", res)
             res = await t("formal_tests", series="MINK", model="m02", family="integration")

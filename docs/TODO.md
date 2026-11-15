@@ -811,12 +811,14 @@ afectados.
     - **los armónicos**: `especifica` no los añade (ni Semana Santa), así
       que la ruta estacional determinista se monta en fue_gui. Hace falta
       `--armonicos N` (y `--pascua`) en `atsw-cli especifica`, con lib/inpdet.
-    - **la ecuación estimada en texto**: ninguna orden da la tabla de
-      parámetros con sus errores típicos, y el protocolo pide presentarla.
-      Hace falta una orden (`atsw-cli ecuacion`, de `fueout_read` o de la
-      ecuación de fue) y la herramienta `model_equation_display`, su pareja
-      de art.
-  - Lo siguiente del bloque: esos dos huecos, las herramientas del extra
+    - **la ecuación estimada en texto — HECHO (15-nov-2026):** `atsw-cli
+      ecuacion` da el bloque de estimaciones del `.out` tal cual, con la t de
+      cada parámetro, el nombre de cada determinista (casado con el `.inp`),
+      σ, la log-verosimilitud y el hessiano; y `model_equation_display`, su
+      pareja de art. No se transcribe a otra forma, para no tocar fue: la
+      ecuación en dos líneas, como la de art, pediría un modo de texto en el
+      motor, y eso espera a una decisión.
+  - Lo siguiente del bloque: los armónicos de `especifica`, las herramientas del extra
     Python (la λ de Box-Cox, la escalera de intervenciones, la
     sobreparametrización), el `.cns` de atsw-mt, atsw-sis y la fase 2.
 

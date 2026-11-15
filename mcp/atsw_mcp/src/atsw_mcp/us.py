@@ -105,8 +105,13 @@ En este orden, UNO CADA VEZ, en los dos carriles:
  9. contrastes     formal_tests, SOLO con la diagnosis limpia.
 10. reformulación  si un contraste manda cambiar algo, vuelve al nodo que
                    corresponda. Volver atrás es el método funcionando.
-Tras cada estimación: diagnose (la diagnosis en veredictos). Un modelo con la
-diagnosis en NO no se contrasta ni se elige: se reformula.
+TRAS CADA ESTIMACIÓN, en este orden: model_equation_display, que es la
+presentación del modelo (cópiala TAL CUAL, en un bloque de código; nunca
+construyas tu propia tabla de parámetros: puede equivocar signos, errores
+típicos o el convenio, y los retardos de un operador RESTAN); después diagnose
+(la diagnosis en veredictos) y tu comentario: |t| > 2, Q, JB, el veredicto. En
+guiado el analista solo ve lo que enseñas: sin la ecuación no decide. Un
+modelo con la diagnosis en NO no se contrasta ni se elige: se reformula.
 
 ══ EN GUIADO, EL QUE DECIDE ES EL ANALISTA ══
 Guiado no es «autónomo contando lo que hace». En cada nodo:
@@ -186,10 +191,6 @@ no es un nodo: no hay nada que decidir ni que derivar.
 - Los ARMÓNICOS (y Semana Santa): write_inp no los añade. La ruta
   determinista con armónicos se monta hoy en fue_gui, a mano: si el nodo
   estacional la elige, díselo al analista y sigue sobre el modelo que deje.
-- La ECUACIÓN estimada con sus errores típicos no sale en texto:
-  estimate_and_diagnose da la log-verosimilitud y diagnose los veredictos
-  (cuántos |t| < 2, las correlaciones altas). El analista la ve en la madre
-  («Ver modelo…»). No te inventes la tabla.
 - La λ recomendada de Box-Cox, la escalera de intervenciones, la
 sobreparametrización, verificar un óptimo y comparar versiones son de
 art-python y aún no están en atsw-us. Si un nodo los pide, dilo y propón el
@@ -282,6 +283,15 @@ def crea():
         """Estima con fue un modelo sin estimar: la log-verosimilitud y el dictamen."""
         return _hazlo(lambda: cli.atsw_cli("estima", ID("la serie", series), ID("el modelo", model),
                                            "--por", "asistente", muestra=sample))
+
+    @app.tool()
+    def model_equation_display(series: str, model: str, sample: str = "") -> str:
+        """El modelo estimado: el bloque de estimaciones del .out tal cual (estimación,
+        error típico y número), con la t de cada parámetro y el nombre de cada
+        determinista; σ, la log-verosimilitud y de qué hessiano salen los errores
+        típicos. Preséntalo verbatim: no rehagas la tabla."""
+        return _hazlo(lambda: cli.atsw_cli("ecuacion", ID("la serie", series), ID("el modelo", model),
+                                           muestra=sample))
 
     @app.tool()
     def diagnose(series: str, model: str, sample: str = "") -> str:

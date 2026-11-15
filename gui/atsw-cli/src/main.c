@@ -503,6 +503,122 @@ static int dictamen( const char *path, const char *serie, const char *id )
 }
 
 /* ------------------------------------------------------------------------ */
+/* ecuacion: el modelo estimado, como lo escribe el motor                   */
+/* ------------------------------------------------------------------------ */
+
+/* EL BLOQUE DE ESTIMACIONES DEL .out, TAL CUAL, con la t de cada parametro y
+   el nombre de cada determinista, que el .out no da («Omegas for
+   deterministic variable 3») y se casa por posicion con el .inp (id_nombres).
+   No se transcribe a otra forma: el bloque del motor es la presentacion
+   autoritativa, y una tabla rehecha puede equivocar signos o convenios (el
+   de la FLT resta los retardos). Lo que se anade se dice aparte.          */
+static int ecuacion( const char *path, const char *serie, const char *id )
+{
+    char        out[PR_RUTA], inp[PR_RUTA], why[256], linea[512], est[96];
+    char        det[ID_MAX_DET][ID_LINEA], sigma[128] = "", errt[128] = "";
+    Proyecto   *p = NULL;
+    FueOut     *o;
+    FILE       *f;
+    GString    *bloque, *jpar, *t;
+    int         ndet, dentro = 0, npar = 0, k;
+
+    if ( ruta_de( path, serie, id, ".out", out, sizeof out, &p ) != 0 ) { g_free( p ); return 1; }
+    if ( pr_ruta( p, serie, muestra, id, ".inp", inp, sizeof inp ) != 0 ) inp[0] = '\0';
+    g_free( p );
+    o = g_new0( FueOut, 1 );
+    if ( !fueout_read( out, o ) || !( f = g_fopen( out, "r" ) ) )
+        { g_free( o ); return falla( "«%s» no está estimado: no hay .out.", id ); }
+    ndet = inp[0] ? id_nombres( inp, det, ID_MAX_DET, why, sizeof why ) : -1;
+
+    bloque = g_string_new( "" );
+    jpar   = g_string_new( "" );
+    while ( fgets( linea, sizeof linea, f ) )
+        {
+        double v, se;
+        int    i, n;
+
+        linea[strcspn( linea, "\r\n" )] = '\0';
+        if ( !strncmp( linea, "sigma :", 7 ) ) g_snprintf( sigma, sizeof sigma, "%s", linea + 7 );
+        if ( !strncmp( linea, "Standard errors:", 16 ) ) g_snprintf( errt, sizeof errt, "%s", linea + 16 );
+        if ( !dentro && ( !strncmp( linea, "Omegas for", 10 ) || !strncmp( linea, "Deltas for", 10 ) ||
+                          !strncmp( linea, "Coefficients for", 16 ) || !strncmp( linea, "Mean parameter", 14 ) ) )
+            dentro = 1;
+        if ( !dentro ) continue;
+        if ( !strncmp( linea, "Box-Cox lambda", 14 ) ) { dentro = -1; continue; }
+        if ( dentro < 0 ) continue;
+        if ( !linea[0] ) continue;
+        g_string_append( bloque, "  " );
+        g_string_append( bloque, linea );
+        if ( sscanf( linea, " Omegas for deterministic variable %d", &k ) == 1 ||
+             sscanf( linea, " Deltas for deterministic variable %d", &k ) == 1 )
+            {
+            if ( k >= 1 && k <= ndet )
+                g_string_append_printf( bloque, "   ← %s", det[k - 1] );
+            g_snprintf( est, sizeof est, "%s%s%s", linea, ( k >= 1 && k <= ndet ) ? " " : "",
+                        ( k >= 1 && k <= ndet ) ? det[k - 1] : "" );
+            }
+        else if ( linea[strlen( linea ) - 1] == ':' )
+            g_snprintf( est, sizeof est, "%s", linea );
+        else if ( sscanf( linea, " %lf (%lf) [%d]%n", &v, &se, &i, &n ) == 3 )
+            {
+            /* ESTIMADO: con su error tipico y su numero en la tabla */
+            g_string_append_printf( bloque, "   t = %6.2f", se > 0 ? v / se : 0.0 );
+            g_string_append_printf( jpar, "%s{\"n\": %d, ", npar++ ? ", " : "", i );
+            js_par( jpar, "bloque", est ); g_string_append( jpar, ", " );
+            js_num( jpar, "estimacion", v ); g_string_append( jpar, ", " );
+            js_num( jpar, "et", se ); g_string_append( jpar, ", " );
+            js_num( jpar, "t", se > 0 ? v / se : 0.0 ); g_string_append( jpar, "}" );
+            }
+        else if ( sscanf( linea, " %lf", &v ) == 1 )
+            {
+            g_string_append( bloque, "   (fijo)" );
+            g_string_append_printf( jpar, "%s{\"n\": null, ", npar++ ? ", " : "" );
+            js_par( jpar, "bloque", est ); g_string_append( jpar, ", " );
+            js_num( jpar, "estimacion", v ); g_string_append( jpar, ", \"fijo\": true}" );
+            }
+        g_string_append_c( bloque, '\n' );
+        }
+    fclose( f );
+    g_strstrip( sigma ); g_strstrip( errt );
+
+    t = g_string_new( "" );
+    fueout_estructura( o, linea, sizeof linea );
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "serie", serie ); g_string_append( t, ", " );
+        js_par( t, "modelo", id ); g_string_append( t, ", " );
+        js_par( t, "estructura", linea ); g_string_append( t, ", " );
+        js_num( t, "lambda", o->lambda ); g_string_append( t, ", " );
+        g_string_append_printf( t, "\"nobs\": %d, \"npar\": %d, ", o->nobs, o->npar );
+        js_par( t, "sigma", sigma ); g_string_append( t, ", " );
+        js_par( t, "errores_tipicos", errt ); g_string_append( t, ", " );
+        if ( o->tiene_logelf ) { js_num( t, "logelf", o->logelf ); g_string_append( t, ", " ); }
+        g_string_append_printf( t, "\"parametros\": [%s], ", jpar->str );
+        js_par( t, "bloque", bloque->str );
+        g_string_append( t, "}\n" );
+        }
+    else
+        {
+        g_string_append_printf( t, "MODELO ESTIMADO: %s/%s   %s\n", serie, id, linea );
+        g_string_append_printf( t, "  %d observaciones, %d parámetros\n\n", o->nobs, o->npar );
+        g_string_append( t, "  El bloque de estimaciones del .out, tal cual: estimación (error típico) [número].\n"
+                            "  Se añade la t de cada uno, y el nombre de cada determinista (del .inp).\n\n" );
+        g_string_append( t, bloque->str );
+        g_string_append( t, "\n" );
+        if ( sigma[0] ) g_string_append_printf( t, "  σ de las innovaciones: %s%s\n", sigma,
+                                                 o->lambda == 0.0 ? " (en logaritmos: ×100 es un %)" : "" );
+        if ( o->tiene_logelf ) g_string_append_printf( t, "  log-verosimilitud: %.6f\n", o->logelf );
+        if ( errt[0] ) g_string_append_printf( t, "  errores típicos: %s\n", errt );
+        g_string_append( t, "  Convenio: los operadores de retardo RESTAN (w(B) = w0 - w1 B - ...).\n" );
+        }
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE ); g_string_free( bloque, TRUE ); g_string_free( jpar, TRUE );
+    g_free( o );
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
 /* raices: la factorizacion del AR, y el modelo factorizado                 */
 /* ------------------------------------------------------------------------ */
 
@@ -2346,6 +2462,7 @@ static void uso( FILE *f )
            "  caso-estima P CASO [--enlace E->S:b,r,s]... [--desde cNN] [--diagonal]\n"
            "              [--prever H [--evaluar W]]   drtran sobre el caso\n"
            "  dictamen P SERIE MODELO               la diagnosis del .out\n"
+           "  ecuacion P SERIE MODELO               el modelo estimado: el bloque del .out, con sus t\n"
            "  raices factores P SERIE MODELO        la factorización del AR\n"
            "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n"
            "  ficha P SERIE MODELO [--comprobar]    la ficha de confianza, en Markdown\n"
@@ -2454,6 +2571,7 @@ int main( int argc, char **argv )
     if ( ES( 0, "proyecto" ) && ES( 1, "caso-nuevo" ) && npos >= 4 )
         return proyecto_caso( pos[2], pos + 3, npos - 3 );
     if ( ES( 0, "dictamen" ) && npos == 4 ) return dictamen( pos[1], pos[2], pos[3] );
+    if ( ES( 0, "ecuacion" ) && npos == 4 ) return ecuacion( pos[1], pos[2], pos[3] );
     if ( ES( 0, "raices" ) && ES( 1, "factores" ) && npos == 5 )
         return raices_factores( pos[2], pos[3], pos[4] );
     if ( ES( 0, "raices" ) && ES( 1, "factorizado" ) && npos == 5 )

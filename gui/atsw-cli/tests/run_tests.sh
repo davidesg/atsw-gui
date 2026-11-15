@@ -87,6 +87,22 @@ mira "dictamen --json: se lee y trae sus líneas" \
 mira "dictamen: la estimación convergió" \
      '[ "$(echo "$J" | campo "d[\"lineas\"][0][\"estado\"]")" = cuadra ]'
 
+# ecuacion: el bloque de estimaciones del .out, tal cual, con sus t. Con printf
+# y no echo: el JSON lleva \n escapados, y el echo de sh (dash, macOS) los
+# convierte en saltos de linea de verdad.
+J=$("$CLI" --json ecuacion "$Y" RIPC m01)
+NEST=$(grep -cE '^ +-?[0-9.]+ +\([0-9.]+\) +\[ *[0-9]+\]' "$P/RIPC/work/RIPC_m01.out")
+mira "ecuacion --json: un parámetro por cada línea estimada del .out ($NEST)" \
+     '[ "$(printf "%s\n" "$J" | campo "len([q for q in d[\"parametros\"] if q[\"n\"]])")" = "$NEST" ]'
+mira "ecuacion: la t es la estimación entre su error típico" \
+     '[ "$(printf "%s\n" "$J" | campo "all(abs(q[\"t\"] - q[\"estimacion\"]/q[\"et\"]) < 1e-6 * (1 + abs(q[\"t\"])) for q in d[\"parametros\"] if q[\"n\"])")" = True ]'
+mira "ecuacion: con su log-verosimilitud y su σ" \
+     '[ "$(printf "%s\n" "$J" | campo "d[\"logelf\"] is not None and d[\"sigma\"] != \"\"")" = True ]'
+mira "ecuacion: en texto, la cabecera del modelo" \
+     '"$CLI" ecuacion "$Y" RIPC m01 | grep -q "^MODELO ESTIMADO: RIPC/m01"'
+J=$("$CLI" --json ecuacion "$Y" RIPC m00 2>/dev/null); rc=$?
+mira "ecuacion de un modelo sin estimar: lo dice" '[ $rc -ne 0 ]'
+
 # raices: los números de test_raices (art.roots)
 J=$("$CLI" --json raices factores "$Y" en4 m01)
 mira "raices factores: el AR(18) en nueve pares" \

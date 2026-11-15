@@ -64,6 +64,10 @@
 
 static gboolean  json;
 static gboolean  comprobar;
+/* especifica: lo que se cambia del .inp (lib/inpdet) */
+static const char *e_arma = NULL, *e_anade = NULL, *e_transf = NULL, *e_media = NULL;
+static const char *e_interv[16];
+static int         e_ninterv = 0;
 static gboolean  con_sub;                 /* formales --sub                 */
 static const char *familia = NULL;        /* formales --familia             */
 static int       retardos = 0;            /* prewhiten --retardos           */
@@ -1443,6 +1447,219 @@ static int formales( const char *path, const char *serie, const char *id )
 }
 
 /* ------------------------------------------------------------------------ */
+/* especifica y estima: lo que el asistente hace con un modelo nuevo        */
+/* ------------------------------------------------------------------------ */
+
+/* UN MODELO QUE SE PUEDE TOCAR: el que no es de datos y no esta estimado.
+   Lo estimado no se reescribe (su .out y su .pre lo describen; la fase 5 de
+   AUDITORIA-procesos): de el se deriva un hijo, con «proyecto itera».   */
+static int tocable( Proyecto *p, const char *serie, const char *id, char *inp, size_t n )
+{
+    char out[PR_RUTA];
+
+    if ( pr_es_datos( p, serie, muestra, id ) )
+        return falla( "%s/%s son los datos: no se tocan. Deriva un modelo con «proyecto nuevo».",
+                      serie, id );
+    if ( pr_ruta( p, serie, muestra, id, ".out", out, sizeof out ) == 0 &&
+         g_file_test( out, G_FILE_TEST_EXISTS ) )
+        return falla( "%s/%s ya está estimado: no se reescribe. Deriva un hijo con «proyecto itera».",
+                      serie, id );
+    if ( pr_ruta( p, serie, muestra, id, ".inp", inp, n ) != 0 || !g_file_test( inp, G_FILE_TEST_EXISTS ) )
+        return falla( "%s/%s no tiene .inp.", serie, id );
+    return 0;
+}
+
+/* «a,b,c,d» -> cuatro enteros. 0 si cupo. */
+static int cuatro( const char *s, int *a, int *b, int *c, int *d )
+{
+    return s && sscanf( s, "%d,%d,%d,%d", a, b, c, d ) == 4 && *a >= 0 && *b >= 0 && *c >= 0 && *d >= 0
+           ? 0 : 1;
+}
+
+/* especifica P SERIE MODELO [--transformacion L,d,D] [--arma p,q,P,Q]
+   [--anade-arma p,q,P,Q] [--intervencion "step 10 2008"]... [--media libre|V]:
+   EL MISMO EDITOR DEL .inp QUE LAS VENTANAS DE LA MADRE (lib/inpdet), que
+   reescribe solo lo que toca y deja lo demas byte a byte. Cada paso va a un
+   temporal; el resultado pasa por la puerta del motor (inp_check_fue) antes
+   de sustituir el .inp. Si algo falla, el .inp queda como estaba.      */
+static int especifica( const char *path, const char *serie, const char *id )
+{
+    char      why[512], inp[PR_RUTA], msg[512];
+    Proyecto *p = NULL;
+    gchar    *a, *b, *cur;
+    int       pa, qa, Pa, Qa, cambios = 0;
+    GString  *hecho = g_string_new( "" ), *t;
+
+    p = abre( path, why, sizeof why );
+    if ( !p ) { g_string_free( hecho, TRUE ); return falla( "%s", why ); }
+    if ( pr_modelo_idx( p, serie, muestra, id ) < 0 )
+        { g_free( p ); g_string_free( hecho, TRUE ); return falla( "«%s» no es un modelo de %s.", id, serie ); }
+    if ( tocable( p, serie, id, inp, sizeof inp ) != 0 ) { g_free( p ); g_string_free( hecho, TRUE ); return 1; }
+    a = g_strdup_printf( "%s.esp1.tmp", inp );
+    b = g_strdup_printf( "%s.esp2.tmp", inp );
+    cur = g_strdup( inp );
+
+#define PASO( llamada, que ) do { \
+        const char *dest = ( cambios % 2 ) ? b : a; \
+        if ( llamada != 0 ) goto mal; \
+        g_free( cur ); cur = g_strdup( dest ); cambios++; \
+        g_string_append_printf( hecho, "%s%s", hecho->len ? "; " : "", que ); } while ( 0 )
+
+    if ( e_transf )
+        {
+        double lam; int d, D;
+        if ( sscanf( e_transf, "%lf,%d,%d", &lam, &d, &D ) != 3 || d < 0 || D < 0 )
+            { g_snprintf( why, sizeof why, "--transformacion %s: es λ,d,D (0,1,0 es log y una diferencia).", e_transf ); goto mal; }
+        PASO( id_pon_transformacion( cur, ( cambios % 2 ) ? b : a, lam, d, D, why, sizeof why ),
+              ( g_snprintf( msg, sizeof msg, "transformación λ = %g, d = %d, D = %d", lam, d, D ), msg ) );
+        }
+    if ( e_arma )
+        {
+        if ( cuatro( e_arma, &pa, &qa, &Pa, &Qa ) )
+            { g_snprintf( why, sizeof why, "--arma %s: es p,q,P,Q.", e_arma ); goto mal; }
+        PASO( id_pon_arma( cur, ( cambios % 2 ) ? b : a, pa, NULL, qa, NULL, Pa, NULL, Qa, NULL, why, sizeof why ),
+              ( g_snprintf( msg, sizeof msg, "ARMA (%d,%d)(%d,%d), desde cero", pa, qa, Pa, Qa ), msg ) );
+        }
+    if ( e_anade )
+        {
+        if ( cuatro( e_anade, &pa, &qa, &Pa, &Qa ) )
+            { g_snprintf( why, sizeof why, "--anade-arma %s: es p,q,P,Q.", e_anade ); goto mal; }
+        PASO( id_anade_arma( cur, ( cambios % 2 ) ? b : a, pa, NULL, qa, NULL, Pa, NULL, Qa, NULL, why, sizeof why ),
+              ( g_snprintf( msg, sizeof msg, "un factor más (%d,%d)(%d,%d)", pa, qa, Pa, Qa ), msg ) );
+        }
+    if ( e_ninterv > 0 )
+        {
+        g_snprintf( msg, sizeof msg, "%d intervención%s", e_ninterv, e_ninterv == 1 ? "" : "es" );
+        PASO( id_anade( cur, ( cambios % 2 ) ? b : a, e_interv, NULL, e_ninterv, why, sizeof why ), msg );
+        }
+    if ( e_media )
+        {
+        int    libre = !strcmp( e_media, "libre" );
+        double v = 0.0;
+        char  *fin = NULL;
+
+        if ( !libre ) { v = g_ascii_strtod( e_media, &fin ); if ( !fin || *fin )
+            { g_snprintf( why, sizeof why, "--media %s: es «libre» o un número (fija).", e_media ); goto mal; } }
+        PASO( id_fija_media( cur, ( cambios % 2 ) ? b : a, v, libre ? 1 : 0, why, sizeof why ),
+              libre ? "media libre" : ( g_snprintf( msg, sizeof msg, "media fija en %g", v ), msg ) );
+        }
+#undef PASO
+    if ( cambios == 0 )
+        { g_snprintf( why, sizeof why, "No se ha pedido ningún cambio (--transformacion, --arma, "
+                      "--anade-arma, --intervencion, --media)." ); goto mal; }
+    /* EL JUEZ ES EL MOTOR */
+    if ( inp_check_fue( cur, msg, sizeof msg ) != 0 )
+        { g_snprintf( why, sizeof why, "Lo que salió no lo acepta fue: %s", msg ); goto mal; }
+    if ( g_rename( cur, inp ) != 0 )
+        {
+        /* en Windows rename no reemplaza: se quita el viejo y se pone */
+        g_unlink( inp );
+        if ( g_rename( cur, inp ) != 0 ) { g_snprintf( why, sizeof why, "No pude sustituir %s.", inp ); goto mal; }
+        }
+    g_unlink( a ); g_unlink( b );
+
+    {
+    int p2 = 0, q2 = 0, P2 = 0, Q2 = 0;
+
+    id_arma_ordenes( inp, &p2, &q2, &P2, &Q2, msg, sizeof msg );
+    t = g_string_new( "" );
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "serie", serie ); g_string_append( t, ", " );
+        js_par( t, "modelo", id ); g_string_append( t, ", " );
+        js_par( t, "inp", inp ); g_string_append( t, ", " );
+        js_par( t, "cambios", hecho->str );
+        g_string_append_printf( t, ", \"arma\": [%d, %d, %d, %d]}\n", p2, q2, P2, Q2 );
+        }
+    else
+        g_string_append_printf( t, "%s/%s: %s. El .inp queda con ARMA (%d,%d)(%d,%d); fue lo acepta.\n"
+                                "  %s\n", serie, id, hecho->str, p2, q2, P2, Q2, inp );
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE );
+    }
+    g_free( cur ); g_free( a ); g_free( b ); g_free( p ); g_string_free( hecho, TRUE );
+    return 0;
+mal:
+    g_unlink( a ); g_unlink( b );
+    g_free( cur ); g_free( a ); g_free( b ); g_free( p ); g_string_free( hecho, TRUE );
+    {
+    size_t l = strlen( why );
+    return falla( "%s%s El .inp queda como estaba.", why, l && why[l - 1] == '.' ? "" : "." );
+    }
+}
+
+/* estima P SERIE MODELO: fue sobre el .inp del modelo, por lib/engine --sin
+   consola, con plazo y con su linea en costes.csv--, y lo que dice el .out:
+   la log-verosimilitud y el dictamen. Lo estimado no se reestima.       */
+static int estima( const char *path, const char *serie, const char *id )
+{
+    char         why[512], inp[PR_RUTA], out[PR_RUTA], raiz[PR_RUTA];
+    Proyecto    *p = abre( path, why, sizeof why );
+    EngineResult r;
+    gchar       *dir, *base, *obj;
+    Dictamen     d;
+    FueOut      *o;
+    GString     *t;
+    int          hay_dx;
+
+    if ( !p ) return falla( "%s", why );
+    if ( pr_modelo_idx( p, serie, muestra, id ) < 0 )
+        { g_free( p ); return falla( "«%s» no es un modelo de %s.", id, serie ); }
+    if ( tocable( p, serie, id, inp, sizeof inp ) != 0 ) { g_free( p ); return 1; }
+    pr_ruta( p, serie, muestra, id, ".out", out, sizeof out );
+    dir  = g_path_get_dirname( inp );
+    base = g_path_get_basename( inp );
+    base[strlen( base ) - 4] = '\0';
+    obj  = *muestra ? g_strdup_printf( "%s/%s/%s", serie, muestra, id )
+                    : g_strdup_printf( "%s/%s", serie, id );
+    engine_set_finder( hermano );
+    raiz_de( path, raiz, sizeof raiz );
+    coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "estimar" );
+    r = engine_run( dir, "fue", base, NULL );
+    coste_contexto_limpia();
+    g_free( obj ); g_free( base ); g_free( dir );
+
+    if ( !engine_wrote_results( &r ) )
+        {
+        gchar *m = g_strdup( r.message );
+        engine_result_clear( &r ); g_free( p );
+        falla( "%s", m ); g_free( m );
+        return 1;
+        }
+    o = g_new0( FueOut, 1 );
+    fueout_read( out, o );
+    hay_dx = fi_dictamen( p, serie, muestra, id, &d ) == 0;
+    t = g_string_new( "" );
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "serie", serie ); g_string_append( t, ", " );
+        js_par( t, "modelo", id ); g_string_append( t, ", " );
+        g_string_append_printf( t, "\"estado\": %d, ", r.status );
+        js_par( t, "mensaje", r.message ); g_string_append( t, ", " );
+        if ( o->tiene_logelf ) js_num( t, "logelf", o->logelf );
+        else g_string_append( t, "\"logelf\": null" );
+        g_string_append( t, ", " );
+        js_par( t, "dictamen", hay_dx ? dx_estado_es( d.peor ) : "" ); g_string_append( t, ", " );
+        js_par( t, "out", out ); g_string_append( t, "}\n" );
+        }
+    else
+        {
+        g_string_append_printf( t, "%s/%s: %s\n", serie, id, r.message );
+        if ( o->tiene_logelf ) g_string_append_printf( t, "  log-verosimilitud %.6f\n", o->logelf );
+        if ( hay_dx ) g_string_append_printf( t, "  diagnosis: %s (atsw-cli dictamen para el detalle)\n",
+                                              dx_estado_es( d.peor ) );
+        g_string_append_printf( t, "  %s\n", out );
+        }
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE );
+    engine_result_clear( &r );
+    g_free( o ); g_free( p );
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
 /* La orden                                                                 */
 /* ------------------------------------------------------------------------ */
 
@@ -1460,6 +1677,8 @@ static void uso( FILE *f )
            "  raices factores P SERIE MODELO        la factorización del AR\n"
            "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n"
            "  ficha P SERIE MODELO [--comprobar]    la ficha de confianza, en Markdown\n"
+           "  especifica P SERIE MODELO [cambios]   la especificación de un modelo sin estimar\n"
+           "  estima P SERIE MODELO                fue sobre el modelo, y su dictamen\n"
            "  formales P SERIE MODELO [--familia F] [--sub]   los contrastes formales\n"
            "  anomalos P SERIE MODELO [--episodios L]   los episodios y su calibración\n"
            "  prewhiten P SALIDA/MODELO ENTRADA/MODELO...   la CCF preblanqueada\n"
@@ -1474,6 +1693,8 @@ static void uso( FILE *f )
            "  --por Q       quién da el paso: analista (si no se dice) o asistente;\n"
            "                en nuevo, itera, elige y raices factorizado queda escrito\n"
            "  --comprobar   ficha: corre fue sobre el .pre y lo apunta en costes.csv\n"
+           "  especifica: --transformacion L,d,D  --arma p,q,P,Q  --anade-arma p,q,P,Q\n"
+           "    --intervencion \"step 10 2008\" (se repite)  --media libre|V (fija en V)\n"
            "  --familia F   formales: integracion o estacionalidad (sin ella, las dos)\n"
            "  --sub         formales: también d - 1 (se pide, no se ofrece)\n"
            "  --episodios L anomalos: los que se omiten al calibrar, 1,3 o todos\n"
@@ -1495,6 +1716,12 @@ int main( int argc, char **argv )
         {
         if ( !strcmp( argv[i], "--json" ) ) json = TRUE;
         else if ( !strcmp( argv[i], "--comprobar" ) ) comprobar = TRUE;
+        else if ( !strcmp( argv[i], "--arma" ) && i + 1 < argc ) e_arma = argv[++i];
+        else if ( !strcmp( argv[i], "--anade-arma" ) && i + 1 < argc ) e_anade = argv[++i];
+        else if ( !strcmp( argv[i], "--transformacion" ) && i + 1 < argc ) e_transf = argv[++i];
+        else if ( !strcmp( argv[i], "--media" ) && i + 1 < argc ) e_media = argv[++i];
+        else if ( !strcmp( argv[i], "--intervencion" ) && i + 1 < argc )
+            { if ( e_ninterv < (int) G_N_ELEMENTS(e_interv) ) e_interv[e_ninterv++] = argv[++i]; else i++; }
         else if ( !strcmp( argv[i], "--sub" ) ) con_sub = TRUE;
         else if ( !strcmp( argv[i], "--familia" ) && i + 1 < argc ) familia = argv[++i];
         else if ( !strcmp( argv[i], "--episodios" ) && i + 1 < argc ) episodios = argv[++i];
@@ -1551,6 +1778,8 @@ int main( int argc, char **argv )
     if ( ES( 0, "raices" ) && ES( 1, "factorizado" ) && npos == 5 )
         return raices_factorizado( pos[2], pos[3], pos[4] );
     if ( ES( 0, "ficha" ) && npos == 4 ) return ficha( pos[1], pos[2], pos[3] );
+    if ( ES( 0, "especifica" ) && npos == 4 ) return especifica( pos[1], pos[2], pos[3] );
+    if ( ES( 0, "estima" ) && npos == 4 ) return estima( pos[1], pos[2], pos[3] );
     if ( ES( 0, "formales" ) && npos == 4 ) return formales( pos[1], pos[2], pos[3] );
     if ( ES( 0, "anomalos" ) && npos == 4 ) return anomalos( pos[1], pos[2], pos[3] );
     if ( ES( 0, "prewhiten" ) && npos >= 3 ) return prewhiten( pos[1], pos + 2, npos - 2 );

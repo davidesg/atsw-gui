@@ -701,6 +701,13 @@ atsw_gui --proyecto P --ver QUE SERIE[/MODELO] [--muestra M]
 - **Lo que hay que mover:** el vistazo vive hoy en `gui/atsw/src/vistazo.c` y
   recibe la `Atsw` entera. Pasa a `lib/analisis` con un anfitrión como
   `AnHost`, igual que las demás ventanas. Es el único cambio de fondo.
+  **Hecho de otra manera (15-nov-2026):** `--ver` es el propio `atsw_gui`,
+  así que el vistazo no ha tenido que salir de la madre. En ese modo la
+  madre abre el proyecto sin su ventana principal, la `Atsw` lleva
+  `solo_ver` (la muestra es la pedida y los mensajes van a stderr) y
+  `atsw_host` da un anfitrión sin `guarda`, `abre` ni `cierra`. Además de
+  las cuatro de la tabla está `diagnosis`. El vistazo pasará a `lib/analisis`
+  cuando otro programa tenga que abrirlo. Prueba: `gui/atsw/tests/ver.sh`.
 - **La herramienta `ver(que, serie, modelo)`** lanza `$ATSW_GUI --ver …` y
   **devuelve en texto** los números que el gráfico enseña, sacados de
   `atsw-cli`: las ACF y PACF con sus bandas, la Q, los anómalos con su fecha.

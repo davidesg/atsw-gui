@@ -61,7 +61,7 @@ async def corre(raiz: Path, w: Path) -> None:
             ts = {t.name for t in (await s.list_tools()).tools}
             quiero = {"guion_map", "identification_analysis", "new_version", "write_inp",
                       "estimate_and_diagnose", "diagnose", "formal_tests", "residual_outlier_scan",
-                      "ar_factorization", "full_report", "guion_annotate", "guion_adopt", "plot",
+                      "ar_factorization", "factorized_model", "full_report", "guion_annotate", "guion_adopt", "plot",
                       "generate_forecast"}
             check(quiero <= ts, "las herramientas del camino en C", str(sorted(ts)))
 
@@ -102,6 +102,12 @@ async def corre(raiz: Path, w: Path) -> None:
             check("Anómalos de MINK/m02" in res and "Q(" in res, "residual_outlier_scan", res)
             res = await t("full_report", series="MINK", model="m02")
             check("m02" in res and "asistente" in res, "full_report: el paso es del asistente", res)
+
+            res = await t("factorized_model", series="MINK", model="m02", reason="")
+            check(res.startswith("No se pudo") and "razón" in res, "factorized_model sin razón: no", res)
+            res = await t("factorized_model", series="MINK", model="m02", reason="un AR(1)")
+            check(res.startswith("No se pudo") and "irreducible" in res,
+                  "factorized_model de un AR(1): ya está factorizado", res)
 
             res = await t("generate_forecast", series="MINK", model="m02")
             check("FORECAST REPORT" in res and "1912" in res, "generate_forecast: la tabla de fuf, anual", res)

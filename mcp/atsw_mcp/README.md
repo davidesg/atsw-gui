@@ -38,10 +38,15 @@ los `.inp`: lo hace `atsw-cli`, con `lib/proyecto` y `lib/inpdet`.
 | `formal_tests` | los contrastes formales, por familia | `formales` |
 | `residual_outlier_scan` | los episodios y si cambian la identificación | `anomalos` |
 | `ar_factorization` | la factorización del AR | `raices factores` |
+| `factorized_model` | el hijo con el AR factorizado, con su razón | `raices factorizado` |
 | `full_report` | la ficha de confianza | `ficha` |
 | `generate_forecast` | la previsión, fue -f y fuf desde el .pre, sin tocar el modelo | `prever` |
 | `guion_annotate`, `guion_adopt` | dejar escrito el porqué y el elegido | `proyecto razon` / `elige` |
 | `plot` | la ventana de la madre, y en texto lo que enseña | `atsw_gui --ver` |
+
+Las instrucciones son el protocolo de nodos de art (los dos carriles, los diez
+nodos, el AR que no se capa, los contrastes formales), recortado a estas
+herramientas, en 11 KB; dicen también lo que todavía no hay.
 
 Las herramientas y sus argumentos (`series`, `model`, `sample`, `reason`…)
 se llaman como sus parejas de art, en Python: la misma orden hace lo mismo en

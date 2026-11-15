@@ -804,6 +804,21 @@ afectados.
     usa aquí sin vocabulario nuevo (menos instrucciones, menos cómputo), y
     lo que se hace en un proyecto se lleva a otro. Las palabras de atsw-cli que hay debajo no cambian todavía (ver
     «Las órdenes de C y de Python, en inglés y las mismas»).
+  - **Las instrucciones de atsw-us, completas (15-nov-2026):** el protocolo
+    de nodos de art recortado a sus herramientas (11 KB), y
+    `factorized_model` (`raices factorizado`). Al escribirlas salieron dos
+    huecos, que las instrucciones declaran:
+    - **los armónicos**: `especifica` no los añade (ni Semana Santa), así
+      que la ruta estacional determinista se monta en fue_gui. Hace falta
+      `--armonicos N` (y `--pascua`) en `atsw-cli especifica`, con lib/inpdet.
+    - **la ecuación estimada en texto**: ninguna orden da la tabla de
+      parámetros con sus errores típicos, y el protocolo pide presentarla.
+      Hace falta una orden (`atsw-cli ecuacion`, de `fueout_read` o de la
+      ecuación de fue) y la herramienta `model_equation_display`, su pareja
+      de art.
+  - Lo siguiente del bloque: esos dos huecos, las herramientas del extra
+    Python (la λ de Box-Cox, la escalera de intervenciones, la
+    sobreparametrización), el `.cns` de atsw-mt, atsw-sis y la fase 2.
 
 ---
 

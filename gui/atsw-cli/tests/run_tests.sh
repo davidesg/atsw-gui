@@ -148,6 +148,27 @@ fi
 mira "raices factorizado: el ya factorizado no se vuelve a partir (estado 1)" \
      '! "$CLI" raices factorizado "$Y" en4 "$(echo "$J" | campo "d[\"modelo\"]")" 2>/dev/null'
 
+# identifica: lo que art propone, con las mismas funciones que la ventana de
+# identificacion (lib/artcand/artrun.c). Propone y no escribe nada.
+ART="$R/engines/art/bin/art$EXE"
+if [ -x "$ART" ]; then
+    H=$(cksum < "$Y")
+    J=$("$CLI" --json identifica "$Y" RIPC --transformacion 1,0,0)
+    mira "identifica: art propone, y su propuesta va la primera" \
+         '[ "$(echo "$J" | campo "len(d[\"candidatos\"]) > 0 and d[\"candidatos\"][0][\"propuesto\"]")" = True ]'
+    mira "identifica: sobre los datos, con la transformación pedida y s = 12" \
+         '[ "$(echo "$J" | campo "(d[\"sobre\"], d[\"lambda\"], d[\"d\"], d[\"D\"], d[\"s\"])")" = "('"'"'datos'"'"', 1, 0, 0, 12)" ]'
+    J=$("$CLI" --json identifica "$Y" RIPC --residuos m01)
+    mira "identifica --residuos: lo que les falta a los residuos de m01" \
+         '[ "$(echo "$J" | campo "(d[\"sobre\"], d[\"modelo\"], len(d[\"candidatos\"]) > 0)")" = "('"'"'residuos'"'"', '"'"'m01'"'"', True)" ]'
+    mira "identifica no escribe nada en el proyecto" '[ "$H" = "$(cksum < "$Y")" ]'
+fi
+mira "identifica con una λ que art no admite: estado 1, y dice cuáles sí" \
+     '"$CLI" identifica "$Y" RIPC --transformacion 0.5,0,0 2>&1 | grep -q "logaritmos"'
+mira "identifica de una serie que no está: estado 1" '! "$CLI" identifica "$Y" OTRA 2>/dev/null'
+mira "identifica --residuos de los datos: no están estimados (estado 1)" \
+     '! "$CLI" identifica "$Y" RIPC --residuos m00 2>/dev/null'
+
 # especifica y estima: lo que el asistente hace con un modelo nuevo. Sobre una
 # copia (estima deja costes.csv). El editor es lib/inpdet, el de la madre, y
 # el juez del .inp, fue (inp_check_fue).

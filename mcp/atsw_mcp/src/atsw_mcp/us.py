@@ -35,6 +35,9 @@ EL PROYECTO
 - Lo estimado NO se reescribe: para cambiarlo, se deriva un hijo.
 
 EL CAMINO DE UN MODELO
+0. identificar(serie, transformacion): lo que el identificador art propone
+   sobre los datos, con λ (0 log, 1 niveles), d y D; o sobre los residuos de
+   un modelo estimado (residuos_de), lo que les falta. Propone; no deriva.
 1. derivar(serie, padre, razon) -> mNN
 2. especificar(serie, mNN, ...): la transformación (λ,d,D), el ARMA
    (p,q,P,Q), las intervenciones ("step 10 2008", "impulse 3 2020", ...) y la
@@ -75,6 +78,20 @@ def crea():
     def proyecto_resumen() -> str:
         """Las series del proyecto, sus modelos con su linaje y su razón, y los elegidos."""
         return _hazlo(cli.atsw_cli, "proyecto", "ver")
+
+    @app.tool()
+    def identificar(serie: str, transformacion: str = "", residuos_de: str = "",
+                    muestra: str = "") -> str:
+        """Lo que propone el identificador art: los candidatos ARMA en su orden (el
+        primero es su propuesta), con sus pesos, la F estacional y ADF/KPSS. Sobre los
+        datos con transformacion «λ,d,D» (λ 0 o 1; sin ella, la del nodo de datos), o
+        sobre los residuos del modelo residuos_de. No escribe nada."""
+        def f():
+            a = ["identifica", ID("la serie", serie)]
+            if transformacion: a += ["--transformacion", transformacion]
+            if residuos_de:    a += ["--residuos", ID("el modelo", residuos_de)]
+            return cli.atsw_cli(*a, muestra=muestra)
+        return _hazlo(f)
 
     @app.tool()
     def derivar(serie: str, razon: str, padre: str = "", muestra: str = "") -> str:

@@ -40,6 +40,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/formales/formales.c \
       ../../engines/art/src/unit_root_tests.c \
       $(LIB)/artcand/artcand.c \
+      $(LIB)/artcand/artrun.c \
       $(LIB)/analisis/plotstats.c \
       $(LIB)/intervencion/intervencion.c \
       $(LIB)/inpdet/inpdet.c \

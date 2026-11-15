@@ -1055,3 +1055,36 @@ int fuepre_check_alignment(const struct Tseries *Ts, int m, char *why, size_t si
     }
     return 0;
 }
+
+/*  Los factores de reescalado de los ficheros de un sistema.  El modelo
+ *  conjunto se construye en w = refactor*BoxCox(z): si los ficheros no
+ *  comparten factor, un coeficiente entre dos series lleva el cociente de los
+ *  dos y los errores tipicos pierden precision (docs/ESTUDIO-escala.md).
+ *  drvec ya lo avisa en su ruta; esto es lo mismo para drtran y la escalera.
+ *  Devuelve 1 si no coinciden y, con `f`, lo dice alli (stderr: el .out no
+ *  cambia).                                                                  */
+int fuepre_warn_refactors(const struct Tseries *Ts, int m, FILE *f)
+{
+    int    i, same = 1;
+    double r1 = (Ts[1].refactor != 0.0) ? Ts[1].refactor : 1.0;
+
+    for (i = 2; i <= m; i++) {
+        double ri = (Ts[i].refactor != 0.0) ? Ts[i].refactor : 1.0;
+        if (fabs(ri - r1) > 1.0e-9 * fabs(r1)) same = 0;
+    }
+    if (same) return 0;
+    if (f) {
+        fprintf(f,
+            "WARNING: the files do not share one refactor (");
+        for (i = 1; i <= m; i++)
+            fprintf(f, "%s%s %g", i > 1 ? ", " : "", Ts[i].name,
+                    (Ts[i].refactor != 0.0) ? Ts[i].refactor : 1.0);
+        fprintf(f,
+            ").  The model is\n"
+            "         built in w = refactor*BoxCox(z) units, so a coefficient of\n"
+            "         series j in the equation of series i is its z-unit value\n"
+            "         times refactor_i / refactor_j, and the standard errors lose\n"
+            "         precision.  A common factor avoids both.\n");
+    }
+    return 1;
+}

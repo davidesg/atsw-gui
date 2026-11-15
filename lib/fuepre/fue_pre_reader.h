@@ -66,6 +66,10 @@ int unstable_delta ( struct Tusmodel *Tm );
 int fuepre_check_alignment( const struct Tseries *Ts, int m,
                             char *why, size_t size );
 
+/* 1 si los ficheros no comparten factor de reescalado; con `f`, lo avisa
+   alli (docs/ESTUDIO-escala.md).                                          */
+int fuepre_warn_refactors( const struct Tseries *Ts, int m, FILE *f );
+
 /* fuepre_forecast.c -- from a forecast of the stationary series w back to
    the LEVEL, with the .pre's own model (see the comment there).
      fuepre_bc          refactor * BoxCox(y)

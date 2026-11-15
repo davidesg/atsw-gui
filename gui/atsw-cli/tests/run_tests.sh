@@ -87,15 +87,17 @@ mira "dictamen --json: se lee y trae sus líneas" \
 mira "dictamen: la estimación convergió" \
      '[ "$(echo "$J" | campo "d[\"lineas\"][0][\"estado\"]")" = cuadra ]'
 
-# ecuacion: el bloque de estimaciones del .out, tal cual, con sus t
+# ecuacion: el bloque de estimaciones del .out, tal cual, con sus t. Con printf
+# y no echo: el JSON lleva \n escapados, y el echo de sh (dash, macOS) los
+# convierte en saltos de linea de verdad.
 J=$("$CLI" --json ecuacion "$Y" RIPC m01)
 NEST=$(grep -cE '^ +-?[0-9.]+ +\([0-9.]+\) +\[ *[0-9]+\]' "$P/RIPC/work/RIPC_m01.out")
 mira "ecuacion --json: un parámetro por cada línea estimada del .out ($NEST)" \
-     '[ "$(echo "$J" | campo "len([q for q in d[\"parametros\"] if q[\"n\"]])")" = "$NEST" ]'
+     '[ "$(printf "%s\n" "$J" | campo "len([q for q in d[\"parametros\"] if q[\"n\"]])")" = "$NEST" ]'
 mira "ecuacion: la t es la estimación entre su error típico" \
-     '[ "$(echo "$J" | campo "all(abs(q[\"t\"] - q[\"estimacion\"]/q[\"et\"]) < 1e-6 * (1 + abs(q[\"t\"])) for q in d[\"parametros\"] if q[\"n\"])")" = True ]'
+     '[ "$(printf "%s\n" "$J" | campo "all(abs(q[\"t\"] - q[\"estimacion\"]/q[\"et\"]) < 1e-6 * (1 + abs(q[\"t\"])) for q in d[\"parametros\"] if q[\"n\"])")" = True ]'
 mira "ecuacion: con su log-verosimilitud y su σ" \
-     '[ "$(echo "$J" | campo "d[\"logelf\"] is not None and d[\"sigma\"] != \"\"")" = True ]'
+     '[ "$(printf "%s\n" "$J" | campo "d[\"logelf\"] is not None and d[\"sigma\"] != \"\"")" = True ]'
 mira "ecuacion: en texto, la cabecera del modelo" \
      '"$CLI" ecuacion "$Y" RIPC m01 | grep -q "^MODELO ESTIMADO: RIPC/m01"'
 J=$("$CLI" --json ecuacion "$Y" RIPC m00 2>/dev/null); rc=$?

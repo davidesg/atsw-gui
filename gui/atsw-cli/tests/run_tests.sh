@@ -224,6 +224,21 @@ mira "especifica: un cambio que no vale deja el .inp como estaba (estado 1)" \
 mira "especifica sin cambios: estado 1" '! "$CLI" especifica "$YE" RIPC "$N" 2>/dev/null'
 mira "especifica de los datos: no se tocan (estado 1)" \
      '"$CLI" especifica "$YE" RIPC m00 --arma 1,0,0,0 2>&1 | grep -q "son los datos"'
+# los armónicos y Semana Santa: deterministas que fue lee por su nombre. Los
+# datos de RIPC ya traen el paquete entero (cos/sin 1..5 y alter).
+N2=$("$CLI" --json proyecto nuevo "$YE" RIPC --por asistente --razon "Semana Santa" | campo "d[\"modelo\"]")
+F2="$PE/RIPC/work/RIPC_$N2.inp"; H2=$(cksum < "$F2")
+mira "especifica --armonicos todos: los que ya trae no se repiten (estado 1)" \
+     '"$CLI" especifica "$YE" RIPC "$N2" --armonicos todos 2>&1 | grep -q "ya trae esos armónicos" && [ "$H2" = "$(cksum < "$F2")" ]'
+mira "especifica --armonicos 6 con s = 12: son de 1 a 5 pares (estado 1)" \
+     '"$CLI" especifica "$YE" RIPC "$N2" --armonicos 6 2>&1 | grep -q "de 1 a 5"'
+mira "especifica --armonicos con D = 1: la estacionalidad ya va en la diferencia (estado 1)" \
+     '"$CLI" especifica "$YE" RIPC "$N2" --transformacion 1,0,1 --armonicos 1 2>&1 | grep -q "D = 1" && [ "$H2" = "$(cksum < "$F2")" ]'
+J=$("$CLI" --json especifica "$YE" RIPC "$N2" --pascua)
+mira "especifica --pascua: easter entra, y fue lo acepta" \
+     '[ "$(echo "$J" | campo "\"easter\" in d[\"cambios\"]")" = True ] && grep -qx "easter" "$F2"'
+mira "especifica --pascua otra vez: ya la trae (estado 1)" \
+     '"$CLI" especifica "$YE" RIPC "$N2" --pascua 2>&1 | grep -q "ya trae Semana Santa"'
 if [ -x "$FUE" ]; then
     J=$("$CLI" --json estima "$YE" RIPC "$N" --por asistente)
     mira "estima: fue termina y trae la log-verosimilitud y el dictamen" \

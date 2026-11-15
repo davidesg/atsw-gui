@@ -86,8 +86,10 @@ En este orden, UNO CADA VEZ, en los dos carriles:
                    transform="λ,d,0") con d = 0, 1: tendencia o ACF que no
                    cae → una diferencia más. ADF y KPSS apoyan, no deciden.
  4. estacionalidad la F estacional y la ACF en s, 2s, 3s
-                   (identification_analysis). Determinista (D=0, armónicos) o
-                   estocástica (D=1). En GUIADO, aquí se pregunta el objetivo:
+                   (identification_analysis). Determinista (D=0, armónicos:
+                   write_inp seasonal=True, o n_harmonics) o estocástica (D=1).
+                   Semana Santa (easter) si los residuos muestran marzo/abril
+                   anómalos que se mueven con el calendario. En GUIADO, aquí se pregunta el objetivo:
                    para un sistema conviene la determinista (el preblanqueo de
                    una transferencia no quita una estacionalidad estocástica
                    que la entrada no tenga); para prever, a veces la
@@ -188,9 +190,6 @@ desviación típica y las variaciones del periodo y anual con las suyas. Prever
 no es un nodo: no hay nada que decidir ni que derivar.
 
 ══ LO QUE AQUÍ NO HAY (todavía) ══
-- Los ARMÓNICOS (y Semana Santa): write_inp no los añade. La ruta
-  determinista con armónicos se monta hoy en fue_gui, a mano: si el nodo
-  estacional la elige, díselo al analista y sigue sobre el modelo que deje.
 - La λ recomendada de Box-Cox, la escalera de intervenciones, la
 sobreparametrización, verificar un óptimo y comparar versiones son de
 art-python y aún no están en atsw-us. Si un nodo los pide, dilo y propón el
@@ -261,12 +260,17 @@ def crea():
     @app.tool()
     def write_inp(series: str, model: str, transform: str = "", arma: str = "",
                   add_arma: str = "", interventions: list[str] | None = None,
-                  mean: str = "", sample: str = "") -> str:
+                  mean: str = "", n_harmonics: int = 0, seasonal: bool = False,
+                  easter: bool = False, sample: str = "") -> str:
         """La especificación de un modelo SIN ESTIMAR. transform «λ,d,D»
         (0,1,0: log y una diferencia); arma «p,q,P,Q» (sustituye el ARMA);
         add_arma «p,q,P,Q» (multiplica un factor más); interventions como el
         motor las lee («step 10 2008», «impulse 3 2020»); mean «free» o un
-        número (fija). fue juzga el resultado: si no lo acepta, no se cambia nada."""
+        número (fija). La estacionalidad determinista, con D = 0: n_harmonics N
+        (los pares cos/sin k = 1..N) o seasonal (el paquete entero: los pares y,
+        con s par, alter, la de Nyquist); easter, Semana Santa (mensuales). Los
+        que el .inp ya trae no se repiten. fue juzga el resultado: si no lo
+        acepta, no se cambia nada."""
         def f():
             a = ["especifica", ID("la serie", series), ID("el modelo", model)]
             if transform: a += ["--transformacion", transform]
@@ -275,6 +279,9 @@ def crea():
             for i in interventions or []:
                 a += ["--intervencion", i]
             if mean:      a += ["--media", "libre" if mean == "free" else mean]
+            if seasonal:      a += ["--armonicos", "todos"]
+            elif n_harmonics: a += ["--armonicos", str(int(n_harmonics))]
+            if easter:        a += ["--pascua"]
             return cli.atsw_cli(*a, muestra=sample)
         return _hazlo(f)
 

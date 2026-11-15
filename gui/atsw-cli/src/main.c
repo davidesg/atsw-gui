@@ -79,6 +79,8 @@ static const char *i_resid = NULL;        /* identifica --residuos          */
 static gboolean  comprobar;
 /* especifica: lo que se cambia del .inp (lib/inpdet) */
 static const char *e_arma = NULL, *e_anade = NULL, *e_transf = NULL, *e_media = NULL;
+static const char *e_armon = NULL;   /* especifica --armonicos N|todos */
+static int         e_pascua = 0;     /* especifica --pascua            */
 static const char *e_interv[16];
 static int         e_ninterv = 0;
 static gboolean  con_sub;                 /* formales --sub                 */
@@ -1608,6 +1610,59 @@ static int cuatro( const char *s, int *a, int *b, int *c, int *d )
            ? 0 : 1;
 }
 
+/* LOS ARMONICOS Y SEMANA SANTA, como deterministas que fue lee por su nombre
+   («cos k», «sin k», «alter», «easter»): N pares k = 1..N, o «todos» (los
+   pares hasta s/2 - 1 y, con s par, «alter», la de Nyquist), como el paquete
+   estacional de art. Solo con D = 0: con la diferencia anual la
+   estacionalidad ya va en ella. Los que el .inp ya trae no se repiten.
+   Deja en nuevo[] (memoria de quien llama) los que hay que anadir.       */
+static int armonicos_nuevos( const char *inp, const char *val, int pascua,
+                             char nuevo[][ID_LINEA], int *nn, char *why, size_t n )
+{
+    InpFile f;
+    char    hay[ID_MAX_DET][ID_LINEA], cual[ID_LINEA];
+    int     nh, s, D, maxp, np, alter = 0, k, j, ya;
+
+    *nn = 0;
+    memset( &f, 0, sizeof f );
+    if ( inp_read( inp, &f, why, n ) != 0 ) return 1;
+    s = f.freq; D = f.nadiff;
+    inp_free( &f );
+    if ( ( nh = id_nombres( inp, hay, ID_MAX_DET, why, n ) ) < 0 ) return 1;
+    maxp = s % 2 ? ( s - 1 ) / 2 : s / 2 - 1;
+    if ( val )
+        {
+        if ( s < 2 ) { g_snprintf( why, n, "--armonicos: la serie es anual (s = %d), no hay estacionalidad que poner.", s ); return 1; }
+        if ( D > 0 ) { g_snprintf( why, n, "--armonicos con D = %d: la estacionalidad ya va en la diferencia anual. "
+                                   "Para la ruta determinista, D = 0 (--transformacion λ,d,0).", D ); return 1; }
+        if ( !strcmp( val, "todos" ) ) { np = maxp; alter = ( s % 2 == 0 ); }
+        else
+            {
+            char *fin = NULL;
+            np = (int) strtol( val, &fin, 10 );
+            if ( !fin || *fin || np < 1 || np > maxp )
+                { g_snprintf( why, n, "--armonicos %s: es un número de pares, de 1 a %d con s = %d, o «todos».", val, maxp, s ); return 1; }
+            }
+        for ( k = 1; k <= np + alter; k++ )
+            for ( j = 0; j < 2; j++ )
+                {
+                if ( k > np ) { if ( j ) break; g_snprintf( cual, sizeof cual, "alter" ); }
+                else g_snprintf( cual, sizeof cual, "%s %d", j ? "sin" : "cos", k );
+                for ( ya = 0; ya < nh && strcmp( hay[ya], cual ); ya++ ) ;
+                if ( ya == nh && *nn < ID_MAX_DET ) g_snprintf( nuevo[(*nn)++], ID_LINEA, "%s", cual );
+                }
+        }
+    if ( pascua )
+        {
+        if ( s != 12 ) { g_snprintf( why, n, "--pascua: Semana Santa es para series mensuales (s = %d).", s ); return 1; }
+        for ( ya = 0; ya < nh && strcmp( hay[ya], "easter" ); ya++ ) ;
+        if ( ya == nh && *nn < ID_MAX_DET ) g_snprintf( nuevo[(*nn)++], ID_LINEA, "easter" );
+        }
+    if ( *nn == 0 ) { g_snprintf( why, n, "El .inp ya trae %s.", val && pascua ? "esos armónicos y Semana Santa"
+                                  : pascua ? "Semana Santa" : "esos armónicos" ); return 1; }
+    return 0;
+}
+
 /* especifica P SERIE MODELO [--transformacion L,d,D] [--arma p,q,P,Q]
    [--anade-arma p,q,P,Q] [--intervencion "step 10 2008"]... [--media libre|V]:
    EL MISMO EDITOR DEL .inp QUE LAS VENTANAS DE LA MADRE (lib/inpdet), que
@@ -1659,6 +1714,19 @@ static int especifica( const char *path, const char *serie, const char *id )
         PASO( id_anade_arma( cur, ( cambios % 2 ) ? b : a, pa, NULL, qa, NULL, Pa, NULL, Qa, NULL, why, sizeof why ),
               ( g_snprintf( msg, sizeof msg, "un factor más (%d,%d)(%d,%d)", pa, qa, Pa, Qa ), msg ) );
         }
+    if ( e_armon || e_pascua )
+        {
+        char        nv[ID_MAX_DET][ID_LINEA];
+        const char *pn[ID_MAX_DET];
+        int         nn = 0, k;
+
+        if ( armonicos_nuevos( cur, e_armon, e_pascua, nv, &nn, why, sizeof why ) != 0 ) goto mal;
+        for ( k = 0; k < nn; k++ ) pn[k] = nv[k];
+        g_snprintf( msg, sizeof msg, "%d determinista%s estacional%s (", nn, nn == 1 ? "" : "s", nn == 1 ? "" : "es" );
+        for ( k = 0; k < nn; k++ ) g_strlcat( msg, k ? ", " : "", sizeof msg ), g_strlcat( msg, nv[k], sizeof msg );
+        g_strlcat( msg, ")", sizeof msg );
+        PASO( id_anade( cur, ( cambios % 2 ) ? b : a, pn, NULL, nn, why, sizeof why ), msg );
+        }
     if ( e_ninterv > 0 )
         {
         g_snprintf( msg, sizeof msg, "%d intervención%s", e_ninterv, e_ninterv == 1 ? "" : "es" );
@@ -1678,7 +1746,7 @@ static int especifica( const char *path, const char *serie, const char *id )
 #undef PASO
     if ( cambios == 0 )
         { g_snprintf( why, sizeof why, "No se ha pedido ningún cambio (--transformacion, --arma, "
-                      "--anade-arma, --intervencion, --media)." ); goto mal; }
+                      "--anade-arma, --armonicos, --pascua, --intervencion, --media)." ); goto mal; }
     /* EL JUEZ ES EL MOTOR */
     if ( inp_check_fue( cur, msg, sizeof msg ) != 0 )
         { g_snprintf( why, sizeof why, "Lo que salió no lo acepta fue: %s", msg ); goto mal; }
@@ -2486,6 +2554,7 @@ static void uso( FILE *f )
            "  --comprobar   ficha: corre fue sobre el .pre y lo apunta en costes.csv\n"
            "  especifica: --transformacion L,d,D  --arma p,q,P,Q  --anade-arma p,q,P,Q\n"
            "    --intervencion \"step 10 2008\" (se repite)  --media libre|V (fija en V)\n"
+           "    --armonicos N|todos (N pares cos/sin; todos: y alter, con D = 0)  --pascua (mensuales)\n"
            "  --familia F   formales: integracion o estacionalidad (sin ella, las dos)\n"
            "  --sub         formales: también d - 1 (se pide, no se ofrece)\n"
            "  --episodios L anomalos: los que se omiten al calibrar, 1,3 o todos\n"
@@ -2517,6 +2586,8 @@ int main( int argc, char **argv )
         else if ( !strcmp( argv[i], "--arma" ) && i + 1 < argc ) e_arma = argv[++i];
         else if ( !strcmp( argv[i], "--anade-arma" ) && i + 1 < argc ) e_anade = argv[++i];
         else if ( !strcmp( argv[i], "--transformacion" ) && i + 1 < argc ) e_transf = argv[++i];
+        else if ( !strcmp( argv[i], "--armonicos" ) && i + 1 < argc ) e_armon = argv[++i];
+        else if ( !strcmp( argv[i], "--pascua" ) ) e_pascua = 1;
         else if ( !strcmp( argv[i], "--media" ) && i + 1 < argc ) e_media = argv[++i];
         else if ( !strcmp( argv[i], "--intervencion" ) && i + 1 < argc )
             { if ( e_ninterv < (int) G_N_ELEMENTS(e_interv) ) e_interv[e_ninterv++] = argv[++i]; else i++; }

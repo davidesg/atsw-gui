@@ -82,6 +82,9 @@ async def corre(raiz: Path, w: Path) -> None:
             res = await t("write_inp", series="MINK", model="m02", transform="0,1,0",
                           arma="1,0,0,0", mean="free")
             check("fue lo acepta" in res, "write_inp: log, una diferencia y un AR(1)", res)
+            res = await t("write_inp", series="MINK", model="m02", n_harmonics=1)
+            check(res.startswith("No se pudo") and "anual" in res,
+                  "write_inp con armónicos en una serie anual: no", res)
             res = await t("write_inp", series="MINK", model="m02", interventions=["step"])
             check(res.startswith("No se pudo") and "queda como estaba" in res,
                   "write_inp algo que no vale: no se cambia nada", res)

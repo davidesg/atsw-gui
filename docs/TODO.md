@@ -808,9 +808,11 @@ afectados.
     de nodos de art recortado a sus herramientas (11 KB), y
     `factorized_model` (`raices factorizado`). Al escribirlas salieron dos
     huecos, que las instrucciones declaran:
-    - **los armónicos**: `especifica` no los añade (ni Semana Santa), así
-      que la ruta estacional determinista se monta en fue_gui. Hace falta
-      `--armonicos N` (y `--pascua`) en `atsw-cli especifica`, con lib/inpdet.
+    - **los armónicos — HECHO (15-nov-2026):** `atsw-cli especifica
+      --armonicos N|todos` (N pares cos/sin, o el paquete entero con alter,
+      solo con D = 0) y `--pascua` (mensuales), con `id_anade` de lib/inpdet;
+      en atsw-us, `write_inp` con `n_harmonics`, `seasonal` y `easter`, los
+      nombres de art.
     - **la ecuación estimada en texto — HECHO (15-nov-2026):** `atsw-cli
       ecuacion` da el bloque de estimaciones del `.out` tal cual, con la t de
       cada parámetro, el nombre de cada determinista (casado con el `.inp`),
@@ -818,7 +820,7 @@ afectados.
       pareja de art. No se transcribe a otra forma, para no tocar fue: la
       ecuación en dos líneas, como la de art, pediría un modo de texto en el
       motor, y eso espera a una decisión.
-  - Lo siguiente del bloque: los armónicos de `especifica`, las herramientas del extra
+  - Lo siguiente del bloque: las herramientas del extra
     Python (la λ de Box-Cox, la escalera de intervenciones, la
     sobreparametrización), el `.cns` de atsw-mt, atsw-sis y la fase 2.
 

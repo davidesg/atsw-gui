@@ -39,6 +39,7 @@
 #include "engine.h"
 #include "sitio.h"
 #include "ficha.h"
+#include "outfcst.h"
 #include "netfile.h"
 #include "outdiag.h"
 #include "artrun.h"
@@ -791,6 +792,7 @@ static gchar *hermano( const char *programa )
         "../../engines/fue/bin/%s",          /* el arbol de compilacion   */
         "../../engines/drtran/bin/%s",
         "../../engines/art/bin/%s",
+        "../../engines/fuf/bin/%s",
         "./%s", NULL                         /* el paquete: todo junto    */
     };
     return sitio_busca( programa, sitio );
@@ -2042,6 +2044,145 @@ static int caso_estima( const char *path, const char *caso )
     return 0;
 }
 
+static int copia_pre( const char *de, const char *a )
+{
+    gchar *c = NULL;
+    gsize  n = 0;
+    int    r = g_file_get_contents( de, &c, &n, NULL ) && g_file_set_contents( a, c, (gssize) n, NULL );
+
+    g_free( c );
+    return r ? 0 : 1;
+}
+
+/* ------------------------------------------------------------------------ */
+/* prever: la prevision univariante, fue -f y fuf                           */
+/* ------------------------------------------------------------------------ */
+
+/* prever P SERIE MODELO: LO QUE HACE «Forecast» EN fue_gui --fue -f escribe
+   forecast_<base>.inp y fuf lo corre--, sin tocar el modelo. fue -f
+   reestima, y sobre el .inp reescribia el .out del modelo (la C3 de
+   AUDITORIA-procesos): aqui se hace en una carpeta temporal y desde el .pre,
+   que es el optimo y no se mueve. Junto al modelo quedan solo
+   forecast_<base>.inp y forecast_<base>.out, donde los deja fue_gui. Las dos
+   corridas, en costes.csv como «prever».                               */
+static int prever( const char *path, const char *serie, const char *id )
+{
+    char         why[512], pre[PR_RUTA], raiz[PR_RUTA], tabla[16384];
+    Proyecto    *p = NULL;
+    gchar       *tmp, *base, *dmod, *fin, *fout, *inp_t, *obj;
+    EngineResult r;
+    Forecast    *f;
+    GString     *t;
+    int          i, k, rc = 1;
+
+    if ( ruta_de( path, serie, id, ".pre", pre, sizeof pre, &p ) != 0 ) { g_free( p ); return 1; }
+    if ( !g_file_test( pre, G_FILE_TEST_EXISTS ) )
+        { g_free( p ); return falla( "%s/%s no está estimado: no hay .pre del que prever.", serie, id ); }
+    tmp = g_dir_make_tmp( "atsw-prever-XXXXXX", NULL );
+    if ( !tmp ) { g_free( p ); return falla( "No pude crear la carpeta de trabajo." ); }
+    base  = g_path_get_basename( pre );
+    base[strlen( base ) - 4] = '\0';
+    dmod  = g_path_get_dirname( pre );
+    inp_t = g_strdup_printf( "%s%c%s.inp", tmp, G_DIR_SEPARATOR, base );
+    if ( copia_pre( pre, inp_t ) != 0 ) { g_snprintf( why, sizeof why, "No pude copiar %s.", pre ); goto fin_mal; }
+
+    engine_set_finder( hermano );
+    raiz_de( path, raiz, sizeof raiz );
+    obj = *muestra ? g_strdup_printf( "%s/%s/%s", serie, muestra, id ) : g_strdup_printf( "%s/%s", serie, id );
+    coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "prever" );
+    r = engine_run( tmp, "fue", base, "-f", NULL );
+    coste_contexto_limpia();
+    if ( !engine_wrote_results( &r ) )
+        { g_snprintf( why, sizeof why, "fue -f: %s", r.message ); engine_result_clear( &r ); g_free( obj ); goto fin_mal; }
+    engine_result_clear( &r );
+    {
+    gchar *fb = g_strdup_printf( "forecast_%s", base );
+
+    coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "prever" );
+    r = engine_run( tmp, "fuf", fb, NULL );
+    coste_contexto_limpia();
+    g_free( fb );
+    }
+    g_free( obj );
+    if ( !engine_wrote_results( &r ) )
+        { g_snprintf( why, sizeof why, "fuf: %s", r.message ); engine_result_clear( &r ); goto fin_mal; }
+    engine_result_clear( &r );
+
+    /* lo de la prevision, junto al modelo */
+    fin  = g_strdup_printf( "%s%cforecast_%s.inp", dmod, G_DIR_SEPARATOR, base );
+    fout = g_strdup_printf( "%s%cforecast_%s.out", dmod, G_DIR_SEPARATOR, base );
+    {
+    gchar *a = g_strdup_printf( "%s%cforecast_%s.inp", tmp, G_DIR_SEPARATOR, base );
+    gchar *b = g_strdup_printf( "%s%cforecast_%s.out", tmp, G_DIR_SEPARATOR, base );
+    int    ok = copia_pre( a, fin ) == 0 && copia_pre( b, fout ) == 0;
+
+    g_free( a ); g_free( b );
+    if ( !ok ) { g_snprintf( why, sizeof why, "No pude dejar la previsión junto al modelo." );
+                 g_free( fin ); g_free( fout ); goto fin_mal; }
+    }
+
+    f = g_new0( Forecast, 1 );
+    t = g_string_new( "" );
+    if ( of_parse_file( fout, f ) != 0 || f->ns < 1 )
+        { g_free( f ); g_string_free( t, TRUE ); g_free( fin ); g_free( fout );
+          g_snprintf( why, sizeof why, "fuf no dejó una tabla de previsión que se lea." ); goto fin_mal; }
+    if ( json )
+        {
+        const OfSerie *s0 = &f->s[0];
+
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "serie", serie ); g_string_append( t, ", " );
+        js_par( t, "modelo", id ); g_string_append( t, ", " );
+        js_par( t, "origen", s0->origen );
+        g_string_append_printf( t, ", \"horizonte\": %d, ", s0->lead );
+        js_par( t, "out", fout ); g_string_append( t, ", \"prevision\": [" );
+        for ( i = 0, k = 0; i < s0->nf; i++ )
+            {
+            const OfFila *x = &s0->f[i];
+
+            if ( !x->tiene_sd ) continue;
+            g_string_append_printf( t, "%s{", k++ ? ", " : "" );
+            js_par( t, "fecha", x->fecha ); g_string_append( t, ", " );
+            js_num( t, "nivel", x->nivel ); g_string_append( t, ", " );
+            js_num( t, "sd", x->sd_nivel ); g_string_append( t, ", " );
+            js_num( t, "var_periodo", x->var_per ); g_string_append( t, ", " );
+            js_num( t, "sd_periodo", x->sd_per ); g_string_append( t, ", " );
+            /* una serie anual no tiene columnas anuales: «-» en la tabla */
+            if ( strchr( x->fecha, '/' ) )
+                { js_num( t, "var_anual", x->var_anu ); g_string_append( t, ", " );
+                  js_num( t, "sd_anual", x->sd_anu ); }
+            else g_string_append( t, "\"var_anual\": null, \"sd_anual\": null" );
+            g_string_append( t, "}" );
+            }
+        g_string_append( t, "]}\n" );
+        }
+    else
+        {
+        if ( of_tabla_file( fout, f->s[0].nombre, tabla, sizeof tabla ) != 0 ) tabla[0] = '\0';
+        g_string_append_printf( t, "Previsión de %s/%s (fue -f y fuf, desde el .pre: el modelo no se toca)\n%s\n  %s\n",
+                                serie, id, tabla, fout );
+        }
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE );
+    g_free( f ); g_free( fin ); g_free( fout );
+    rc = 0;
+    goto fin;
+fin_mal:
+    falla( "%s", why );
+fin:
+    {
+    GDir        *d = g_dir_open( tmp, 0, NULL );
+    const gchar *n;
+
+    while ( d && ( n = g_dir_read_name( d ) ) != NULL )
+        { gchar *x = g_build_filename( tmp, n, NULL ); g_unlink( x ); g_free( x ); }
+    if ( d ) g_dir_close( d );
+    g_rmdir( tmp );
+    }
+    g_free( inp_t ); g_free( dmod ); g_free( base ); g_free( tmp ); g_free( p );
+    return rc;
+}
+
 /* ------------------------------------------------------------------------ */
 /* La orden                                                                 */
 /* ------------------------------------------------------------------------ */
@@ -2064,6 +2205,7 @@ static void uso( FILE *f )
            "  identifica P SERIE [--transformacion L,d,D] [--residuos MODELO]   lo que art propone\n"
            "  especifica P SERIE MODELO [cambios]   la especificación de un modelo sin estimar\n"
            "  estima P SERIE MODELO                fue sobre el modelo, y su dictamen\n"
+           "  prever P SERIE MODELO                la previsión: fue -f y fuf, sin tocar el modelo\n"
            "  formales P SERIE MODELO [--familia F] [--sub]   los contrastes formales\n"
            "  anomalos P SERIE MODELO [--episodios L]   los episodios y su calibración\n"
            "  prewhiten P SALIDA/MODELO ENTRADA/MODELO...   la CCF preblanqueada\n"
@@ -2168,6 +2310,7 @@ int main( int argc, char **argv )
     if ( ES( 0, "raices" ) && ES( 1, "factorizado" ) && npos == 5 )
         return raices_factorizado( pos[2], pos[3], pos[4] );
     if ( ES( 0, "ficha" ) && npos == 4 ) return ficha( pos[1], pos[2], pos[3] );
+    if ( ES( 0, "prever" ) && npos == 4 ) return prever( pos[1], pos[2], pos[3] );
     if ( ES( 0, "caso-estima" ) && npos == 3 ) return caso_estima( pos[1], pos[2] );
     if ( ES( 0, "identifica" ) && npos == 3 ) return identifica( pos[1], pos[2] );
     if ( ES( 0, "especifica" ) && npos == 4 ) return especifica( pos[1], pos[2], pos[3] );

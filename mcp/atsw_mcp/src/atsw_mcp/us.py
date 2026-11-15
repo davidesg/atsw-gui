@@ -47,7 +47,9 @@ EL CAMINO DE UN MODELO
    contrastes formales, por familia, uno a uno; no hay veredicto encadenado),
    anomalos (los episodios y si cambian la identificación), raices (la
    factorización del AR), ficha (la ficha de confianza).
-5. razon / elegir: dejar escrito por qué, y cuál es el modelo de la serie.
+5. prever(serie, mNN): la previsión de un modelo estimado (fue -f y fuf), en
+   la tabla de fuf: el nivel y su d.t., las variaciones y sus d.t.
+6. razon / elegir: dejar escrito por qué, y cuál es el modelo de la serie.
 
 LO QUE VE EL ANALISTA
 - ver(que, serie, modelo) abre la ventana de la madre: serie (y ACF/PACF),
@@ -179,6 +181,14 @@ def crea():
             if comprobar: a += ["--comprobar", "--por", "asistente"]
             return cli.atsw_cli(*a, muestra=muestra)
         return _hazlo(f)
+
+    @app.tool()
+    def prever(serie: str, modelo: str, muestra: str = "") -> str:
+        """La previsión de un modelo estimado: fue -f y fuf desde su .pre, sin tocar
+        el modelo. La tabla de fuf: el nivel con su d.t. y las variaciones del periodo
+        y anual con las suyas. Deja forecast_<modelo>.inp/.out junto al modelo."""
+        return _hazlo(lambda: cli.atsw_cli("prever", ID("la serie", serie), ID("el modelo", modelo),
+                                           "--por", "asistente", muestra=muestra))
 
     @app.tool()
     def razon(serie: str, modelo: str, texto: str, muestra: str = "") -> str:

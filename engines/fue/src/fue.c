@@ -2384,7 +2384,16 @@ FREE_STR( file_output );
 
    fprintf( preputv, "\n** ACF/PACF bands (0 Automatic) and reescaling factor: \n");
    fprintf( preputv, " %.2f", Tm.cbands );
-   fprintf( preputv, " %.2f", Ts.refactor );
+   /* BUG-0003: dos decimales si es exacto (100 sigue «100.00», byte a byte)
+      y la forma exacta mas corta si no: 0.001 salia «0.00», que todo lector
+      toma por 1. */
+   {
+   char rfbuf[40];
+   snprintf( rfbuf, sizeof rfbuf, "%.2f", Ts.refactor );
+   if ( strtod( rfbuf, NULL ) != Ts.refactor )
+      snprintf( rfbuf, sizeof rfbuf, "%.10g", Ts.refactor );
+   fprintf( preputv, " %s", rfbuf );
+   }
    fprintf( preputv, "\n** Time series (stochastic and non-standard deterministic variables): \n");
 
    for ( i = 1; i <= Ts.nobs; i++ )

@@ -1226,12 +1226,22 @@ static void write_forecast(FILE *out, FILE *ff, Fc *fc, int L)
     if (ff) {
         fprintf(ff, "Forecasts from the ladder VARMA (cross orders p=%d q=%d)\n", cx_p, cx_q);
         fprintf(ff, "horizon=%d, freq=%d; each series with its own .pre transformation\n", L, freq);
+        /* Con todas las series en logaritmos la cabecera es la de siempre,
+           byte a byte; si alguna no lo esta, dice las dos reglas (BUG-0005). */
+        int todas_log = 1;
+        for (a = 1; a <= act_m; a++)
+            if (fabs(Tm[act[a]].boxlam) >= 1e-8) todas_log = 0;
         fprintf(ff, "Level/Low95/High95 in original units. mon%%/ann%% = period/annual "
-                    "variation and std (100*delta/refactor; %% for lambda=0).\n\n");
+                    "variation and std (%s).\n\n",
+                todas_log ? "100*delta/refactor; % for lambda=0"
+                          : "% for lambda=0: 100*delta/refactor; otherwise delta/refactor");
     }
     for (a = 1; a <= act_m; a++) {
         int i = act[a], nb = fc[a].nb;
-        real sc = 100.0 / Ts[i].refactor;
+        /* BUG-0005: un tanto por ciento solo en logaritmos; si no, el cambio
+           de la transformada en sus unidades. La regla de fuf, drtran, drvec
+           y de la tabla de exactitud de mas abajo. */
+        real sc = (fabs(Tm[i].boxlam) < 1e-8 ? 100.0 : 1.0) / Ts[i].refactor;
         FILE *f;
         int  pass;
         ObsToDate(Ts[i].begyear, Ts[i].begtime, nb, freq, &per, &sub);

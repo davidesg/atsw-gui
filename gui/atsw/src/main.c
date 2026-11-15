@@ -34,7 +34,8 @@ void atsw_vistazo( Atsw *a, const char *inp, int modo, double lam );
 static Atsw A;
 
 void barra_pub( Atsw *a, const char *s )
-{
+{    /* --ver: no hay barra; lo que se diga, a stderr */
+    if ( a->estado == NULL ) { if ( s && *s ) fprintf( stderr, "atsw_gui: %s\n", s ); return; }
     /* UN MENSAJE DE VERDAD GANA AL GLOBO que se estuviera enseñando: al
        salir del menu ya no se repone lo de antes (on_entrada_fuera).   */
     g_object_set_data( G_OBJECT(a->estado), "previo", NULL );
@@ -2546,6 +2547,92 @@ static gboolean on_atajo_estima( GtkAccelGroup *g, GObject *o, guint k,
    --sin-presentacion. Las pruebas no pasan por main().                */
 static gboolean presentacion = FALSE;
 
+/* ------------------------------------------------------------------------ */
+/* atsw_gui --ver: una ventana suelta (docs/ESTUDIO-terminal-mcp.md §7.4)    */
+/* ------------------------------------------------------------------------ */
+
+/* Lo pedido con --ver; main() lo valida antes de levantar GTK. */
+static const char *ver_que = NULL;
+static char        ver_id[PR_ID];
+static gboolean    ver_visto;        /* ya hubo alguna ventana a la vista */
+static int         ver_espera;       /* decimas de segundo esperando     */
+
+/* El proceso vive mientras haya alguna ventana a la vista. La del vistazo
+   llega cuando fug acaba, asi que se espera a la primera antes de mirar
+   si quedan; si en un minuto no llega ninguna, se acaba.              */
+static gboolean ver_mira( gpointer app )
+{
+    GList   *l, *ws = gtk_window_list_toplevels();
+    gboolean hay = FALSE;
+
+    for ( l = ws; l; l = l->next )
+        if ( gtk_widget_get_visible( GTK_WIDGET(l->data) ) ) { hay = TRUE; break; }
+    g_list_free( ws );
+    if ( hay ) ver_visto = TRUE;
+    if ( ( ver_visto && !hay ) || ( !ver_visto && ++ver_espera > 600 ) )
+        {
+        if ( !ver_visto ) fprintf( stderr, "atsw_gui: la ventana no llegó a abrirse\n" );
+        g_application_release( G_APPLICATION(app) );
+        return G_SOURCE_REMOVE;
+        }
+    return G_SOURCE_CONTINUE;
+}
+
+static void ver_activa( GtkApplication *app, Atsw *a )
+{
+    AnHost h = atsw_host( a );
+
+    at_logo_por_defecto();
+    g_application_hold( G_APPLICATION(app) );
+    if ( !strcmp( ver_que, "serie" ) )           vistazo( a, 0, 1.0 );
+    else if ( !strcmp( ver_que, "media-dt" ) )   vistazo( a, 1, 1.0 );
+    else if ( !strcmp( ver_que, "histograma" ) ) vistazo( a, 2, 1.0 );
+    else if ( !strcmp( ver_que, "residuos" ) )
+        an_anomalos( &h, a->serie, atsw_muestra_actual( a ), ver_id );
+    else if ( !strcmp( ver_que, "diagnosis" ) )
+        an_diagnosis( &h, a->serie, atsw_muestra_actual( a ), ver_id );
+    g_timeout_add( 100, ver_mira, app );
+}
+
+/* LO QUE --ver PIDE, comprobado antes de abrir nada: la orden sale con 2 si
+   esta mal escrita y con 3 si lo pedido no esta, y el que la lanzo (el
+   asistente) sabe por que no se abrio ninguna ventana.                 */
+static int ver_valida( Atsw *a, const char *que, const char *obj )
+{
+    static const char *const ques[] = { "serie", "media-dt", "histograma", "residuos",
+                                        "diagnosis", NULL };
+    const char *barra = strchr( obj, '/' ), *mu = a->ver_mu;
+    char        f[PR_RUTA];
+    int         i, conoce = 0;
+
+    for ( i = 0; ques[i]; i++ ) conoce |= !strcmp( que, ques[i] );
+    if ( !conoce )
+        { fprintf( stderr, "atsw_gui: --ver %s: es serie, media-dt, histograma, residuos o "
+                           "diagnosis\n", que ); return 2; }
+    if ( barra ) snprintf( a->serie, sizeof a->serie, "%.*s", (int) ( barra - obj ), obj );
+    else         snprintf( a->serie, sizeof a->serie, "%s", obj );
+    snprintf( ver_id, sizeof ver_id, "%s", barra ? barra + 1 : "" );
+    if ( pr_serie_idx( a->p, a->serie ) < 0 )
+        { fprintf( stderr, "atsw_gui: «%s» no es una serie del proyecto\n", a->serie ); return 3; }
+    if ( !strcmp( que, "residuos" ) || !strcmp( que, "diagnosis" ) )
+        {
+        if ( !ver_id[0] )
+            snprintf( ver_id, sizeof ver_id, "%s",
+                      atsw_modelo_por_defecto_en( a->p, a->serie, mu ) );
+        if ( !ver_id[0] || pr_modelo_idx( a->p, a->serie, mu, ver_id ) < 0 )
+            { fprintf( stderr, "atsw_gui: «%s» no es un modelo de %s\n", ver_id, a->serie );
+              return 3; }
+        if ( pr_ruta( a->p, a->serie, mu, ver_id, ".out", f, sizeof f ) != 0 ||
+             !g_file_test( f, G_FILE_TEST_EXISTS ) )
+            { fprintf( stderr, "atsw_gui: %s/%s no está estimado: no hay .out\n",
+                       a->serie, ver_id ); return 3; }
+        }
+    else if ( !que_identificar( a, f, sizeof f ) )
+        { fprintf( stderr, "atsw_gui: %s no tiene datos en esa muestra\n", a->serie );
+          return 3; }
+    return 0;
+}
+
 static void activate( GtkApplication *app, gpointer d )
 {
     Atsw         *a = d;
@@ -2555,6 +2642,7 @@ static void activate( GtkApplication *app, gpointer d )
     guint          k;
     GdkModifierType prim;
 
+    if ( a->solo_ver ) { ver_activa( app, a ); return; }
     at_logo_por_defecto();
     w = gtk_application_window_new( app );
     a->ventana = w;
@@ -2847,7 +2935,7 @@ static void numeros_con_punto( GApplication *app, gpointer data )
 int main( int argc, char **argv )
 {
     GtkApplication *app;
-    const char     *proy = NULL;
+    const char     *proy = NULL, *ver_obj = NULL, *ver_muestra = "";
     gboolean        sin_pres = FALSE;
     int             rc, i;
 
@@ -2856,16 +2944,25 @@ int main( int argc, char **argv )
         if ( !strcmp( argv[i], "--proyecto" ) && i + 1 < argc ) proy = argv[++i];
         else if ( !strncmp( argv[i], "--proyecto=", 11 ) ) proy = argv[i] + 11;
         else if ( !strcmp( argv[i], "--sin-presentacion" ) ) sin_pres = TRUE;
+        else if ( !strcmp( argv[i], "--ver" ) && i + 2 < argc )
+            { ver_que = argv[++i]; ver_obj = argv[++i]; }
+        else if ( !strcmp( argv[i], "--muestra" ) && i + 1 < argc ) ver_muestra = argv[++i];
         else if ( !strcmp( argv[i], "-h" ) || !strcmp( argv[i], "--help" ) )
             {
-            printf( "uso: %s [--proyecto FICHERO] [--sin-presentacion]\n\n"
+            printf( "uso: %s [--proyecto FICHERO] [--sin-presentacion]\n"
+                    "       %s --proyecto FICHERO --ver QUE SERIE[/MODELO] [--muestra M]\n\n"
                     "  ATSW GUI: el taller. Gestiona datos, modelos y\n"
                     "  proyectos, y lanza fue, fug y drtran con el proyecto\n"
                     "  abierto.\n\n"
                     "  --sin-presentacion  sin la ventana de los creditos ni la\n"
                     "                      comprobacion de la instalacion al\n"
-                    "                      arrancar (Ayuda la hace a mano).\n",
-                    argv[0] );
+                    "                      arrancar (Ayuda la hace a mano).\n"
+                    "  --ver QUE OBJETO    solo una ventana, de solo lectura, para el\n"
+                    "                      asistente: QUE es serie, media-dt,\n"
+                    "                      histograma (de la SERIE), residuos o diagnosis\n"
+                    "                      (del MODELO; sin el, el elegido). Sale con 2 si\n"
+                    "                      la orden esta mal y con 3 si no esta lo pedido.\n",
+                    argv[0], argv[0] );
             return 0;
             }
         else { fprintf( stderr, "%s: no entiendo «%s»\n", argv[0], argv[i] );
@@ -2880,8 +2977,18 @@ int main( int argc, char **argv )
             { fprintf( stderr, "%s: %s\n", proy, why ); return 3; }
         }
 
+    if ( ver_que )
+        {
+        int rc;
+
+        if ( !proy ) { fprintf( stderr, "%s: --ver necesita --proyecto\n", argv[0] ); return 2; }
+        A.solo_ver = TRUE;
+        snprintf( A.ver_mu, sizeof A.ver_mu, "%s", ver_muestra );
+        if ( ( rc = ver_valida( &A, ver_que, ver_obj ) ) != 0 ) return rc;
+        sin_pres = TRUE;
+        }
     presentacion = !sin_pres;
-    atsw_escritorio_registra();
+    if ( !ver_que ) atsw_escritorio_registra();
     sitio_madre_limpia_despedidas();     /* una de otra madre con este pid */
     argc = 1;
     app = gtk_application_new( "org.atsw.gui", G_APPLICATION_NON_UNIQUE );

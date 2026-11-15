@@ -163,6 +163,7 @@ const AtRes *atsw_resultado( Atsw *a, const char *serie, const char *muestra,
  * vez de deducirlo del widget en un momento en que el widget miente.     */
 const char *atsw_muestra_actual( Atsw *a )
 {
+    if ( a && a->solo_ver ) return a->ver_mu;
     if ( a == NULL || a->hoja_actual < 0 || a->hoja_actual >= a->nhojas )
         return "";
     return a->hoja_mu[a->hoja_actual];

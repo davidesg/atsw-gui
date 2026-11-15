@@ -103,4 +103,8 @@ if [ $rc != 0 ]; then
     exit 1
 fi
 echo "la madre, conducida: todo en orden ($((t1 - t0)) s)"
+
+# La ventana suelta del asistente, como proceso: con el ejecutable de verdad.
+echo
+sh "$TOP/tests/ver.sh" || exit 1
 exit 0

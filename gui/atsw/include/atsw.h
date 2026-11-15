@@ -163,6 +163,12 @@ typedef struct {
 
    char       serie[PR_ID];       /* la serie marcada                       */
 
+   /* atsw_gui --ver (docs/ESTUDIO-terminal-mcp.md §7.4): una ventana
+      suelta para el asistente, de solo lectura. Sin ventana principal, sin
+      hojas: la muestra es la que se pidio, y los mensajes van a stderr. */
+   gboolean   solo_ver;
+   char       ver_mu[PR_ID];
+
    /* REPINTANDO: no leer la seleccion.
     *
     * gtk_list_store_clear dispara "changed" con nada marcado, asi que marcar

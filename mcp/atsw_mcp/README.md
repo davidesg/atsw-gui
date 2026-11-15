@@ -42,6 +42,21 @@ escribe va con `--por asistente`. La prueba, `tests/us.py`, es una sesión MCP
 a pelo sobre una copia del ejemplo de Jenkins y Alavi, y corre en la CI de
 Linux con los motores del árbol.
 
+## Fase 1b: atsw-mt, primera parte
+
+`atsw-mt` identifica los enlaces y crea los casos; todavía no estima: el caso
+se abre en drtran_gui, donde se define la red y se estima. Estimar desde aquí
+llegará cuando la corrida de drtran_gui esté en `atsw-cli`.
+
+| herramienta | qué hace | sobre |
+|---|---|---|
+| `proyecto_resumen` | las series, sus modelos y los casos | `atsw-cli proyecto ver` |
+| `identificar_enlace` | la CCF preblanqueada de cada entrada: b, s, la exogeneidad | `atsw-cli prewhiten` |
+| `caso_nuevo` | el caso, con lo que se cruza y su razón | `atsw-cli proyecto caso-nuevo` |
+| `abrir_caso` | el caso en drtran_gui | `drtran_gui --caso` |
+
+Prueba: `tests/mt.py`, también en la CI de Linux.
+
 ## Para la fase 1b: los procesos, con la entrada cerrada
 
 La CI de la fase 0 lo ha medido. **En Windows, un proceso lanzado desde

@@ -586,6 +586,11 @@ sale con 0: 26.3518 = √694.416.
 (`docs/ESTUDIO-escala.md`). Es el defecto que fuf tenía hasta ese mismo día
 (su BUG-0001).
 
+**Prioridad: alta.** Los motores van homologados siempre: el porte
+(`drvarma-python` BUG-0025) copia esta tabla y no se aparta del C, así que su
+arreglo —y con él el de lo que enseña sima— espera a este. Los dos se mueven
+juntos.
+
 ### Síntoma
 
 `escalera.c` escribe en el `.forecast`, y en el bloque de previsión del

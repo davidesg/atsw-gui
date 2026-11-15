@@ -116,7 +116,9 @@ donde hoy solo cabe avisar.
 Con parte y repro:
 
 - **drvarma BUG-0005** — la tabla de previsión de la escalera (y `-forecast`)
-  multiplica por 100/factor sea cual sea λ.
+  multiplica por 100/factor sea cual sea λ. **Prioridad alta**: los motores
+  van homologados siempre, y el arreglo del porte (drvarma-python BUG-0025)
+  espera a este.
 - **fue BUG-0003** — el `.pre` escribe el factor con dos decimales.
 
 Sin parte todavía (propuesta; nada de esto está hecho):

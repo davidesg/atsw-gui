@@ -2,7 +2,7 @@
 
 Sobre una copia del ejemplo de Jenkins y Alavi (MUSKRAT y MINK, con sus m01
 estimados): identificar el enlace, crear el caso y lo que no se puede (una
-clave que no es SERIE/MODELO, un caso que no esta). abrir_caso de un caso que
+clave que no es SERIE/MODELO, un caso que no esta). open_case de un caso que
 existe abriria una ventana: aqui solo el que no existe, que drtran_gui
 rechaza antes de abrir nada.
 
@@ -52,40 +52,40 @@ async def corre(raiz: Path, w: Path) -> None:
             check("atsw-mt" in (ini.instructions or "") and len(ini.instructions) < 20_000,
                   "las instrucciones: de atsw-mt, en menos de 20 KB", str(len(ini.instructions or "")))
             ts = {t.name for t in (await s.list_tools()).tools}
-            check({"proyecto_resumen", "identificar_enlace", "caso_nuevo", "estimar_caso",
-                   "abrir_caso"} <= ts,
+            check({"guion_map", "identify_link", "load_pre", "estimate",
+                   "open_case"} <= ts,
                   "las herramientas", str(sorted(ts)))
 
             async def t(nombre, **a):
                 return texto(await s.call_tool(nombre, a))
 
-            res = await t("identificar_enlace", salida="MINK/m01", entradas=["MUSKRAT/m01"])
+            res = await t("identify_link", output="MINK/m01", inputs=["MUSKRAT/m01"])
             check("Identificación de MINK/m01" in res and "MUSKRAT/m01" in res and "Hosking" in res,
-                  "identificar_enlace: la CCF preblanqueada y la exogeneidad", res)
-            res = await t("identificar_enlace", salida="MINK", entradas=["MUSKRAT/m01"])
+                  "identify_link: la CCF preblanqueada y la exogeneidad", res)
+            res = await t("identify_link", output="MINK", inputs=["MUSKRAT/m01"])
             check(res.startswith("No se pudo") and "SERIE/MODELO" in res,
                   "una salida sin modelo: es SERIE/MODELO", res)
-            res = await t("caso_nuevo", salida="MINK/m01", entradas=["MUSKRAT/m01"], razon="")
-            check(res.startswith("No se pudo") and "razón" in res, "caso_nuevo sin razón: no", res)
-            res = await t("caso_nuevo", salida="MINK/m01", entradas=["MUSKRAT/m01"],
-                          razon="el visón responde a la rata", titulo="MINK <- MUSKRAT")
-            check("C2" in res, "caso_nuevo: nace C2 (C1 ya estaba)", res)
-            res = await t("estimar_caso", caso="C2", razon="que drtran identifique")
-            check("C2/c00" in res and "terminado" in res, "estimar_caso: c00, drtran identifica la red", res)
-            res = await t("estimar_caso", caso="C2", razon="un omega más", desde="c00",
-                          enlaces=["MUSKRAT->MINK:0,0,1"])
-            check("C2/c01" in res and "enlaces dados" in res, "estimar_caso: c01, con el enlace dado", res)
-            res = await t("estimar_caso", caso="C2", razon="con previsión", desde="c01", prever=5)
-            check("C2/c02" in res and "FORECAST REPORT" in res, "estimar_caso prever: la tabla de la salida", res)
-            res = await t("estimar_caso", caso="C2", razon="mal", enlaces=["MUSKRAT-MINK:0,0,1"])
+            res = await t("load_pre", output="MINK/m01", inputs=["MUSKRAT/m01"], reason="")
+            check(res.startswith("No se pudo") and "razón" in res, "load_pre sin razón: no", res)
+            res = await t("load_pre", output="MINK/m01", inputs=["MUSKRAT/m01"],
+                          reason="el visón responde a la rata", title="MINK <- MUSKRAT")
+            check("C2" in res, "load_pre: nace C2 (C1 ya estaba)", res)
+            res = await t("estimate", case="C2", reason="que drtran identifique")
+            check("C2/c00" in res and "terminado" in res, "estimate: c00, drtran identifica la red", res)
+            res = await t("estimate", case="C2", reason="un omega más", from_run="c00",
+                          links=["MUSKRAT->MINK:0,0,1"])
+            check("C2/c01" in res and "enlaces dados" in res, "estimate: c01, con el enlace dado", res)
+            res = await t("estimate", case="C2", reason="con previsión", from_run="c01", horizon=5)
+            check("C2/c02" in res and "FORECAST REPORT" in res, "estimate prever: la tabla de la salida", res)
+            res = await t("estimate", case="C2", reason="mal", links=["MUSKRAT-MINK:0,0,1"])
             check(res.startswith("No se pudo") and "ENTRADA->SALIDA" in res,
-                  "estimar_caso con un enlace mal escrito: lo dice", res)
-            res = await t("estimar_caso", caso="C1", razon="es de sim")
+                  "estimate con un enlace mal escrito: lo dice", res)
+            res = await t("estimate", case="C1", reason="es de sim")
             check(res.startswith("No se pudo") and "sim_gui" in res,
-                  "estimar_caso de un caso de SIM: no", res)
-            res = await t("abrir_caso", caso="C9")
+                  "estimate de un caso de SIM: no", res)
+            res = await t("open_case", case="C9")
             check(res.startswith("No se pudo") and "no es un caso" in res,
-                  "abrir_caso de uno que no está: lo dice drtran_gui antes de abrir", res)
+                  "open_case de uno que no está: lo dice drtran_gui antes de abrir", res)
 
     y = (proy / "proyecto.yaml").read_text(encoding="utf-8")
     check("el visón responde a la rata" in y, "el manifiesto tiene el caso con su razón", y[-400:])

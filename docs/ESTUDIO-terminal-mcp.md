@@ -283,6 +283,15 @@ razón «ajuste automático, sin recorrido».
 | **salen** | `load_data`, `create_inp`, `preview_data` (los datos entran por Datos de la madre: `m00`); los `guion_*` y `export_guion` (el `guion.json` es de la otra encarnación, P4); `load_example` de sima, salvo decisión | chocan con el proyecto |
 | **nuevas** | `proyecto_resumen` (series, modelos, casos, elegidos); `modelo(serie, id)` que da la ruta; `derivar` (nuevo `mNN` desde un `.pre`, con padre); `razon` y `elegir`; `caso_nuevo` (MT, con las entradas y su hash); `cuaderno_apunte` (texto al cuaderno); `ver` (abre una ventana de gráficos de la madre, §7.4); `ficha` (la ficha de confianza del modelo, §7.8); `comprobar` (qué está instalado, con versiones) | el idioma de la madre |
 
+> **Nota (15-nov-2026).** Los nombres de esta tabla son los del estudio. Al
+> construirlas, las herramientas tomaron los de sus parejas en Python (decisión
+> del analista): `proyecto_resumen` es `guion_map`, `derivar` es
+> `new_version`, `razon` y `elegir` son `guion_annotate` y `guion_adopt`,
+> `caso_nuevo` es `load_pre`, `ver` es `plot` y `ficha` es `full_report`. Lo
+> que llevan detrás es el manifiesto del proyecto, no un `guion.json`: el
+> nombre dice qué hacen, como en art; el cliente las distingue por el servidor.
+> La lista entera, en `mcp/atsw_mcp/README.md`.
+
 **La razón, gratis.** `DISENO-madre.md` §8 bis no pide razón en la GUI
 porque un modal «¿por qué?» se contesta `asdf`. El asistente sí la da:
 `guion_node` de art la rechaza vacía y 881 de 924 nodos la llevan. En el MTM,

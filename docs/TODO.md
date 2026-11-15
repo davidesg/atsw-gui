@@ -733,6 +733,19 @@ afectados.
     funciones que su ventana y cotejada con art o con el motor.
   - Lo siguiente es la fase 1b: `atsw_gui --ver` y los MCP `atsw-us` y
     `atsw-mt` sobre atsw-cli y los motores.
+  - **Los nombres de las herramientas, como en Python (decisión del
+    analista, 15-nov-2026).** Las herramientas de `atsw-us` y `atsw-mt`, y sus
+    argumentos, se llaman como sus parejas de art y de drtran: `guion_map`,
+    `identification_analysis`, `new_version`, `write_inp`,
+    `estimate_and_diagnose`, `diagnose`, `formal_tests`,
+    `residual_outlier_scan`, `ar_factorization`, `full_report`,
+    `generate_forecast`, `guion_annotate`, `guion_adopt`, `plot`; en MT,
+    `identify_link`, `load_pre`, `estimate` (con `horizon` y `window`, como
+    `forecast` y `evaluate` de drtran) y `open_case`. Argumentos `series`,
+    `model`, `sample`, `reason`, `why`… Se corrige ya porque el asistente es
+    lo que se está construyendo: cada herramienta nueva nace con el nombre de
+    su pareja. Las palabras de atsw-cli que hay debajo no cambian todavía (ver
+    «Las órdenes de C y de Python, en inglés y las mismas»).
 
 ---
 

@@ -42,17 +42,18 @@ escribe va con `--por asistente`. La prueba, `tests/us.py`, es una sesión MCP
 a pelo sobre una copia del ejemplo de Jenkins y Alavi, y corre en la CI de
 Linux con los motores del árbol.
 
-## Fase 1b: atsw-mt, primera parte
+## Fase 1b: atsw-mt
 
-`atsw-mt` identifica los enlaces y crea los casos; todavía no estima: el caso
-se abre en drtran_gui, donde se define la red y se estima. Estimar desde aquí
-llegará cuando la corrida de drtran_gui esté en `atsw-cli`.
+`atsw-mt` identifica los enlaces, crea los casos, los estima con drtran
+(`atsw-cli caso-estima`, lo que hace «Estimar» en drtran_gui) y los abre en
+drtran_gui.
 
 | herramienta | qué hace | sobre |
 |---|---|---|
 | `proyecto_resumen` | las series, sus modelos y los casos | `atsw-cli proyecto ver` |
 | `identificar_enlace` | la CCF preblanqueada de cada entrada: b, s, la exogeneidad | `atsw-cli prewhiten` |
 | `caso_nuevo` | el caso, con lo que se cruza y su razón | `atsw-cli proyecto caso-nuevo` |
+| `estimar_caso` | una corrida del caso: con enlaces, con la red de otra corrida o sin red | `atsw-cli caso-estima` |
 | `abrir_caso` | el caso en drtran_gui | `drtran_gui --caso` |
 
 Prueba: `tests/mt.py`, también en la CI de Linux.

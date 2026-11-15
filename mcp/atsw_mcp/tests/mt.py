@@ -38,7 +38,8 @@ async def corre(raiz: Path, w: Path) -> None:
     exe = ".exe" if os.name == "nt" else ""
     binarios = w / "bin"
     binarios.mkdir()
-    for b in (raiz / "gui/atsw-cli/atsw-cli", raiz / "gui/drtran/drtran_gui"):
+    for b in (raiz / "gui/atsw-cli/atsw-cli", raiz / "gui/drtran/drtran_gui",
+              raiz / "engines/drtran/bin/drtran"):
         shutil.copy2(str(b) + exe, binarios / (b.name + exe))
     proy = w / "proy"
     shutil.copytree(raiz / "docs/ejemplos/jenkins_alavi", proy)
@@ -51,7 +52,8 @@ async def corre(raiz: Path, w: Path) -> None:
             check("atsw-mt" in (ini.instructions or "") and len(ini.instructions) < 20_000,
                   "las instrucciones: de atsw-mt, en menos de 20 KB", str(len(ini.instructions or "")))
             ts = {t.name for t in (await s.list_tools()).tools}
-            check({"proyecto_resumen", "identificar_enlace", "caso_nuevo", "abrir_caso"} <= ts,
+            check({"proyecto_resumen", "identificar_enlace", "caso_nuevo", "estimar_caso",
+                   "abrir_caso"} <= ts,
                   "las herramientas", str(sorted(ts)))
 
             async def t(nombre, **a):
@@ -68,6 +70,17 @@ async def corre(raiz: Path, w: Path) -> None:
             res = await t("caso_nuevo", salida="MINK/m01", entradas=["MUSKRAT/m01"],
                           razon="el visón responde a la rata", titulo="MINK <- MUSKRAT")
             check("C2" in res, "caso_nuevo: nace C2 (C1 ya estaba)", res)
+            res = await t("estimar_caso", caso="C2", razon="que drtran identifique")
+            check("C2/c00" in res and "terminado" in res, "estimar_caso: c00, drtran identifica la red", res)
+            res = await t("estimar_caso", caso="C2", razon="un omega más", desde="c00",
+                          enlaces=["MUSKRAT->MINK:0,0,1"])
+            check("C2/c01" in res and "enlaces dados" in res, "estimar_caso: c01, con el enlace dado", res)
+            res = await t("estimar_caso", caso="C2", razon="mal", enlaces=["MUSKRAT-MINK:0,0,1"])
+            check(res.startswith("No se pudo") and "ENTRADA->SALIDA" in res,
+                  "estimar_caso con un enlace mal escrito: lo dice", res)
+            res = await t("estimar_caso", caso="C1", razon="es de sim")
+            check(res.startswith("No se pudo") and "sim_gui" in res,
+                  "estimar_caso de un caso de SIM: no", res)
             res = await t("abrir_caso", caso="C9")
             check(res.startswith("No se pudo") and "no es un caso" in res,
                   "abrir_caso de uno que no está: lo dice drtran_gui antes de abrir", res)

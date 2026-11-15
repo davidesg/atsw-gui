@@ -1,9 +1,7 @@
 """atsw-mt: el servidor de la clase MT, transferencias (docs/ESTUDIO-terminal-mcp.md).
 
-Fase 1b, primera parte: identificar los enlaces, crear los casos y abrirlos en
-drtran_gui. Estimar un caso desde aqui llega despues, cuando la corrida de
-drtran_gui este en atsw-cli (caso-red, caso-estima): mientras, se estima en
-drtran_gui, que es la ventana del caso.
+Fase 1b: identificar los enlaces, crear los casos, estimarlos (atsw-cli
+caso-estima, lo que hace «Estimar» en drtran_gui) y abrirlos en drtran_gui.
 """
 
 from __future__ import annotations
@@ -32,8 +30,14 @@ EL CAMINO
    entrada, no hay (b, s) que lo arregle y esa entrada no lo es.
 3. caso_nuevo(salida, entradas, titulo, razon): el caso, con lo que se cruza y
    el sha256 de cada .pre. La salida va primero.
-4. abrir_caso(caso): drtran_gui con el caso, donde se define la red y se
-   estima. Desde aquí todavía no se estima: díselo al analista.
+4. estimar_caso(caso, enlaces, desde, razon): una corrida del caso con
+   drtran. enlaces como «ENTRADA->SALIDA:b,r,s» con los nombres de serie del
+   proyecto; sin ellos y con una entrada, drtran identifica b, r y s solo;
+   desde: la corrida de la que parte (hereda su red y sus restricciones);
+   diagonal: el ajuste sin transferencias, la referencia. Devuelve la
+   diagnosis: cuántos contrastes de adecuación y de exogeneidad no pasan.
+5. abrir_caso(caso, modelo): el caso en drtran_gui, para que el analista vea
+   la diagnosis, la previsión y la respuesta al impulso.
 
 REGLAS
 - Las series y los modelos se dicen como SERIE/MODELO («IPC/m03»).
@@ -96,6 +100,27 @@ def crea():
             if titulo:
                 a += ["--titulo", titulo]
             return cli.atsw_cli(*a, muestra=muestra)
+        return _hazlo(f)
+
+    @app.tool()
+    def estimar_caso(caso: str, razon: str, enlaces: list[str] | None = None, desde: str = "",
+                     diagonal: bool = False) -> str:
+        """Una corrida del caso con drtran: con los enlaces «ENTRADA->SALIDA:b,r,s»
+        (nombres de serie del proyecto), con la red de la corrida desde, o sin red
+        (con una entrada, drtran identifica b, r y s). diagonal: sin transferencias.
+        Si drtran no deja resultados, no queda la corrida. La razón es obligatoria."""
+        def f():
+            if not razon.strip():
+                raise cli.NoSePuede("la razón no puede ir vacía")
+            a = ["caso-estima", cli.comprueba_id("el caso", caso)]
+            for e in enlaces or []:
+                a += ["--enlace", e]
+            if desde:
+                a += ["--desde", cli.comprueba_id("la corrida", desde)]
+            if diagonal:
+                a += ["--diagonal"]
+            a += ["--razon", razon, "--por", "asistente"]
+            return cli.atsw_cli(*a)
         return _hazlo(f)
 
     @app.tool()

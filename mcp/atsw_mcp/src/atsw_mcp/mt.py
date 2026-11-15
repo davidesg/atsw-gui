@@ -36,6 +36,10 @@ EL CAMINO
    desde: la corrida de la que parte (hereda su red y sus restricciones);
    diagonal: el ajuste sin transferencias, la referencia. Devuelve la
    diagnosis: cuántos contrastes de adecuación y de exogeneidad no pasan.
+   prever H: la previsión; evaluar W (con prever): la evaluación fuera de
+   muestra y, frente al diagonal con la misma ventana, el cociente de RMSE y
+   Diebold-Mariano por horizonte. Es la prueba de que la transferencia sirve
+   para prever: un cociente < 1 con DM significativo.
 5. abrir_caso(caso, modelo): el caso en drtran_gui, para que el analista vea
    la diagnosis, la previsión y la respuesta al impulso.
 
@@ -104,11 +108,14 @@ def crea():
 
     @app.tool()
     def estimar_caso(caso: str, razon: str, enlaces: list[str] | None = None, desde: str = "",
-                     diagonal: bool = False) -> str:
+                     diagonal: bool = False, prever: int = 0, evaluar: int = 0) -> str:
         """Una corrida del caso con drtran: con los enlaces «ENTRADA->SALIDA:b,r,s»
         (nombres de serie del proyecto), con la red de la corrida desde, o sin red
         (con una entrada, drtran identifica b, r y s). diagonal: sin transferencias.
-        Si drtran no deja resultados, no queda la corrida. La razón es obligatoria."""
+        Si drtran no deja resultados, no queda la corrida. La razón es obligatoria.
+        prever H: la previsión a H pasos; evaluar W (con prever): la evaluación fuera
+        de muestra con una ventana de estimación de W, y frente al diagonal (el cociente
+        de RMSE y Diebold-Mariano por horizonte: ¿mejora la transferencia la previsión?)."""
         def f():
             if not razon.strip():
                 raise cli.NoSePuede("la razón no puede ir vacía")
@@ -119,6 +126,10 @@ def crea():
                 a += ["--desde", cli.comprueba_id("la corrida", desde)]
             if diagonal:
                 a += ["--diagonal"]
+            if prever:
+                a += ["--prever", str(int(prever))]
+            if evaluar:
+                a += ["--evaluar", str(int(evaluar))]
             a += ["--razon", razon, "--por", "asistente"]
             return cli.atsw_cli(*a)
         return _hazlo(f)

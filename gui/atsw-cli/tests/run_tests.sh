@@ -81,8 +81,10 @@ mira "proyecto ver --json: cuatro modelos" \
      '[ "$("$CLI" --json proyecto ver "$Y" | campo "len(d[\"modelos\"])")" = 4 ]'
 
 # proyecto ruta: la de lib/proyecto, para el extra Python del asistente
+# (sin comparar la cadena: en Windows el separador de lib/proyecto es otro)
+R=$("$CLI" proyecto ruta "$Y" RIPC m01 .out)
 mira "proyecto ruta: el .out de RIPC/m01, el que hay" \
-     '[ "$("$CLI" proyecto ruta "$Y" RIPC m01 .out)" = "$P/RIPC/work/RIPC_m01.out" ]'
+     '[ -f "$R" ] && cmp -s "$R" "$P/RIPC/work/RIPC_m01.out" && case "$R" in *RIPC_m01.out) true ;; *) false ;; esac'
 mira "proyecto ruta datos: el nodo de datos de la serie" \
      '[ "$("$CLI" --json proyecto ruta "$Y" RIPC datos .inp | campo "d[\"modelo\"]")" = m00 ]'
 mira "proyecto ruta de un fichero que no está: estado 1" \

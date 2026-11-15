@@ -62,6 +62,7 @@
 #include "sistema.h"
 #include "outvarma.h"
 #include "outvec.h"
+#include "trabajo.h"
 
 #ifndef ATSW_VERSION
 #define ATSW_VERSION "en desarrollo"
@@ -2410,27 +2411,6 @@ static void rango_json( const VecOut *v, GString *t )
     else g_string_append( t, "null" );
 }
 
-/* El fichero del trabajo aparte: <C>_rango.trabajo, «clave valor» por linea */
-static void trabajo_escribe( const char *ruta, long pid, int B, int m, long inicio, const char *por )
-{
-    gchar *t = g_strdup_printf( "pid %ld\nB %d\nm %d\ninicio %ld\npor %s\n", pid, B, m, inicio, por );
-    g_file_set_contents( ruta, t, -1, NULL );
-    g_free( t );
-}
-
-static int trabajo_lee( const char *ruta, long *pid, int *B, int *m, long *inicio, char *por, size_t npor )
-{
-    gchar *t = NULL;
-    char   q[32] = "analista";
-    int    ok;
-
-    if ( !g_file_get_contents( ruta, &t, NULL, NULL ) ) return 1;
-    ok = sscanf( t, "pid %ld\nB %d\nm %d\ninicio %ld\npor %31s", pid, B, m, inicio, q ) >= 4;
-    g_snprintf( por, npor, "%s", q );
-    g_free( t );
-    return ok ? 0 : 1;
-}
-
 /* caso-rango P CASO: N1c/C1 de sima (rank_test). drvec -lrtest sobre las
    series del caso (todas con d = 1 y D = 0), artefacto del caso <C>_rango,
    el MISMO fichero que escribe sim_gui. Sin bootstrap, la asintotica, que
@@ -2450,9 +2430,9 @@ static int caso_rango( const char *path, const char *caso )
     GString      *t;
     const char   *av[SIS_MAX_SER + 16];
     gchar        *dir, *nombre, *obj;
-    long          pid = 0, inicio = 0;
-    int           k, B = 0, m = 0, hecho = 0;
-    char          por[32] = "analista";
+    long          pid = 0;
+    int           k, hecho = 0;
+    Trabajo       tj;
 
     if ( !p ) return falla( "%s", why );
     if ( !( c = caso_sis( p, caso, why, sizeof why ) ) ) { g_free( p ); return falla( "%s", why ); }
@@ -2471,12 +2451,13 @@ static int caso_rango( const char *path, const char *caso )
     v = g_new0( VecOut, 1 );
 
     /* --- EL TRABAJO APARTE: ¿en marcha, terminado o caido? --------------- */
-    if ( trabajo_lee( trab, &pid, &B, &m, &inicio, por, sizeof por ) == 0 )
+    if ( trabajo_lee( trab, &tj ) == 0 )
         {
-        int  hechas = ovec_boot_hechas( boot ), total = B * ( m > 1 ? m - 1 : 1 );
-        long ya = (long) time( NULL ) - inicio;
+        int  hechas = trabajo_hechos( trab, &tj ), total = tj.total;
+        long ya = (long) time( NULL ) - tj.inicio;
 
-        if ( sitio_vive( pid ) )
+        pid = tj.pid;
+        if ( trabajo_estado( trab, &tj ) == TR_EN_MARCHA )
             {
             if ( !k_estado && !k_rehacer )
                 { g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
@@ -2505,10 +2486,10 @@ static int caso_rango( const char *path, const char *caso )
                 {
                 CosteLinea l;
                 gchar *ob = g_strdup_printf( "%s/rango", caso ), *mot = g_strdup_printf( "%s -bootstrap %d",
-                                             v->programa[0] ? v->programa : "drvec", B );
+                                             v->programa[0] ? v->programa : "drvec", v->B );
 
                 memset( &l, 0, sizeof l );
-                l.quien = "atsw-cli"; l.por = por; l.objeto = ob;
+                l.quien = "atsw-cli"; l.por = tj.por; l.objeto = ob;
                 l.paso = "rango"; l.motor = mot; l.via = "C";
                 l.pared_s = l.cpu_s = (double) ya; l.energia_j = -1.0;
                 coste_apunta( raiz, &l, why, sizeof why );
@@ -2565,7 +2546,14 @@ static int caso_rango( const char *path, const char *caso )
                 { int r0 = falla( "No pude lanzar drvec: %s", err ? err->message : "?" );
                   g_clear_error( &err ); g_free( exe ); g_free( argv );
                   g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p ); return r0; }
-            trabajo_escribe( trab, pid, rg.B, sis->n, (long) time( NULL ), c_por ? c_por : "analista" );
+            memset( &tj, 0, sizeof tj );
+            g_strlcpy( tj.que, "bootstrap del rango", sizeof tj.que );
+            g_snprintf( tj.objeto, sizeof tj.objeto, "%s/rango", caso );
+            tj.pid = pid; tj.inicio = (long) time( NULL ); tj.total = rg.B * ( sis->n - 1 );
+            g_strlcpy( tj.por, c_por ? c_por : "analista", sizeof tj.por );
+            g_snprintf( tj.progreso, sizeof tj.progreso, "%s.boot", nombre );
+            g_snprintf( tj.resultado, sizeof tj.resultado, "%s.out", nombre );
+            trabajo_escribe( trab, &tj );
             g_free( exe ); g_free( argv );
             t = g_string_new( "" );
             if ( json ) g_string_append_printf( t, "{\"ok\": true, \"lanzado\": true, \"pid\": %ld, \"B\": %d, "

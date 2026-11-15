@@ -19,7 +19,7 @@ GSL_LIBS=$(pkg-config --libs gsl 2>/dev/null)
 [ -n "$GSL_LIBS" ] || GSL_LIBS="-lgsl -lgslcblas"
 
 INC="-I$TOP/include -I$E/include"
-for d in sistema outvarma outvec outdiag fuepre fuedet dates lik optim diagmv prewhiten \
+for d in sistema outvarma outvec trabajo outdiag fuepre fuedet dates lik optim diagmv prewhiten \
          inpcheck proyecto gesto engine coste sitio barra preview fugdraw ccfplot utils fugplot equation cuaderno tabla fufplot outfcst fcomp; do
     INC="$INC -I$L/$d"
 done
@@ -32,6 +32,16 @@ $CC -O0 -g -w $INC $GSL_CFLAGS "$L/sistema/test_sistema.c" "$L/sistema/sistema.c
 "$W/test_sistema" "$L/outvarma/datos" "$L/outvec/datos" 2> /dev/null > "$W/sistema.txt"
 rc=$?
 grep -E "FALLA|fallos" "$W/sistema.txt"
+[ $rc -eq 0 ] || exit 1
+
+# 1b. lib/trabajo, sin ventana: el contrato del .trabajo que la madre enseña.
+echo "lib/trabajo"
+GLIB_CF=$(pkg-config --cflags glib-2.0); GLIB_LB=$(pkg-config --libs glib-2.0)
+$CC -O0 -g -w -I"$L/trabajo" -I"$L/sitio" $GLIB_CF "$L/trabajo/test_trabajo.c" "$L/trabajo/trabajo.c" \
+    "$L/sitio/sitio.c" -o "$W/test_trabajo" $GLIB_LB || exit 1
+"$W/test_trabajo" > "$W/trabajo.txt"
+rc=$?
+grep -E "FALLA|fallos" "$W/trabajo.txt"
 [ $rc -eq 0 ] || exit 1
 
 # 2. La ventana.

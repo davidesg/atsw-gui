@@ -854,6 +854,18 @@ afectados.
     `test_restriction`. `modelo_del_vec` de sim_gui pasa a lib/sistema
     (`sis_vec_desde`). El bootstrap EN PARALELO, que quitaría la espera, es
     una propuesta para drvec sin decidir: engines/drvec/TODO.md, MEJORA-4.
+  - **El avance de los trabajos aparte, en la barra de estado de la madre
+    (pedido del analista, 15-nov-2026: «así el analista sabe lo que está
+    pasando»).** Primero el contrato, lib/trabajo: un `.trabajo` junto a lo
+    que el trabajo escribe (qué, de qué, el proceso, cuándo empezó, quién, el
+    total de pasos, el fichero que los cuenta y el del resultado). Lo
+    escriben atsw-cli (`caso-rango --aparte`) y sim_gui (su bootstrap, con
+    sim_gui como proceso); sim_gui no pisa uno en marcha del asistente. Lo
+    siguiente: la madre los mira en el proyecto abierto y los enseña en su
+    barra de estado —«C1/rango · bootstrap del rango · 24/57 · quedan ~27 s
+    · asistente»—, con clic al caso en sim_gui, el aviso al terminar y el de
+    uno que se cayó. Servirá igual para las bandas de la respuesta al
+    impulso y los barridos.
   - **Lo que falta de atsw-sis, por PR:** (3) la simplificación y si es una red (`simplify`, `structure`); (4) la
     previsión, la evaluación y las bandas (`forecast`, `evaluate`,
     `impulse_response`, `variance_decomposition`, `irf_bands`). La lógica que

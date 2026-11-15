@@ -579,3 +579,46 @@ fotos del manual que enseñan la IRF, rehechas.
 con 1 mientras el choque de la primera serie no sea √Σ₁₁, con 0 cuando lo
 sea y con 2 si el caso no vale (sin `.out` o con Σ diagonal). Con el arreglo
 sale con 0: 26.3518 = √694.416.
+
+## BUG-0005 — la tabla de previsión de la escalera multiplica las variaciones por 100/refactor sea cual sea λ
+
+**Encontrado:** 2026-11-15, en el estudio de la escala de la suite
+(`docs/ESTUDIO-escala.md`). Es el defecto que fuf tenía hasta ese mismo día
+(su BUG-0001).
+
+### Síntoma
+
+`escalera.c` escribe en el `.forecast`, y en el bloque de previsión del
+`.out`, mon%/ann% y sus desviaciones típicas con `sc = 100.0 / refactor`. En
+logaritmos es un tanto por ciento. **En niveles (λ = 1) es el cambio del nivel
+por cien**, bajo una columna que se llama «mon%»; la cabecera lo sabe y lo
+escribe igual («100*delta/refactor; % for lambda=0»).
+
+Dos series en torno a 100, en niveles, con factor 100:
+
+```
+NIVY: última observación 103.8379, primera previsión 102.3802: cambio −1.4577
+  5/2013   102.3802   100.5127   104.2476 -145.7721 95.2779 ...
+```
+
+La tabla de exactitud de la misma escalera (`escalera.c`, `vs`), fuf, drtran y
+drvec usan `(λ = 0 ? 100 : 1) / refactor`. `drvarma.c` (`-forecast`, la ruta
+del `.inp`) tiene la misma regla con su `-scale`.
+
+### Por qué importa
+
+En niveles las variaciones y sus d.t. salen cien veces mayores y no coinciden
+con las de fuf y drtran para la misma serie. La hereda el porte
+(`drvarma-python` BUG-0025), que copia la tabla, y con él sima.
+
+### Arreglo propuesto (no hecho)
+
+`sc = (fabs(boxlam) < 1e-8 ? 100.0 : 1.0) / refactor` en la tabla de la
+escalera y en `-forecast`, y la cabecera dice «%» solo con λ = 0. El porte se
+mueve a la vez: el C es su oráculo.
+
+### Reproducción
+
+`bugs/BUG-0005-repro/repro.py` (con `NIVY.pre` y `NIVX.pre`, sintéticas). Sale
+con 1 mientras el mon% de la primera previsión sea cien veces el cambio del
+nivel.

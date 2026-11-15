@@ -39,6 +39,8 @@
 #include "engine.h"
 #include "sitio.h"
 #include "ficha.h"
+#include "netfile.h"
+#include "outdiag.h"
 #include "artrun.h"
 #include "inpfile.h"
 #include "formales.h"
@@ -65,6 +67,11 @@
 /* ------------------------------------------------------------------------ */
 
 static gboolean  json;
+/* caso-estima */
+static const char *k_enlace[NET_MAX_LINK];
+static int         k_nenlace = 0;
+static const char *k_desde = NULL;
+static gboolean    k_diagonal = FALSE;
 static const char *i_resid = NULL;        /* identifica --residuos          */
 static gboolean  comprobar;
 /* especifica: lo que se cambia del .inp (lib/inpdet) */
@@ -782,6 +789,8 @@ static gchar *hermano( const char *programa )
 {
     static const char *const sitio[] = {     /* relativos a gui/atsw-cli/ */
         "../../engines/fue/bin/%s",          /* el arbol de compilacion   */
+        "../../engines/drtran/bin/%s",
+        "../../engines/art/bin/%s",
         "./%s", NULL                         /* el paquete: todo junto    */
     };
     return sitio_busca( programa, sitio );
@@ -1831,6 +1840,209 @@ mal:
 }
 
 /* ------------------------------------------------------------------------ */
+/* caso-estima: una corrida de un caso de transferencia, con drtran         */
+/* ------------------------------------------------------------------------ */
+
+static int copia_fichero( const char *de, const char *a )
+{
+    gchar *c = NULL;
+    gsize  n = 0;
+    int    r = g_file_get_contents( de, &c, &n, NULL ) && g_file_set_contents( a, c, (gssize) n, NULL );
+
+    g_free( c );
+    return r ? 0 : 1;
+}
+
+/* caso-estima P CASO [--enlace ENTRADA->SALIDA:b,r,s]... [--desde cNN]
+   [--diagonal] [--razon R]: LO QUE HACE «Estimar» EN drtran_gui, sin ventana.
+   Una corrida nueva del caso (hija de --desde), con su red: la de los
+   enlaces dados --nombres de serie del proyecto--, o la de la corrida
+   --desde, o ninguna (con una entrada, drtran identifica b, r y s solo).
+   drtran por lib/engine, con su coste. Si no deja resultados, la corrida se
+   retira (AUDITORIA-procesos, fase 4): no queda en el linaje una
+   estimacion que no existe. Un caso desfasado --un .pre cambio desde el
+   alta-- no se estima: se crea otro con esos .pre.                     */
+static int caso_estima( const char *path, const char *caso )
+{
+    char            why[512], raiz[PR_RUTA], out[PR_RUTA], dag[PR_RUTA], cns[PR_RUTA], res[PR_RUTA];
+    char            id[PR_ID], pre[PR_MAX_ENTRADA][PR_RUTA];
+    const char     *nom[NET_MAX_SER + 1];
+    char            nombre[PR_MAX_ENTRADA][128];
+    Proyecto       *p = abre( path, why, sizeof why );
+    const PrCaso   *c;
+    NetLink         lnk[NET_MAX_LINK];
+    PrError         e;
+    EngineResult    r;
+    GPtrArray      *av;
+    GString        *desfase = g_string_new( "" ), *t;
+    gchar          *dir, *obj;
+    int             i, k, nl = 0, hay_dag = 0, hay_cns = 0;
+
+    if ( !p ) { g_string_free( desfase, TRUE ); return falla( "%s", why ); }
+    if ( !( c = pr_caso_ver( p, caso ) ) )
+        { g_free( p ); g_string_free( desfase, TRUE ); return falla( "«%s» no es un caso del proyecto.", caso ); }
+    if ( strcmp( c->motor, "drtran" ) != 0 )
+        { int r0 = falla( "%s es de %s: se estima en sim_gui, no con drtran.", caso, c->motor );
+          g_free( p ); g_string_free( desfase, TRUE ); return r0; }
+
+    /* las entradas: sus .pre, su hash y el nombre que lleva cada uno */
+    for ( i = 0; i < c->nen; i++ )
+        {
+        struct Tusmodel tm; struct Tseries ts; real **dm = NULL;
+        gchar *h;
+
+        if ( pr_ruta( p, c->en[i].serie, c->muestra, c->en[i].modelo, ".pre", pre[i], PR_RUTA ) != 0 ||
+             !g_file_test( pre[i], G_FILE_TEST_EXISTS ) )
+            { int r0 = falla( "%s/%s ya no tiene .pre.", c->en[i].serie, c->en[i].modelo );
+              g_free( p ); g_string_free( desfase, TRUE ); return r0; }
+        h = ge_sha( pre[i] );
+        if ( c->en[i].sha[0] && ( !h || strcmp( h, c->en[i].sha ) ) )
+            g_string_append_printf( desfase, "%s%s/%s", desfase->len ? ", " : "", c->en[i].serie, c->en[i].modelo );
+        g_free( h );
+        if ( read_fue_pre( pre[i], &tm, &ts, &dm ) != 0 )
+            { g_free( p ); g_string_free( desfase, TRUE ); return falla( "No pude leer %s.", pre[i] ); }   /* pre[] es nuestro */
+        g_snprintf( nombre[i], sizeof nombre[i], "%s", ts.name ? ts.name : c->en[i].serie );
+        free_fue_pre( &tm, &ts, dm );
+        nom[i + 1] = nombre[i];
+        }
+    nom[0] = NULL;
+    if ( desfase->len )
+        {
+        gchar *m = g_strdup( desfase->str );
+        g_free( p ); g_string_free( desfase, TRUE );
+        falla( "%s está desfasado: cambió el .pre de %s desde el alta. No se estima por debajo: "
+               "crea un caso nuevo con esos modelos.", caso, m );
+        g_free( m );
+        return 1;
+        }
+    g_string_free( desfase, TRUE );
+
+    /* la red: los enlaces, por el nombre de serie del proyecto */
+    for ( k = 0; k < k_nenlace; k++ )
+        {
+        char a[PR_ID], b[PR_ID];
+        int  ia = 0, ib = 0, ob, orr, os, j;
+
+        if ( sscanf( k_enlace[k], "%47[^-]->%47[^:]:%d,%d,%d", a, b, &ob, &orr, &os ) != 5 ||
+             ob < 0 || orr < 0 || os < 0 )
+            { g_free( p ); return falla( "--enlace %s: es ENTRADA->SALIDA:b,r,s («WTI->IPC:0,1,0»).", k_enlace[k] ); }
+        for ( j = 0; j < c->nen; j++ )
+            {
+            if ( !strcmp( c->en[j].serie, a ) ) ia = j + 1;
+            if ( !strcmp( c->en[j].serie, b ) ) ib = j + 1;
+            }
+        if ( !ia || !ib || ia == ib )
+            { g_free( p ); return falla( "--enlace %s: las dos series tienen que ser del caso, y distintas.", k_enlace[k] ); }
+        lnk[nl].out = ib; lnk[nl].inp = ia; lnk[nl].b = ob; lnk[nl].r = orr; lnk[nl].s = os;
+        nl++;
+        }
+    if ( k_desde && pr_corrida_idx( p, caso, k_desde ) < 0 )
+        { g_free( p ); return falla( "«%s» no es un modelo de %s.", k_desde, caso ); }
+
+    /* la corrida, y sus ficheros */
+    if ( pr_corrida_nueva( p, caso, k_desde ? k_desde : "", id, sizeof id, out, sizeof out, &e ) != 0 )
+        { pr_error_es( &e, why, sizeof why ); g_free( p ); return falla( "%s", why ); }
+    if ( razon && *razon ) pr_corrida_razon( p, caso, id, razon, &e );
+    pr_corrida_ruta( p, caso, id, ".dag", dag, sizeof dag );
+    pr_corrida_ruta( p, caso, id, ".cns", cns, sizeof cns );
+    pr_corrida_ruta( p, caso, id, "_res.txt", res, sizeof res );
+    dir = g_path_get_dirname( out );
+    g_mkdir_with_parents( dir, 0700 );
+    if ( !k_diagonal )
+        {
+        if ( nl > 0 )
+            {
+            if ( net_write( dag, nom, lnk, nl, "escrito por atsw-cli caso-estima" ) != 0 )
+                { g_free( dir ); g_free( p ); return falla( "No pude escribir %s.", dag ); }
+            hay_dag = 1;
+            }
+        else if ( k_desde )
+            {
+            char d0[PR_RUTA];
+
+            if ( pr_corrida_ruta( p, caso, k_desde, ".dag", d0, sizeof d0 ) == 0 &&
+                 g_file_test( d0, G_FILE_TEST_EXISTS ) && copia_fichero( d0, dag ) == 0 ) hay_dag = 1;
+            }
+        if ( k_desde )
+            {
+            char c0[PR_RUTA];
+
+            if ( pr_corrida_ruta( p, caso, k_desde, ".cns", c0, sizeof c0 ) == 0 &&
+                 g_file_test( c0, G_FILE_TEST_EXISTS ) && copia_fichero( c0, cns ) == 0 ) hay_cns = 1;
+            }
+        }
+
+    av = g_ptr_array_new();
+    for ( i = 0; i < c->nen; i++ ) g_ptr_array_add( av, pre[i] );
+    g_ptr_array_add( av, "-o" ); g_ptr_array_add( av, out );
+    if ( hay_dag ) { g_ptr_array_add( av, "-n" ); g_ptr_array_add( av, dag ); }
+    if ( hay_cns ) { g_ptr_array_add( av, "-c" ); g_ptr_array_add( av, cns ); }
+    g_ptr_array_add( av, "-e" ); g_ptr_array_add( av, res );
+    if ( k_diagonal ) g_ptr_array_add( av, "-0" );
+    g_ptr_array_add( av, NULL );
+
+    engine_set_finder( hermano );
+    raiz_de( path, raiz, sizeof raiz );
+    obj = g_strdup_printf( "%s/%s", caso, id );
+    coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "estimar" );
+    r = engine_run_v( dir, "drtran", (const char *const *) av->pdata );
+    coste_contexto_limpia();
+    g_ptr_array_free( av, TRUE );
+    g_free( dir );
+
+    if ( !engine_wrote_results( &r ) || !g_file_test( out, G_FILE_TEST_EXISTS ) )
+        {
+        /* sin resultados no hay corrida: no se guarda el manifiesto, y los
+           ficheros que se escribieron para ella, fuera                   */
+        gchar *m = g_strdup( r.message );
+        g_remove( out ); g_remove( dag ); g_remove( cns ); g_remove( res );
+        engine_result_clear( &r ); g_free( obj ); g_free( p );
+        falla( "%s No queda la corrida.", m );
+        g_free( m );
+        return 1;
+        }
+    if ( guarda( p, why, sizeof why ) != 0 )
+        { engine_result_clear( &r ); g_free( obj ); g_free( p ); return falla( "%s", why ); }
+
+    {
+    Diagnosis *d = g_new0( Diagnosis, 1 );
+    int        hay = od_parse_file( out, d ) == 0;
+    int        noad = hay ? od_no_adecuados( d ) : -1, noex = hay ? od_no_exogenos( d ) : -1;
+
+    t = g_string_new( "" );
+    if ( json )
+        {
+        g_string_append( t, "{\"ok\": true, " );
+        js_par( t, "caso", caso ); g_string_append( t, ", " );
+        js_par( t, "corrida", id ); g_string_append( t, ", " );
+        js_par( t, "padre", k_desde ? k_desde : "" ); g_string_append( t, ", " );
+        g_string_append_printf( t, "\"estado\": %d, \"enlaces\": %d, \"red\": %s, \"diagonal\": %s, ",
+                                r.status, nl, hay_dag ? "true" : "false", k_diagonal ? "true" : "false" );
+        js_par( t, "mensaje", r.message ); g_string_append( t, ", " );
+        if ( hay ) g_string_append_printf( t, "\"no_adecuados\": %d, \"no_exogenos\": %d, ", noad, noex );
+        js_par( t, "out", out ); g_string_append( t, "}\n" );
+        }
+    else
+        {
+        g_string_append_printf( t, "%s/%s: %s\n", caso, id, r.message );
+        g_string_append_printf( t, "  red: %s\n", k_diagonal ? "ninguna (el diagonal, -0)" :
+                                hay_dag ? ( nl ? "la de los enlaces dados" : "la de la corrida de partida" )
+                                        : "la que identifique drtran" );
+        if ( hay )
+            g_string_append_printf( t, "  diagnosis: %d contraste%s de adecuación sin pasar, %d de exogeneidad\n",
+                                    noad, noad == 1 ? "" : "s", noex );
+        g_string_append_printf( t, "  %s\n", out );
+        }
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE );
+    g_free( d );
+    }
+    engine_result_clear( &r );
+    g_free( obj ); g_free( p );
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
 /* La orden                                                                 */
 /* ------------------------------------------------------------------------ */
 
@@ -1844,6 +2056,7 @@ static void uso( FILE *f )
            "  proyecto razon P SERIE MODELO TEXTO\n"
            "  proyecto elige P SERIE MODELO RAZON\n"
            "  proyecto caso-nuevo P SERIE/MODELO SERIE/MODELO...   (la salida primero)\n"
+           "  caso-estima P CASO [--enlace E->S:b,r,s]... [--desde cNN] [--diagonal]   drtran sobre el caso\n"
            "  dictamen P SERIE MODELO               la diagnosis del .out\n"
            "  raices factores P SERIE MODELO        la factorización del AR\n"
            "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n"
@@ -1888,6 +2101,10 @@ int main( int argc, char **argv )
         {
         if ( !strcmp( argv[i], "--json" ) ) json = TRUE;
         else if ( !strcmp( argv[i], "--comprobar" ) ) comprobar = TRUE;
+        else if ( !strcmp( argv[i], "--enlace" ) && i + 1 < argc )
+            { if ( k_nenlace < NET_MAX_LINK ) k_enlace[k_nenlace++] = argv[++i]; else i++; }
+        else if ( !strcmp( argv[i], "--desde" ) && i + 1 < argc ) k_desde = argv[++i];
+        else if ( !strcmp( argv[i], "--diagonal" ) ) k_diagonal = TRUE;
         else if ( !strcmp( argv[i], "--residuos" ) && i + 1 < argc ) i_resid = argv[++i];
         else if ( !strcmp( argv[i], "--arma" ) && i + 1 < argc ) e_arma = argv[++i];
         else if ( !strcmp( argv[i], "--anade-arma" ) && i + 1 < argc ) e_anade = argv[++i];
@@ -1951,6 +2168,7 @@ int main( int argc, char **argv )
     if ( ES( 0, "raices" ) && ES( 1, "factorizado" ) && npos == 5 )
         return raices_factorizado( pos[2], pos[3], pos[4] );
     if ( ES( 0, "ficha" ) && npos == 4 ) return ficha( pos[1], pos[2], pos[3] );
+    if ( ES( 0, "caso-estima" ) && npos == 3 ) return caso_estima( pos[1], pos[2] );
     if ( ES( 0, "identifica" ) && npos == 3 ) return identifica( pos[1], pos[2] );
     if ( ES( 0, "especifica" ) && npos == 4 ) return especifica( pos[1], pos[2], pos[3] );
     if ( ES( 0, "estima" ) && npos == 4 ) return estima( pos[1], pos[2], pos[3] );

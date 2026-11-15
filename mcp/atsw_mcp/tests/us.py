@@ -4,8 +4,8 @@ Sobre una copia del ejemplo de Jenkins y Alavi (docs/ejemplos), con ATSW_BIN
 apuntando a los binarios del arbol (atsw-cli, fue, atsw_gui), el camino de un
 modelo como lo recorreria el asistente:
 
-  proyecto_resumen -> derivar -> especificar -> estimar -> dictamen,
-  formales, anomalos, ficha -> razon, elegir
+  guion_map -> new_version -> write_inp -> estimate_and_diagnose -> diagnose,
+  formal_tests, residual_outlier_scan, full_report -> guion_annotate, guion_adopt
 
 y lo que no se puede: tocar lo estimado, una ruta en vez de un nombre, una
 ventana que no existe. Al final, el manifiesto dice «por: asistente».
@@ -59,66 +59,70 @@ async def corre(raiz: Path, w: Path) -> None:
             check(len(ini.instructions or "") < 20_000, "las instrucciones caben en 20 KB",
                   str(len(ini.instructions or "")))
             ts = {t.name for t in (await s.list_tools()).tools}
-            quiero = {"proyecto_resumen", "identificar", "derivar", "especificar", "estimar", "dictamen",
-                      "formales", "anomalos", "raices", "ficha", "razon", "elegir", "ver",
-                      "prever"}
+            quiero = {"guion_map", "identification_analysis", "new_version", "write_inp",
+                      "estimate_and_diagnose", "diagnose", "formal_tests", "residual_outlier_scan",
+                      "ar_factorization", "full_report", "guion_annotate", "guion_adopt", "plot",
+                      "generate_forecast"}
             check(quiero <= ts, "las herramientas del camino en C", str(sorted(ts)))
 
             async def t(nombre, **a):
                 return texto(await s.call_tool(nombre, a))
 
-            res = await t("proyecto_resumen")
-            check("MINK" in res and "MUSKRAT" in res, "proyecto_resumen: las dos series", res)
+            res = await t("guion_map")
+            check("MINK" in res and "MUSKRAT" in res, "guion_map: las dos series", res)
 
-            res = await t("identificar", serie="MINK", transformacion="0,1,0")
-            check("propuesto" in res and "candidatos" in res, "identificar: art propone", res)
+            res = await t("identification_analysis", series="MINK", transform="0,1,0")
+            check("propuesto" in res and "candidatos" in res, "identification_analysis: art propone", res)
 
-            res = await t("derivar", serie="MINK", razon="")
-            check(res.startswith("No se pudo") and "razón" in res, "derivar sin razón: no", res)
-            res = await t("derivar", serie="MINK", razon="un AR(1) en logaritmos y diferencias")
-            check("m02" in res, "derivar: nace MINK/m02 de los datos", res)
+            res = await t("new_version", series="MINK", reason="")
+            check(res.startswith("No se pudo") and "razón" in res, "new_version sin razón: no", res)
+            res = await t("new_version", series="MINK", reason="un AR(1) en logaritmos y diferencias")
+            check("m02" in res, "new_version: nace MINK/m02 de los datos", res)
 
-            res = await t("especificar", serie="MINK", modelo="m02", transformacion="0,1,0",
-                          arma="1,0,0,0", media="libre")
-            check("fue lo acepta" in res, "especificar: log, una diferencia y un AR(1)", res)
-            res = await t("especificar", serie="MINK", modelo="m02", intervenciones=["step"])
+            res = await t("write_inp", series="MINK", model="m02", transform="0,1,0",
+                          arma="1,0,0,0", mean="free")
+            check("fue lo acepta" in res, "write_inp: log, una diferencia y un AR(1)", res)
+            res = await t("write_inp", series="MINK", model="m02", interventions=["step"])
             check(res.startswith("No se pudo") and "queda como estaba" in res,
-                  "especificar algo que no vale: no se cambia nada", res)
+                  "write_inp algo que no vale: no se cambia nada", res)
 
-            res = await t("estimar", serie="MINK", modelo="m02")
-            check("log-verosimilitud" in res, "estimar: fue termina", res)
-            res = await t("estimar", serie="MINK", modelo="m02")
+            res = await t("estimate_and_diagnose", series="MINK", model="m02")
+            check("log-verosimilitud" in res, "estimate_and_diagnose: fue termina", res)
+            res = await t("estimate_and_diagnose", series="MINK", model="m02")
             check(res.startswith("No se pudo") and "ya está estimado" in res,
-                  "estimar otra vez: no se reestima", res)
-            res = await t("especificar", serie="MINK", modelo="m02", arma="2,0,0,0")
+                  "estimate_and_diagnose otra vez: no se reestima", res)
+            res = await t("write_inp", series="MINK", model="m02", arma="2,0,0,0")
             check(res.startswith("No se pudo"), "lo estimado no se reescribe", res)
 
-            res = await t("dictamen", serie="MINK", modelo="m02")
-            check("Diagnosis de MINK/m02" in res, "dictamen", res)
-            res = await t("formales", serie="MINK", modelo="m02", familia="integracion")
-            check("ORDEN DE INTEGRACIÓN" in res and "Shin-Fuller" in res, "formales", res)
-            res = await t("anomalos", serie="MINK", modelo="m02")
-            check("Anómalos de MINK/m02" in res and "Q(" in res, "anomalos", res)
-            res = await t("ficha", serie="MINK", modelo="m02")
-            check("m02" in res and "asistente" in res, "ficha: el paso es del asistente", res)
+            res = await t("diagnose", series="MINK", model="m02")
+            check("Diagnosis de MINK/m02" in res, "diagnose", res)
+            res = await t("formal_tests", series="MINK", model="m02", family="integration")
+            check("ORDEN DE INTEGRACIÓN" in res and "Shin-Fuller" in res, "formal_tests", res)
+            res = await t("residual_outlier_scan", series="MINK", model="m02")
+            check("Anómalos de MINK/m02" in res and "Q(" in res, "residual_outlier_scan", res)
+            res = await t("full_report", series="MINK", model="m02")
+            check("m02" in res and "asistente" in res, "full_report: el paso es del asistente", res)
 
-            res = await t("prever", serie="MINK", modelo="m02")
-            check("FORECAST REPORT" in res and "1912" in res, "prever: la tabla de fuf, anual", res)
+            res = await t("generate_forecast", series="MINK", model="m02")
+            check("FORECAST REPORT" in res and "1912" in res, "generate_forecast: la tabla de fuf, anual", res)
 
-            res = await t("razon", serie="MINK", modelo="m02", texto="el AR(1) basta")
-            check(not res.startswith("No se pudo"), "razon", res)
-            res = await t("elegir", serie="MINK", modelo="m02", razon="el mejor de los dos")
-            check(not res.startswith("No se pudo"), "elegir", res)
+            res = await t("guion_annotate", series="MINK", model="m02", text="el AR(1) basta")
+            check(not res.startswith("No se pudo"), "guion_annotate", res)
+            res = await t("guion_adopt", series="MINK", model="m02", why="el mejor de los dos")
+            check(not res.startswith("No se pudo"), "guion_adopt", res)
 
-            res = await t("dictamen", serie="../MINK", modelo="m02")
+            res = await t("diagnose", series="../MINK", model="m02")
             check(res.startswith("No se pudo") and "no es un nombre" in res,
                   "una ruta en vez de una serie: rechazada", res)
-            res = await t("ver", que="otra", serie="MINK")
-            check(res.startswith("No se pudo") and "serie, media-dt" in res,
-                  "ver una ventana que no existe: lo dice la madre", res)
-            res = await t("ver", que="serie", serie="OTRA")
+            res = await t("formal_tests", series="MINK", model="m02", family="integracion")
+            check(res.startswith("No se pudo") and "integration" in res,
+                  "formal_tests con la familia en español: dice las suyas", res)
+            res = await t("plot", what="otra", series="MINK")
+            check(res.startswith("No se pudo") and "series, mean-sd" in res,
+                  "plot de una ventana que no existe: dice las que hay", res)
+            res = await t("plot", what="series", series="OTRA")
             check(res.startswith("No se pudo") and "no es una serie" in res,
-                  "ver una serie que no está: lo dice la madre", res)
+                  "plot de una serie que no está: lo dice la madre", res)
 
     y = (proy / "proyecto.yaml").read_text(encoding="utf-8")
     bloque = y[y.index("MINK/m02:"):]

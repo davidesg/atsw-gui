@@ -22,26 +22,30 @@ autónomo?» (los mismos nodos en los dos; en autónomo decides tú, con la raz�
 por escrito).
 
 EL CAMINO
-1. proyecto_resumen: las series, sus modelos estimados y los casos que ya hay.
-2. identificar_enlace(salida, entradas): la CCF preblanqueada de cada entrada
+1. guion_map: las series, sus modelos estimados y los casos que ya hay.
+2. identify_link(output, inputs): la CCF preblanqueada de cada entrada
    con su propio ARMA (la salida con el mismo filtro). Se lee b (el retardo
    puro), s (el orden del numerador) y, sobre todo, los retardos NEGATIVOS
    fuera de banda: son el contraste de exogeneidad. Si la salida antecede a la
    entrada, no hay (b, s) que lo arregle y esa entrada no lo es.
-3. caso_nuevo(salida, entradas, titulo, razon): el caso, con lo que se cruza y
+3. load_pre(output, inputs, title, reason): el caso, con lo que se cruza y
    el sha256 de cada .pre. La salida va primero.
-4. estimar_caso(caso, enlaces, desde, razon): una corrida del caso con
-   drtran. enlaces como «ENTRADA->SALIDA:b,r,s» con los nombres de serie del
+4. estimate(case, links, from_run, reason): una corrida del caso con
+   drtran. links como «ENTRADA->SALIDA:b,r,s» con los nombres de serie del
    proyecto; sin ellos y con una entrada, drtran identifica b, r y s solo;
-   desde: la corrida de la que parte (hereda su red y sus restricciones);
+   from_run: la corrida de la que parte (hereda su red y sus restricciones);
    diagonal: el ajuste sin transferencias, la referencia. Devuelve la
    diagnosis: cuántos contrastes de adecuación y de exogeneidad no pasan.
-   prever H: la previsión; evaluar W (con prever): la evaluación fuera de
+   horizon H: la previsión; window W (con horizon): la evaluación fuera de
    muestra y, frente al diagonal con la misma ventana, el cociente de RMSE y
    Diebold-Mariano por horizonte. Es la prueba de que la transferencia sirve
    para prever: un cociente < 1 con DM significativo.
-5. abrir_caso(caso, modelo): el caso en drtran_gui, para que el analista vea
+5. open_case(case, run): el caso en drtran_gui, para que el analista vea
    la diagnosis, la previsión y la respuesta al impulso.
+
+LOS NOMBRES
+- Las herramientas y sus argumentos se llaman como sus parejas de drtran
+  (en Python): la misma orden hace lo mismo en las dos suites.
 
 REGLAS
 - Las series y los modelos se dicen como SERIE/MODELO («IPC/m03»).
@@ -68,77 +72,78 @@ def crea():
     app = comun.crea_servidor(SERVIDOR, "mt", "MT", INSTRUCCIONES)
 
     @app.tool()
-    def proyecto_resumen() -> str:
-        """Las series del proyecto, sus modelos y los casos que ya hay."""
+    def guion_map() -> str:
+        """El mapa del proyecto: las series, sus modelos y los casos que ya hay
+        (atsw-cli proyecto ver)."""
         return _hazlo(cli.atsw_cli, "proyecto", "ver")
 
     @app.tool()
-    def identificar_enlace(salida: str, entradas: list[str], retardos: int = 0,
-                           muestra: str = "") -> str:
+    def identify_link(output: str, inputs: list[str], lags: int = 0, sample: str = "") -> str:
         """La CCF preblanqueada de cada entrada contra la salida (SERIE/MODELO,
         modelos estimados): b, s, el pico, los retardos negativos fuera de banda
-        (la exogeneidad) y el portmanteau de Hosking. retardos: a cada lado (0:
-        la regla del motor)."""
+        (la exogeneidad) y el portmanteau de Hosking. lags: a cada lado (0: la regla
+        del motor)."""
         def f():
-            if not entradas:
+            if not inputs:
                 raise cli.NoSePuede("hace falta al menos una entrada")
-            a = ["prewhiten", _clave("la salida", salida)] + [_clave("la entrada", e) for e in entradas]
-            if retardos:
-                a += ["--retardos", str(int(retardos))]
-            return cli.atsw_cli(*a, muestra=muestra)
+            a = ["prewhiten", _clave("la salida", output)] + [_clave("la entrada", e) for e in inputs]
+            if lags:
+                a += ["--retardos", str(int(lags))]
+            return cli.atsw_cli(*a, muestra=sample)
         return _hazlo(f)
 
     @app.tool()
-    def caso_nuevo(salida: str, entradas: list[str], razon: str, titulo: str = "",
-                   muestra: str = "") -> str:
-        """Un caso de transferencia: la salida y sus entradas (SERIE/MODELO, modelos
-        estimados), con el sha256 de cada .pre. La razón es obligatoria."""
+    def load_pre(output: str, inputs: list[str], reason: str, title: str = "",
+                 sample: str = "") -> str:
+        """Un caso de transferencia: la salida (la primera) y sus entradas
+        (SERIE/MODELO, modelos estimados), con el sha256 de cada .pre. La razón es
+        obligatoria."""
         def f():
-            if not entradas:
+            if not inputs:
                 raise cli.NoSePuede("hace falta al menos una entrada")
-            if not razon.strip():
+            if not reason.strip():
                 raise cli.NoSePuede("la razón no puede ir vacía")
-            a = ["proyecto", "caso-nuevo", _clave("la salida", salida)]
-            a += [_clave("la entrada", e) for e in entradas]
-            a += ["--motor", "drtran", "--razon", razon]
-            if titulo:
-                a += ["--titulo", titulo]
-            return cli.atsw_cli(*a, muestra=muestra)
+            a = ["proyecto", "caso-nuevo", _clave("la salida", output)]
+            a += [_clave("la entrada", e) for e in inputs]
+            a += ["--motor", "drtran", "--razon", reason]
+            if title:
+                a += ["--titulo", title]
+            return cli.atsw_cli(*a, muestra=sample)
         return _hazlo(f)
 
     @app.tool()
-    def estimar_caso(caso: str, razon: str, enlaces: list[str] | None = None, desde: str = "",
-                     diagonal: bool = False, prever: int = 0, evaluar: int = 0) -> str:
-        """Una corrida del caso con drtran: con los enlaces «ENTRADA->SALIDA:b,r,s»
-        (nombres de serie del proyecto), con la red de la corrida desde, o sin red
+    def estimate(case: str, reason: str, links: list[str] | None = None, from_run: str = "",
+                 diagonal: bool = False, horizon: int = 0, window: int = 0) -> str:
+        """Una corrida del caso con drtran: con los links «ENTRADA->SALIDA:b,r,s»
+        (nombres de serie del proyecto), con la red de la corrida from_run, o sin red
         (con una entrada, drtran identifica b, r y s). diagonal: sin transferencias.
         Si drtran no deja resultados, no queda la corrida. La razón es obligatoria.
-        prever H: la previsión a H pasos; evaluar W (con prever): la evaluación fuera
+        horizon H: la previsión a H pasos; window W (con horizon): la evaluación fuera
         de muestra con una ventana de estimación de W, y frente al diagonal (el cociente
         de RMSE y Diebold-Mariano por horizonte: ¿mejora la transferencia la previsión?)."""
         def f():
-            if not razon.strip():
+            if not reason.strip():
                 raise cli.NoSePuede("la razón no puede ir vacía")
-            a = ["caso-estima", cli.comprueba_id("el caso", caso)]
-            for e in enlaces or []:
+            a = ["caso-estima", cli.comprueba_id("el caso", case)]
+            for e in links or []:
                 a += ["--enlace", e]
-            if desde:
-                a += ["--desde", cli.comprueba_id("la corrida", desde)]
+            if from_run:
+                a += ["--desde", cli.comprueba_id("la corrida", from_run)]
             if diagonal:
                 a += ["--diagonal"]
-            if prever:
-                a += ["--prever", str(int(prever))]
-            if evaluar:
-                a += ["--evaluar", str(int(evaluar))]
-            a += ["--razon", razon, "--por", "asistente"]
+            if horizon:
+                a += ["--prever", str(int(horizon))]
+            if window:
+                a += ["--evaluar", str(int(window))]
+            a += ["--razon", reason, "--por", "asistente"]
             return cli.atsw_cli(*a)
         return _hazlo(f)
 
     @app.tool()
-    def abrir_caso(caso: str, modelo: str = "") -> str:
-        """Abre el caso en drtran_gui, donde se define la red y se estima. modelo:
+    def open_case(case: str, run: str = "") -> str:
+        """Abre el caso en drtran_gui, donde se define la red y se estima. run:
         una corrida del caso para cargar (sin ella, la elegida o ninguna)."""
-        return _hazlo(cli.abre_caso, caso, modelo)
+        return _hazlo(cli.abre_caso, case, run)
 
     return app
 

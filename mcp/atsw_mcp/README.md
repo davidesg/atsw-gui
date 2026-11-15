@@ -29,14 +29,23 @@ los `.inp`: lo hace `atsw-cli`, con `lib/proyecto` y `lib/inpdet`.
 
 | herramienta | qué hace | atsw-cli |
 |---|---|---|
-| `proyecto_resumen` | las series, sus modelos, el linaje y los elegidos | `proyecto ver` |
-| `derivar` | un modelo nuevo, de los datos o de un estimado, con su razón | `proyecto nuevo` / `itera` |
-| `especificar` | la transformación, el ARMA, las intervenciones y la media de un modelo sin estimar | `especifica` |
-| `estimar` | fue, con su coste, y el dictamen | `estima` |
-| `dictamen`, `formales`, `anomalos`, `raices`, `ficha` | la evidencia | las órdenes del mismo nombre |
-| `prever` | la previsión, fue -f y fuf desde el .pre, sin tocar el modelo | `prever` |
-| `razon`, `elegir` | dejar escrito el porqué y el elegido | `proyecto razon` / `elige` |
-| `ver` | la ventana de la madre, y en texto lo que enseña | `atsw_gui --ver` |
+| `guion_map` | las series, sus modelos, el linaje y los elegidos | `proyecto ver` |
+| `identification_analysis` | lo que propone el identificador art, sobre los datos o los residuos | `identifica` |
+| `new_version` | un modelo nuevo, de los datos o de un estimado, con su razón | `proyecto nuevo` / `itera` |
+| `write_inp` | la transformación, el ARMA, las intervenciones y la media de un modelo sin estimar | `especifica` |
+| `estimate_and_diagnose` | fue, con su coste, y el dictamen | `estima` |
+| `diagnose` | la diagnosis en veredictos | `dictamen` |
+| `formal_tests` | los contrastes formales, por familia | `formales` |
+| `residual_outlier_scan` | los episodios y si cambian la identificación | `anomalos` |
+| `ar_factorization` | la factorización del AR | `raices factores` |
+| `full_report` | la ficha de confianza | `ficha` |
+| `generate_forecast` | la previsión, fue -f y fuf desde el .pre, sin tocar el modelo | `prever` |
+| `guion_annotate`, `guion_adopt` | dejar escrito el porqué y el elegido | `proyecto razon` / `elige` |
+| `plot` | la ventana de la madre, y en texto lo que enseña | `atsw_gui --ver` |
+
+Las herramientas y sus argumentos (`series`, `model`, `sample`, `reason`…)
+se llaman como sus parejas de art, en Python: la misma orden hace lo mismo en
+las dos suites. Los textos que devuelven siguen en español.
 
 Las herramientas reciben series y modelos del proyecto, nunca rutas; lo que
 escribe va con `--por asistente`. La prueba, `tests/us.py`, es una sesión MCP
@@ -51,11 +60,13 @@ drtran_gui.
 
 | herramienta | qué hace | sobre |
 |---|---|---|
-| `proyecto_resumen` | las series, sus modelos y los casos | `atsw-cli proyecto ver` |
-| `identificar_enlace` | la CCF preblanqueada de cada entrada: b, s, la exogeneidad | `atsw-cli prewhiten` |
-| `caso_nuevo` | el caso, con lo que se cruza y su razón | `atsw-cli proyecto caso-nuevo` |
-| `estimar_caso` | una corrida del caso: con enlaces, con la red de otra corrida o sin red | `atsw-cli caso-estima` |
-| `abrir_caso` | el caso en drtran_gui | `drtran_gui --caso` |
+| `guion_map` | las series, sus modelos y los casos | `atsw-cli proyecto ver` |
+| `identify_link` | la CCF preblanqueada de cada entrada: b, s, la exogeneidad | `atsw-cli prewhiten` |
+| `load_pre` | el caso: la salida primero, sus entradas, lo que se cruza y su razón | `atsw-cli proyecto caso-nuevo` |
+| `estimate` | una corrida del caso: con `links`, con la red de otra corrida (`from_run`) o sin red; `horizon` y `window`, la previsión y la evaluación frente al diagonal | `atsw-cli caso-estima` |
+| `open_case` | el caso en drtran_gui | `drtran_gui --caso` |
+
+Como en atsw-us, los nombres son los de drtran en Python.
 
 Prueba: `tests/mt.py`, también en la CI de Linux.
 

@@ -580,7 +580,7 @@ con 1 mientras el choque de la primera serie no sea √Σ₁₁, con 0 cuando lo
 sea y con 2 si el caso no vale (sin `.out` o con Σ diagonal). Con el arreglo
 sale con 0: 26.3518 = √694.416.
 
-## BUG-0005 — la tabla de previsión de la escalera multiplica las variaciones por 100/refactor sea cual sea λ
+## BUG-0005 — la tabla de previsión de la escalera multiplica las variaciones por 100/refactor sea cual sea λ (ARREGLADO)
 
 **Encontrado:** 2026-11-15, en el estudio de la escala de la suite
 (`docs/ESTUDIO-escala.md`). Es el defecto que fuf tenía hasta ese mismo día
@@ -616,14 +616,16 @@ En niveles las variaciones y sus d.t. salen cien veces mayores y no coinciden
 con las de fuf y drtran para la misma serie. La hereda el porte
 (`drvarma-python` BUG-0025), que copia la tabla, y con él sima.
 
-### Arreglo propuesto (no hecho)
+### Arreglo (2026-11-15)
 
 `sc = (fabs(boxlam) < 1e-8 ? 100.0 : 1.0) / refactor` en la tabla de la
-escalera y en `-forecast`, y la cabecera dice «%» solo con λ = 0. El porte se
-mueve a la vez: el C es su oráculo.
+escalera (`escalera.c`) y en `-forecast` (`drvarma.c`). Con todas las series
+en logaritmos la salida no cambia ni un byte, cabecera incluida (el banco
+contra 0.4.1 sigue pasando); si alguna no lo está, la cabecera dice las dos
+reglas. El porte (`drvarma-python` BUG-0025) se mueve a la vez.
 
 ### Reproducción
 
 `bugs/BUG-0005-repro/repro.py` (con `NIVY.pre` y `NIVX.pre`, sintéticas). Sale
 con 1 mientras el mon% de la primera previsión sea cien veces el cambio del
-nivel.
+nivel. Con el arreglo sale con 0: −1.4577 donde decía −145.7721.

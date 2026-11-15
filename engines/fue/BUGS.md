@@ -109,7 +109,7 @@ cinco líneas libres en 88 caracteres o menos.
 porte como dice el formato (88 se lee, 120 no), con 1 si cambia, y con 2 si
 falla el de 88. No depende del estado de git.
 
-## BUG-0003 — el .pre escribe el factor de reescalado con dos decimales: por debajo de 0.005 sale «0.00» y se relee como 1
+## BUG-0003 — el .pre escribe el factor de reescalado con dos decimales: por debajo de 0.005 sale «0.00» y se relee como 1 (ARREGLADO)
 
 **Encontrado:** 2026-11-15, en el estudio de la escala de la suite
 (`docs/ESTUDIO-escala.md`). drvec tuvo el mismo defecto en su escritor
@@ -137,10 +137,13 @@ menor que 0.01, que es lo que pediría una serie en niveles de unidades muy
 grandes. Como `%.4f`/`%.6f` de BUG-0001, no rompe nada de lo que hay (todo va
 a 1 o a 100); limita lo que se puede escribir.
 
-### Arreglo propuesto (no hecho)
+### Arreglo (2026-11-15)
 
-El de drvec: `%.10g` para el factor, en los tres escritores. Mientras tanto,
-quien escribe un `.inp` no elige un factor menor que 0.01.
+Dos decimales cuando eso es exacto —100 sigue saliendo `100.00`, así que
+ningún `.pre` de los que hay cambia un byte— y `%.10g` si no. En `fue.c` y en
+`inp_write_bare` (`engines/fug/src/inpfile.c`). Es la misma regla que
+`fue.scale.format_refactor` del porte (fue-python 0.1.22). Queda `gui/fue`
+(`file_io.c`), que además recorta el factor a su control de 1 a 1000.
 
 ### Reproducción
 

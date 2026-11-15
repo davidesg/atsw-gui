@@ -490,8 +490,14 @@ int inp_write_bare( const char *path, const InpFile *inp )
       fprintf( f, " 0" );
    fprintf( f, "\n" );
    fprintf( f, "** ACF/PACF bands (0 Automatic) and reescaling factor:\n" );
-   fprintf( f, " %s %.2f\n", inp_format( num, sizeof( num ), inp->cbands ),
-            (inp->refactor > 0.0) ? inp->refactor : 1.0 );
+   {
+   /* fue BUG-0003: dos decimales si es exacto, la forma exacta mas corta si no */
+   double rf = (inp->refactor > 0.0) ? inp->refactor : 1.0;
+   char   rfbuf[40];
+   snprintf( rfbuf, sizeof rfbuf, "%.2f", rf );
+   if ( strtod( rfbuf, NULL ) != rf ) snprintf( rfbuf, sizeof rfbuf, "%.10g", rf );
+   fprintf( f, " %s %s\n", inp_format( num, sizeof( num ), inp->cbands ), rfbuf );
+   }
    fprintf( f, "** Time series (stochastic and non-standard deterministic variables):\n" );
    for ( i = 0; i < inp->nobs; i++ )
        fprintf( f, "%s\n", inp_format( num, sizeof( num ), inp->data[i] ) );

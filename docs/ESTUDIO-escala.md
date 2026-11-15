@@ -113,7 +113,7 @@ donde hoy solo cabe avisar.
 
 ## 7. Pendiente en este repositorio
 
-Con parte y repro:
+Con parte y repro (los dos arreglados el 15-nov-2026):
 
 - **drvarma BUG-0005** — la tabla de previsión de la escalera (y `-forecast`)
   multiplica por 100/factor sea cual sea λ. **Prioridad alta**: los motores

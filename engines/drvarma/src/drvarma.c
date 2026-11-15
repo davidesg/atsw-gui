@@ -596,8 +596,10 @@ int main(int argc, char *argv[])
                 do_deseason ? (deseason_mode ? "force" : "auto") : "no");
         fprintf(ffore, "Level/Low95/High95 in original units%s. "
                        "mon%%/ann%% = monthly/annual variation rate and std "
-                       "(100*delta/scale; %% for lambda=0).\n\n",
-                do_deseason ? " (re-seasonalized)" : "");
+                       "(%s).\n\n",
+                do_deseason ? " (re-seasonalized)" : "",
+                fabs(trans_lambda) < 1e-8 ? "100*delta/scale; % for lambda=0"
+                                          : "delta/scale: lambda is not 0");
         for (int k = 1; k <= nser; k++) {
             fprintf(ffore, "Series %d (%s):\n", k, series_names[k]);
             fprintf(ffore, "  date   %10s %10s %10s %8s %7s %8s %7s\n",
@@ -614,7 +616,7 @@ int main(int argc, char *argv[])
                          ? cf[k][l] - bc_series[nobs_raw - sfreq + l][k] : 0.0;
                 else
                     g3 = cf[k][l] - cf[k][l-sfreq];
-                real sc = 100.0 / trans_scale;
+                real sc = (fabs(trans_lambda) < 1e-8 ? 100.0 : 1.0) / trans_scale;   /* BUG-0005 */
                 fprintf(ffore, "%3d/%4d %10.4f %10.4f %10.4f %8.4f %7.4f %8.4f %7.4f\n",
                         sub, per, level_raw[k][l], low_raw[k][l], high_raw[k][l],
                         sc * g2, sc * sqrt(v_mon[l][k][k]),

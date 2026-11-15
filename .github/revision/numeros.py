@@ -151,7 +151,8 @@ def drtran_out(ruta):
     # plazo en su linea, «LEAD TIME FOR FORECASTING: 8». Y la de antes.
     for m in re.finditer(r"VARIABLE NAME\s*:\s*(\S+)\s+FORECAST ORIGIN\s*:\s*(\S+)\s+LEAD TIME(?: FOR FORECASTING)?:\s*(\d+)(.*?)\+-{10,}\+\s*\n\s*\n", txt, re.S):
         filas = [ln.split() for ln in m.group(4).splitlines()]
-        filas = [f for f in filas if f and re.match(r"\d+/\d{4}$", f[0]) and len(f) >= 3 and f[2] != "-"]
+        # la fecha, «12/2025» o, en una serie anual, «1912» (fuf BUG-0003)
+        filas = [f for f in filas if f and re.match(r"(\d+/)?\d{4}$", f[0]) and len(f) >= 3 and f[2] != "-"]
         if filas:
             prev[m.group(1)] = {"fecha": filas[0][0], "valor": float(filas[0][1]),
                                 "et": float(filas[0][2]), "horizonte": len(filas)}

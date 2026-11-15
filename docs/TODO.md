@@ -133,8 +133,8 @@ previsión.
 - **El primer alcance** (¿univariantes primero?) y **el sitio** (¿pestaña de
   la madre o programa aparte?).
 - ~~Las unidades de la columna ERR de fuf~~ — **aclarado** (13-nov-2026):
-  con logaritmos están bien; con λ = 1 salen ×100 todas las columnas menos
-  el nivel (fuf BUG-0001). Los miles de `CPI_USA_model_AR` venían además de
+  con logaritmos están bien; con λ = 1 salían ×100 todas las columnas menos
+  el nivel (fuf BUG-0001, arreglado el 15-nov-2026). Los miles de `CPI_USA_model_AR` venían además de
   un `.fuf.inp` con el factor de reescalado mal puesto. Está en
   `DISENO-gestor-previsiones.md` §2.
 
@@ -434,6 +434,40 @@ el mismo modelo.
 
 *El plan, por repositorio y en este orden*
 
+- **fue-python, la tabla de fuf (0.1.21), lo primero** (apuntado el
+  15-nov-2026, leído `master` 14c5402). El C arregló su tabla de previsión
+  (fuf BUG-0001, BUG-0002 y BUG-0003, `engines/fuf/BUGS.md`) y el porte tiene
+  que decir lo mismo, byte a byte, en `report._fuf_section_forecast_table`
+  (src/fue/report.py, ~1485). Hoy se aparta del C así:
+  - **la escala (BUG-0001):** multiplica por 100 las variaciones en niveles
+    (`100.0 * (...) / refactor`); tiene que ser vs = 100/refactor con λ = 0 y
+    1/refactor si no, en las variaciones, sus d.t., la d.t. del nivel y ERR;
+  - **ERR:** lo escribe sin escalar (`residuals[res_idx]`); en el C es
+    vs · a_t;
+  - **los anchos (BUG-0002):** `{level_val:9.4f}{lstd:7.4f}{diff1:8.4f}...`,
+    sin separador. El C escribe ahora:
+    - la cabecera de 76 columnas de drtran, drvarma y drvec
+      (`" +-----…-----+"`, `" |       |       LEVEL        |              VARIATION              |         |"`,
+      y las demás de `forecast_table_acii` en `engines/fuf/src/usfo.c`), y un
+      borde de cierre al final;
+    - la fecha: `"  %2d/%4d"` con freq > 1 y `"     %4d"` con una serie anual;
+      `FORECAST ORIGIN : %2d/%4d` o `: %4d`;
+    - una observada: `" %11.4f %8s"` (nivel y «-»), `" %9.4f %8s"` (la del
+      periodo; «-» en la primera), `" %9.4f %8s"` (la anual; «-» si no hay
+      freq observaciones antes o si freq = 1), `" %9.4f"` (ERR, o «-» antes
+      de los residuos);
+    - una prevista: `" %11.4f %8.4f"`, `" %9.4f %8.4f"`, `" %9.4f %8.4f"` (o
+      «-» y «-» con freq = 1), `" %9s"` con «-»;
+  - **la anual de las primeras observadas:** con k ≤ freq escribe
+    `100·BoxCox(z_k)/refactor`; en el C es «-» (no hay dato un año antes);
+  - **las series anuales (BUG-0003):** ya escribe la tabla, pero con las
+    columnas anuales llenas; en el C van con «-».
+  - **Prueba:** la tabla de cada caso de `engines/fuf/tests/golden/*.out`
+    (14), byte a byte en Linux y con tolerancia fuera, desde el mismo
+    `.fuf.inp` del corpus; y la de MINK/m01 (anual, `engines/fuf/bugs/
+    BUG-0003-repro`). Luego, art-tseries y sima-tseries con la versión mínima
+    nueva de fue.
+
 - **drvarma-python** (una versión menor, 0.4.0, porque añade capacidad):
   - *la tabla de fuf* en el `.out` de la escalera, al final del bloque de
     previsión y como en `escalera.c`: un `report._fuf_table` con las mismas
@@ -521,8 +555,8 @@ el mismo modelo.
 (`engines/fuf/src/usfo.c`) escribe los campos pegados (`%9.4f%7.4f…`). Con
 un nivel de 1000 o más, el valor se junta con la fecha (` 12/20241234.5678`),
 y con una desviación de 10 o más, con el número de al lado. La tabla se lee
-mal a ojo y no se puede leer a máquina. fuf funciona y no se toca sin decidirlo:
-es su BUG-0002 (`engines/fuf/BUGS.md`, con repro). drtran no lo copia: deja un espacio entre campos.
+mal a ojo y no se puede leer a máquina. Era su BUG-0002 (`engines/fuf/BUGS.md`),
+arreglado el 15-nov-2026 con el diseño de drtran: un espacio entre campos.
 Tampoco copia otras dos cosas de fuf: con λ ≠ 0 la variación va en las unidades
 de la serie (fuf la multiplica por 100), y con λ < 0 no escribe la segunda
 tabla de fuf (bandas y nivel transformado), porque la de drtran ya da el nivel
@@ -746,15 +780,12 @@ programa:
   6), así que no es el óptimo exacto. Estimar sobre él vuelve a iterar, y
   drtran hereda el redondeo al mantener fijos los parámetros del `.pre`.
   `engines/fue/BUGS.md`.
-- **fuf BUG-0001**: en el informe de previsión, con λ = 1 salen ×100 todas
-  las columnas menos el nivel: variaciones, d.t. y ERR. El gestor de
-  previsiones va a leer esas columnas. Revisado el 13-nov-2026: lo de que ERR
-  no estaba en la escala de σ en logaritmos no era de fuf, sino de unos
-  `.fuf.inp` con el factor de reescalado en 1 (fue lo escribe bien).
+- ~~**fuf BUG-0001, BUG-0002 y BUG-0003**~~ — **arreglados** (15-nov-2026):
+  la tabla de previsión de fuf, entera. Con λ = 1 ya no sale ×100, los campos
+  van separados (el diseño de drtran, drvarma y drvec) y las series anuales
+  tienen tabla. Las salidas de referencia de fuf, regeneradas (solo cambia la
+  tabla). El porte de Python lo sigue: arriba, en el plan de los portes.
   `engines/fuf/BUGS.md`.
-- **fuf BUG-0002**: la tabla de previsión escribe los campos pegados: un
-  nivel de 1000 o más se junta con la fecha, una d.t. de 10 o más con el
-  campo de al lado. `engines/fuf/BUGS.md`.
 
 **drvarma / drvarma_gui**
 

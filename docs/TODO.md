@@ -866,7 +866,8 @@ afectados.
     · asistente»—, con clic al caso en sim_gui, el aviso al terminar y el de
     uno que se cayó. Servirá igual para las bandas de la respuesta al
     impulso y los barridos.
-  - **Lo que falta de atsw-sis, por PR:** (3) la simplificación y si es una red (`simplify`, `structure`); (4) la
+  - **atsw-sis, tercer paso (15-nov-2026):** `atsw-cli caso-simplifica` (Tiao y Box: los cruzados con |t| < 1 a cero, una corrida hija, la LR contra la madre) y `caso-estructura` (cada par a cero y cada orden triangular, por LR; `--pasar-mt` da de alta el caso de MT con la salida primero, solo si se pide). En atsw-sis, `simplify` y `structure`.
+  - **Lo que falta de atsw-sis:** (4) la
     previsión, la evaluación y las bandas (`forecast`, `evaluate`,
     `impulse_response`, `variance_decomposition`, `irf_bands`). La lógica que
     hoy vive en los ficheros GTK de sim_gui (la clasificación del ajuste, las

@@ -100,10 +100,12 @@ orden que arma sim_gui— y lib/outvarma. Primer paso del hito: la parte VARMA.
 | `job_status`, `job_result` | el trabajo aparte, «CASO/rango»: cómo va, y su resultado final | `atsw-cli caso-rango --estado` |
 | `estimate_vec` | C2, el VEC de rango r, con su normalización; se niega sin bootstrap salvo `theory` | `atsw-cli caso-estima --r` |
 | `test_restriction` | C3, la exogeneidad débil de cada serie, por LR | `atsw-cli caso-exogeneidad` |
+| `simplify` | N4s, los cruzados con \|t\| < 1 a cero, una corrida hija y la LR contra la madre | `atsw-cli caso-simplifica` |
+| `structure` | N4t, cada par a cero y cada orden triangular; si es una red, se ofrece MT (`pass_to_mt` solo si lo pide el analista) | `atsw-cli caso-estructura [--pasar-mt]` |
 | `open_case` | el caso en sim_gui | `sim_gui --caso` |
 
-Los nombres son los de sima. La simplificación, la estructura, la
-evaluación y la previsión llegan en los pasos siguientes. Prueba:
+Los nombres son los de sima. La evaluación y la previsión llegan en el
+paso siguiente. Prueba:
 `tests/sis.py`, en la CI de Linux.
 
 ## Para la fase 1b: los procesos, con la entrada cerrada

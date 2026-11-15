@@ -85,6 +85,15 @@ N4 La diagnosis viene con la corrida: la LR frente a las univariantes (en
    muestra: necesaria, no suficiente), Hosking y Jarque-Bera multivariantes,
    la raíz inversa mayor y cómo paró el optimizador. Un ajuste PARADO EN LA
    PARED DE INVERTIBILIDAD MA no es un óptimo: nunca lo presentes como tal.
+N4s simplify(case, run, t): Tiao y Box. Los cruzados con |t| < t (1 por
+   defecto) a cero, una corrida hija, y la LR (y el AIC) contra su padre.
+   Varias rondas son normales. Un ajuste en la pared MA no se simplifica.
+N4t structure(case, run): ¿es el sistema simultáneo? Cada par a cero y,
+   con hasta cuatro series, cada orden triangular, por LR. Si un orden se
+   sostiene, es una RED DE TRANSFERENCIA: OFRECE atsw-mt; no vayas solo.
+   Solo si el analista lo pide, pass_to_mt=True da de alta el caso de MT (la
+   salida primero). El veredicto vale lo que valga el orden del ajuste: con
+   orden bajo puede salir una retroalimentación espuria.
 Un empate (LR con p cerca de 0,05, o dos candidatos que leen lo mismo) se
 resuelve ESTIMANDO LOS DOS, no eligiendo sobre el papel. Nunca decidas nodos
 en lote: elegir candidatos antes de ver las CCF es decidir sin la evidencia.
@@ -95,8 +104,7 @@ en un bloque de código; nunca la rehagas. Los cruzados se llaman AR1[A<-B],
 MA1[A<-B]; Q[A,B] es la covarianza de las innovaciones.
 
 ══ LO QUE AQUÍ NO HAY (todavía) ══
-La simplificación de Tiao y Box, la pregunta de si el sistema es una red, la evaluación fuera de muestra (el
-patrón de medida), la previsión y la respuesta al impulso con sus bandas.
+La evaluación fuera de muestra (el patrón de medida), la previsión y la respuesta al impulso con sus bandas.
 Llegan en los pasos siguientes. Mientras, open_case abre el caso en sim_gui,
 donde el analista los tiene. No improvises sus resultados.
 
@@ -305,6 +313,35 @@ def crea():
         (atsw-mt)."""
         return _hazlo(lambda: cli.atsw_cli("caso-exogeneidad", cli.comprueba_id("el caso", case),
                                            cli.comprueba_id("la corrida", run), "--por", "asistente"))
+
+    @app.tool()
+    def simplify(case: str, run: str, reason: str = "", t: float = 1.0) -> str:
+        """N4s, la simplificación de Tiao y Box (1981, §4) sobre el VARMA de la corrida
+        run: los coeficientes cruzados con |t| < t a cero (además de los que ya
+        estaban), una corrida hija, y la LR contra run, con el AIC. Varias rondas son
+        normales. Devuelve lo mismo que estimate, con la línea «contra run»."""
+        def f():
+            a = ["caso-simplifica", cli.comprueba_id("el caso", case), cli.comprueba_id("la corrida", run),
+                 "--t", repr(float(t)), "--por", "asistente"]
+            if reason.strip():
+                a += ["--razon", reason]
+            return cli.atsw_cli(*a)
+        return _hazlo(f)
+
+    @app.tool()
+    def structure(case: str, run: str, pass_to_mt: bool = False) -> str:
+        """N4t, ¿es el sistema simultáneo? (Tiao y Box, §3.1, §5.2.) Sobre el VARMA de
+        la corrida run: la LR de cada par a cero (B no entra en la ecuación de A) y, con
+        hasta cuatro series, la de cada orden triangular. Si un orden se sostiene, es una
+        red de transferencia: se OFRECE atsw-mt. pass_to_mt=True, solo si el analista lo
+        pide, da de alta el caso de MT con la salida primero."""
+        def f():
+            a = ["caso-estructura", cli.comprueba_id("el caso", case), cli.comprueba_id("la corrida", run),
+                 "--por", "asistente"]
+            if pass_to_mt:
+                a += ["--pasar-mt"]
+            return cli.atsw_cli(*a)
+        return _hazlo(f)
 
     @app.tool()
     def open_case(case: str, run: str = "") -> str:

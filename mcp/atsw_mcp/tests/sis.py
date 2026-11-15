@@ -71,6 +71,15 @@ async def corre(raiz: Path, w: Path) -> None:
                           links="MINK<-MUSKRAT", from_run="c00")
             check("C1/c01" in res and "-564.754457" in res,
                   "estimate links: c01, el enlace restringido", res)
+            res = await t("structure", case="C1", run="c01")
+            check("ES UNA RED" in res and "Pasado a MT" not in res,
+                  "structure de un modelo triangular: es una red, y no pasa solo", res)
+            res = await t("estimate", case="C1", reason="el VARMA(2,0)", p=2, q=0)
+            res = await t("simplify", case="C1", run="c02")
+            check("C1/c03" in res and "contra c02" in res and "0.4761" in res,
+                  "simplify: c03, hija de c02, con su LR", res)
+            res = await t("structure", case="C1", run="c02")
+            check("SIMULTÁNEO" in res, "structure del VARMA(2,0): simultáneo", res)
             res = await t("estimate", case="C1", reason="mal", p=1, q=0, links="MINK-MUSKRAT")
             check(res.startswith("No se pudo") and "A<-B" in res,
                   "estimate con un enlace mal escrito: lo dice", res)
@@ -82,7 +91,7 @@ async def corre(raiz: Path, w: Path) -> None:
             check(res.startswith("No se pudo"), "open_case de uno que no está: lo dice", res)
 
     y = (proy / "proyecto.yaml").read_text(encoding="utf-8")
-    check("C1/c00" in y and "otro orden de Cholesky" in y,
+    check("C1/c00" in y and "otro orden de Cholesky" in y and "padre: C1" not in y,
           "el manifiesto tiene las corridas y el caso nuevo", y[-400:])
 
     # EL VEC, sobre johansen_juselius (cuatro series I(1)): el rango, su

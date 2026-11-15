@@ -2459,9 +2459,12 @@ static int caso_rango( const char *path, const char *caso )
         pid = tj.pid;
         if ( trabajo_estado( trab, &tj ) == TR_EN_MARCHA )
             {
-            if ( !k_estado && !k_rehacer )
+            /* NI CON --rehacer: dos drvec escribirian el mismo .boot y el
+               mismo .out. --rehacer repite uno TERMINADO, nunca uno en marcha. */
+            if ( !k_estado )
                 { g_free( v ); g_free( dir ); g_free( nombre ); g_free( sis ); g_free( p );
-                  return falla( "Hay un bootstrap del rango en marcha (proceso %ld): caso-rango --estado lo sigue.", pid ); }
+                  return falla( "Hay un bootstrap del rango en marcha (proceso %ld, %s): caso-rango --estado lo "
+                                "sigue. Ni --rehacer lanza otro encima.", pid, tj.por ); }
             if ( k_estado )
                 {
                 t = g_string_new( "" );

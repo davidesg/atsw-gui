@@ -125,6 +125,13 @@ typedef struct {
    GtkWidget *ver_cuenta;         /* veredicto: cuantas cosas hay           */
    GtkWidget *ver_ojo;            /* veredicto: LO QUE HAY QUE MIRAR        */
    GtkWidget *estado;             /* la barra de abajo                      */
+   /* LOS TRABAJOS APARTE (lib/trabajo): su barra de avance, a la derecha de
+      la de estado, lo que ya se vio de cada uno (para avisar una vez) y el
+      caso del que se enseña (el clic lo abre en sim_gui). trabajos.c   */
+   GtkWidget  *trab_barra;
+   GHashTable *trab_visto;
+   gchar      *trab_caso;
+   guint       trab_tic;
    GtkWidget *b_fue, *b_nuevo, *b_iterar, *b_elegir, *b_razon;
 
    /* LA BARRA DE MENUS (ESTUDIO-madre-organizacion §3.1): Proyecto, Datos,
@@ -276,6 +283,10 @@ void       atsw_lanza_dice( Atsw *a, const char *programa, const char *fichero,
    que, como en atsw_lanza_dice; NULL si no hay gesto que decir.        */
 void       atsw_lanza_caso( Atsw *a, const char *programa, const char *caso,
                             const char *corrida, const char *que );
+
+/* --- los trabajos aparte, en la barra de estado (trabajos.c) ------------ */
+GtkWidget *atsw_trabajos_widget( Atsw *a );
+void       atsw_trabajos_mira( Atsw *a );
 
 /* --- los casos (docs/DISENO-casos.md) ----------------------------------- */
 

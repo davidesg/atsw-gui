@@ -18,6 +18,7 @@ Sale con 0 si todo va bien.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import os
 import shutil
 import sys
@@ -62,7 +63,7 @@ async def corre(raiz: Path, w: Path) -> None:
             quiero = {"guion_map", "identification_analysis", "new_version", "write_inp",
                       "estimate_and_diagnose", "diagnose", "formal_tests", "residual_outlier_scan",
                       "ar_factorization", "factorized_model", "model_equation_display", "full_report", "guion_annotate", "guion_adopt", "plot",
-                      "generate_forecast"}
+                      "generate_forecast", "boxcox_analysis", "intervention_ladder"}
             check(quiero <= ts, "las herramientas del camino en C", str(sorted(ts)))
 
             async def t(nombre, **a):
@@ -73,6 +74,24 @@ async def corre(raiz: Path, w: Path) -> None:
 
             res = await t("identification_analysis", series="MINK", transform="0,1,0")
             check("propuesto" in res and "candidatos" in res, "identification_analysis: art propone", res)
+
+            # EL EXTRA PYTHON: con él, el texto de art y su línea de coste con
+            # via: python; sin él (la CI), la herramienta lo dice y no hace nada.
+            hay_art = importlib.util.find_spec("art") is not None
+            res = await t("boxcox_analysis", series="MINK")
+            if hay_art:
+                check("Box-Cox" in res and "λ=0" in res, "boxcox_analysis: la de art", res)
+                res = await t("intervention_ladder", series="MINK", model="m01")
+                check("Escalera de Ockham" in res and "Peldaño 1" in res,
+                      "intervention_ladder: la escalera de art sobre MINK/m01", res)
+                costes = (proy / "costes.csv").read_text(encoding="utf-8")
+                check(",python," in costes and "MINK/m01,escalera" in costes,
+                      "el extra deja su línea en costes.csv, via python", costes[-400:])
+            else:
+                check(res.startswith("No se pudo") and "extra Python" in res,
+                      "boxcox_analysis sin el extra: lo dice", res)
+            res = await t("intervention_ladder", series="MINK", model="m00")
+            check(res.startswith("No se pudo"), "intervention_ladder de los datos: no", res)
 
             res = await t("new_version", series="MINK", reason="")
             check(res.startswith("No se pudo") and "razón" in res, "new_version sin razón: no", res)

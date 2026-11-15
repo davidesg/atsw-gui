@@ -38,12 +38,21 @@ los `.inp`: lo hace `atsw-cli`, con `lib/proyecto` y `lib/inpdet`.
 | `diagnose` | la diagnosis en veredictos | `dictamen` |
 | `formal_tests` | los contrastes formales, por familia | `formales` |
 | `residual_outlier_scan` | los episodios y si cambian la identificación | `anomalos` |
+| `boxcox_analysis` | [extra] la λ de Box-Cox de art, sobre los datos | art-python, aparte |
+| `intervention_ladder` | [extra] la escalera de Ockham de art para un suceso | art-python, aparte |
 | `ar_factorization` | la factorización del AR | `raices factores` |
 | `factorized_model` | el hijo con el AR factorizado, con su razón | `raices factorizado` |
 | `full_report` | la ficha de confianza | `ficha` |
 | `generate_forecast` | la previsión, fue -f y fuf desde el .pre, sin tocar el modelo | `prever` |
 | `guion_annotate`, `guion_adopt` | dejar escrito el porqué y el elegido | `proyecto razon` / `elige` |
 | `plot` | la ventana de la madre, y en texto lo que enseña | `atsw_gui --ver` |
+
+**El extra Python** (`atsw-gui-mcp[python]`) corre en un proceso aparte,
+`python -m atsw_mcp.extra`: el canal MCP es la salida estándar del servidor y
+art escribe por ella; importarlo tarda; y lo que estima con su fue en Python, si
+revienta, revienta el hijo. Llama a la misma herramienta de art con la ruta que
+da `atsw-cli proyecto ruta`, devuelve su texto sin las figuras, y apunta su línea
+en `costes.csv` con `via: python`. Sin el extra, la herramienta lo dice.
 
 Las instrucciones son el protocolo de nodos de art (los dos carriles, los diez
 nodos, el AR que no se capa, los contrastes formales), recortado a estas

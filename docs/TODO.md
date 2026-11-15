@@ -820,9 +820,14 @@ afectados.
       pareja de art. No se transcribe a otra forma, para no tocar fue: la
       ecuación en dos líneas, como la de art, pediría un modo de texto en el
       motor, y eso espera a una decisión.
-  - Lo siguiente del bloque: las herramientas del extra
-    Python (la λ de Box-Cox, la escalera de intervenciones, la
-    sobreparametrización), el `.cns` de atsw-mt, atsw-sis y la fase 2.
+  - **El extra Python, en un proceso aparte (15-nov-2026):**
+    `boxcox_analysis` e `intervention_ladder`, las herramientas de art
+    (art-tseries 0.2.3) llamadas desde `python -m atsw_mcp.extra`, con la ruta
+    de `atsw-cli proyecto ruta` y su línea en `costes.csv` con `via: python`.
+    La sobreparametrización de art son los pares con |r| ≥ 0,7, y eso ya lo
+    da `diagnose` en C. Quedan en art-python, sin portar: verificar un
+    óptimo, comparar versiones y `guided_intervention`.
+  - Lo siguiente del bloque: el `.cns` de atsw-mt, atsw-sis y la fase 2.
 
 ---
 

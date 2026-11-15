@@ -80,8 +80,10 @@ En este orden, UNO CADA VEZ, en los dos carriles:
                    estocástica). ANTES de ver ningún candidato: es un
                    preregistro, y decide los empates del nodo 8. Va a la razón
                    del primer modelo.
- 2. lambda         plot(what="mean-sd", series): nube con pendiente → λ=0
-                   (log); horizontal → λ=1. Índices de precios: λ=0 siempre.
+ 2. lambda         plot(what="mean-sd", series) y boxcox_analysis(series):
+                   nube con pendiente → λ=0 (log); horizontal → λ=1. Con
+                   signos opuestos el estadístico no decide: manda el dominio.
+                   Índices de precios: λ=0 siempre.
  3. d              plot(what="series") e identification_analysis(series,
                    transform="λ,d,0") con d = 0, 1: tendencia o ACF que no
                    cae → una diferencia más. ADF y KPSS apoyan, no deciden.
@@ -99,8 +101,10 @@ En este orden, UNO CADA VEZ, en los dos carriles:
                    estimate_and_diagnose.
  7. intervenciones residual_outlier_scan sobre el base: ¿cambia la
                    identificación sin los episodios? Si no cambia, intervenir
-                   no compra nada. Una intervención cada vez, en un hijo
-                   (write_inp interventions=["step 10 2008"]).
+                   no compra nada. Si cambia, intervention_ladder: qué FORMA
+                   admite el suceso (escalón o impulso; el AIC no arbitra la
+                   subida de peldaño). Una intervención cada vez, en un hijo
+                   (write_inp interventions=["impulse 3 2020"]).
  8. órdenes        identification_analysis(series, residuals_of=<base>): el
                    ARMA que les falta a los residuos del base. Un hijo del
                    base con ese ARMA (write_inp arma="p,q,P,Q").
@@ -190,11 +194,15 @@ desviación típica y las variaciones del periodo y anual con las suyas. Prever
 no es un nodo: no hay nada que decidir ni que derivar.
 
 ══ LO QUE AQUÍ NO HAY (todavía) ══
-- La λ recomendada de Box-Cox, la escalera de intervenciones, la
-sobreparametrización, verificar un óptimo y comparar versiones son de
-art-python y aún no están en atsw-us. Si un nodo los pide, dilo y propón el
-camino con lo que hay (plot, residual_outlier_scan, un hijo más estimado a
-mano). No improvises el resultado como si saliera de una herramienta.
+- boxcox_analysis e intervention_ladder son del EXTRA PYTHON: si no está
+  instalado lo dicen, y se sigue con lo de C (plot mean-sd y el dominio;
+  residual_outlier_scan y un hijo por forma). Lo que estiman lo estiman con
+  el fue de Python.
+- La sobreparametrización (los pares de parámetros con |r| ≥ 0,7) está en
+  C: la da diagnose.
+- Verificar un óptimo y comparar versiones son de art-python y aún no están
+  en atsw-us. Si un nodo los pide, dilo y propón el camino con lo que hay.
+  No improvises el resultado como si saliera de una herramienta.
 
 ══ REGLAS ══
 - Solo dentro del proyecto y solo con estas herramientas: no hay órdenes de
@@ -334,6 +342,39 @@ def crea():
             a = ["anomalos", ID("la serie", series), ID("el modelo", model)]
             if episodes: a += ["--episodios", "todos" if episodes == "all" else episodes]
             return cli.atsw_cli(*a, muestra=sample)
+        return _hazlo(f)
+
+    @app.tool()
+    def boxcox_analysis(series: str, sample: str = "") -> str:
+        """[extra Python] La λ de Box-Cox, la de art: la correlación media-desviación
+        típica con λ=1 y con λ=0 sobre los datos de la serie, y su recomendación.
+        Con signos opuestos el estadístico no decide y manda el dominio. Corre en
+        un proceso aparte y queda en costes.csv con via: python."""
+        def f():
+            s = ID("la serie", series)
+            return cli.extra("boxcox", {"inp_path": cli.ruta(s, "datos", ".inp", sample)},
+                             f"{s}/datos", "boxcox")
+        return _hazlo(f)
+
+    @app.tool()
+    def intervention_ladder(series: str, model: str, at: int = 0, ventana: int = 0,
+                            threshold: float = 3.0, umbral_vecino: float = 0.0,
+                            sample: str = "") -> str:
+        """[extra Python] La escalera de Ockham de art para un suceso: estima las
+        formas rivales en orden (1a escalón permanente, 1b impulso transitorio; 2,
+        el episodio con varios ω y el contraste de ganancia) y dice qué justifica
+        subir de peldaño. El AIC NO arbitra la subida. model: un modelo ESTIMADO sin
+        la intervención; at: la observación (1-based, en los residuos) donde arranca
+        el suceso, 0 = el episodio de mayor |z|. No escribe nada: la forma elegida
+        se construye después en un hijo con write_inp. art reestima con su fue en
+        Python (via: python en costes.csv)."""
+        def f():
+            s, m = ID("la serie", series), ID("el modelo", model)
+            cli.ruta(s, m, ".out", sample)                  # que esté estimado
+            args = {"inp_path": cli.ruta(s, m, ".inp", sample), "at": int(at),
+                    "ventana": int(ventana), "threshold": float(threshold),
+                    "umbral_vecino": float(umbral_vecino)}
+            return cli.extra("escalera", args, f"{s}/{m}", "escalera")
         return _hazlo(f)
 
     @app.tool()

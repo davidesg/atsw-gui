@@ -108,3 +108,41 @@ cinco líneas libres en 88 caracteres o menos.
 `.inp` con la línea 3 de 88 caracteres y de 120; sale con 0 mientras fue se
 porte como dice el formato (88 se lee, 120 no), con 1 si cambia, y con 2 si
 falla el de 88. No depende del estado de git.
+
+## BUG-0003 — el .pre escribe el factor de reescalado con dos decimales: por debajo de 0.005 sale «0.00» y se relee como 1
+
+**Encontrado:** 2026-11-15, en el estudio de la escala de la suite
+(`docs/ESTUDIO-escala.md`). drvec tuvo el mismo defecto en su escritor
+(su BUG-44, arreglado con `%.10g`).
+
+### Síntoma
+
+`fue.c` escribe la línea de bandas y factor con `" %.2f"` los dos campos. Un
+factor 0.001 se escribe `0.00`, y los cinco lectores hacen
+`if (refactor == 0) refactor = 1`. El `.pre` deja de ser el modelo que se
+estimó: μ y los ω siguen en las unidades del factor 0.001 y el fichero dice 1.
+
+```
+factor del .inp: 0.001   factor del .pre: 0.00
+```
+
+Con el mismo formato escriben `inp_write_bare` (`engines/fug/src/inpfile.c`,
+que usan la madre y gui/fug) y `gui/fue` (`file_io.c`, que además pasa el
+factor por un control de rango 1 a 1000).
+
+### Por qué importa
+
+Es el suelo del formato: hoy ningún fichero de la suite puede llevar un factor
+menor que 0.01, que es lo que pediría una serie en niveles de unidades muy
+grandes. Como `%.4f`/`%.6f` de BUG-0001, no rompe nada de lo que hay (todo va
+a 1 o a 100); limita lo que se puede escribir.
+
+### Arreglo propuesto (no hecho)
+
+El de drvec: `%.10g` para el factor, en los tres escritores. Mientras tanto,
+quien escribe un `.inp` no elige un factor menor que 0.01.
+
+### Reproducción
+
+`bugs/BUG-0003-repro/repro.py` (con `NIV_factor.inp`, sintética). Sale con 1
+mientras el `.pre` no devuelva el factor del `.inp`.

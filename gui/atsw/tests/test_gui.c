@@ -47,6 +47,8 @@
 #endif
 
 #include "sitio.h"
+#include "trabajo.h"
+#include <time.h>
 #ifndef G_OS_WIN32
 #include <unistd.h>
 #endif
@@ -4154,6 +4156,55 @@ static void legado( const char *padre, const char *y, const char *x,
     g_free( out );
 }
 
+/* LOS TRABAJOS APARTE EN LA BARRA (trabajos.c, lib/trabajo): un .trabajo en
+   el proyecto --el de un bootstrap del rango-- asoma a la derecha de la barra
+   de estado con su avance; al terminar, la barra lo dice una vez; sin el
+   fichero, la barra de avance se va.                                     */
+static void trabajos( void )
+{
+    char    raiz[PR_RUTA];
+    gchar  *w, *tr, *boot, *out;
+    Trabajo t;
+    GtkProgressBar *pb;
+
+    check( pr_raiz( A.p, raiz, sizeof raiz ) == 0, "la raiz del proyecto", NULL );
+    atsw_trabajos_mira( &A );
+    check( !gtk_widget_get_visible( A.trab_barra ), "sin trabajos, no hay barra de avance", NULL );
+    w = g_build_filename( raiz, "_casos", "C9", "work", NULL );
+    g_mkdir_with_parents( w, 0700 );
+    tr = g_build_filename( w, "C9_rango.trabajo", NULL );
+    boot = g_build_filename( w, "C9_rango.boot", NULL );
+    out = g_build_filename( w, "C9_rango.out", NULL );
+    memset( &t, 0, sizeof t );
+    g_strlcpy( t.que, "bootstrap del rango", sizeof t.que );
+    g_strlcpy( t.objeto, "C9/rango", sizeof t.objeto );
+    t.pid = sitio_mi_pid(); t.inicio = (long) time( NULL ) - 20; t.total = 57;
+    g_strlcpy( t.por, "asistente", sizeof t.por );
+    g_strlcpy( t.progreso, "C9_rango.boot", sizeof t.progreso );
+    g_strlcpy( t.resultado, "C9_rango.out", sizeof t.resultado );
+    trabajo_escribe( tr, &t );
+    g_file_set_contents( boot, "h0,rep,status,lr\n0,1,ok,1.0\n0,2,ok,2.0\n", -1, NULL );
+    atsw_trabajos_mira( &A );
+    pb = GTK_PROGRESS_BAR( gtk_bin_get_child( GTK_BIN( A.trab_barra ) ) );
+    check( gtk_widget_get_visible( A.trab_barra ), "un trabajo en marcha: asoma la barra de avance", NULL );
+    check( strstr( gtk_progress_bar_get_text( pb ), "C9/rango" ) && strstr( gtk_progress_bar_get_text( pb ), "2/57" ),
+           "la barra dice qué es y cuánto va", gtk_progress_bar_get_text( pb ) );
+    check( A.trab_caso && !strcmp( A.trab_caso, "C9" ), "el clic abriría su caso", A.trab_caso );
+    /* termina: el proceso ya no es el de la prueba y deja su resultado */
+    t.pid = 999999999;
+    trabajo_escribe( tr, &t );
+    g_file_set_contents( out, "fin\n", -1, NULL );
+    atsw_trabajos_mira( &A );
+    check( strstr( gtk_label_get_text( GTK_LABEL( A.estado ) ), "terminado" ) != NULL,
+           "al terminar, la barra de estado lo dice", gtk_label_get_text( GTK_LABEL( A.estado ) ) );
+    check( strstr( gtk_progress_bar_get_text( pb ), "terminado" ) != NULL, "y la de avance también",
+           gtk_progress_bar_get_text( pb ) );
+    g_remove( tr ); g_remove( boot ); g_remove( out );
+    atsw_trabajos_mira( &A );
+    check( !gtk_widget_get_visible( A.trab_barra ), "recogido el trabajo, la barra de avance se va", NULL );
+    g_free( w ); g_free( tr ); g_free( boot ); g_free( out );
+}
+
 static void legados( void )
 {
     char     l1[PR_ID], l2[PR_ID], l3[PR_ID], l4[PR_ID], m5[PR_ID], ruta[PR_RUTA];
@@ -4873,6 +4924,7 @@ int main( int argc, char **argv )
             fase( "barra" ); menus_barra();
             fase( "quitados" ); quitados();
             fase( "legados" ); legados();
+            fase( "trabajos" ); trabajos();
             }
         }
     fase( "ejemplos" ); ejemplos();

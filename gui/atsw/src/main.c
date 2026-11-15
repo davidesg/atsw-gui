@@ -2900,10 +2900,18 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_box_pack_start( GTK_BOX(vb), atsw_legado_caja( a ), FALSE, FALSE, 0 );
     gtk_box_pack_start( GTK_BOX(raiz), vb, FALSE, FALSE, 0 );
 
+    {
+    /* LA BARRA DE ABAJO: el estado y, a su derecha, el avance de los
+       trabajos aparte (trabajos.c), que solo asoma cuando hay alguno */
+    GtkWidget *pie = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
+
     a->estado = gtk_label_new( "" );
     gtk_widget_set_halign( a->estado, GTK_ALIGN_START );
     gtk_label_set_ellipsize( GTK_LABEL(a->estado), PANGO_ELLIPSIZE_END );
-    gtk_box_pack_start( GTK_BOX(raiz), a->estado, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(pie), a->estado, TRUE, TRUE, 0 );
+    gtk_box_pack_end( GTK_BOX(pie), atsw_trabajos_widget( a ), FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(raiz), pie, FALSE, FALSE, 0 );
+    }
 
     atsw_refresca( a );
     /* Los menus nacen llenos: se rehacen al abrirse, pero un menu vacio

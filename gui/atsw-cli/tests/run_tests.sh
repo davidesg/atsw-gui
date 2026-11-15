@@ -534,6 +534,8 @@ if [ -x "$DVC" ] && [ -x "$DRV" ]; then
          '[ "$(printf "%s\n" "$J" | campo "(d[\"lanzado\"], d[\"total\"])")" = "(True, 57)" ]'
     mira "caso-rango con uno en marcha: no lanza otro (estado 1)" \
          '"$CLI" caso-rango "$YJ" C1 --p 1 --bootstrap 19 --aparte 2>&1 | grep -q "en marcha"'
+    mira "caso-rango --rehacer con uno en marcha: tampoco (estado 1)" \
+         '"$CLI" caso-rango "$YJ" C1 --p 1 --bootstrap 19 --aparte --rehacer 2>&1 | grep -q "Ni --rehacer"'
     n=0
     until "$CLI" --json caso-rango "$YJ" C1 --estado | grep -q '"terminado": true' || [ $n -ge 120 ]; do sleep 2; n=$((n+2)); done
     J=$("$CLI" --json caso-rango "$YJ" C1 --estado)

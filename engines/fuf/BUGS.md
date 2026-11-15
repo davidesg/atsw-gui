@@ -1,11 +1,14 @@
 # Fallos conocidos — fuf
 
-## BUG-0001 — con λ = 1 la tabla de previsión sale ×100, salvo el nivel
+## BUG-0001 — con λ = 1 la tabla de previsión sale ×100, salvo el nivel (ARREGLADO)
 
 **Encontrado:** 2026-10-17, al planear el gestor de previsiones
 (`docs/DISENO-gestor-previsiones.md`), que va a leer la columna ERR.
 **Revisado:** 2026-11-13. La primera versión de este fallo decía dos cosas, y
 una era falsa (abajo).
+**Arreglado:** 2026-11-15, con el BUG-0002 y el BUG-0003 (la tabla, entera):
+vs = 100/refactor en logaritmos y 1/refactor si no, la convención de drvarma y
+drvec. `repro.py` sale con 0.
 
 ### Síntoma
 
@@ -46,10 +49,15 @@ veces más grandes.
 diferencia de niveles o la d.t. de la primera previsión no sea σ. En
 logaritmos (`IPC_ES_m01_ar1`) comprueba que la tabla sale bien, como control.
 
-## BUG-0002 — la tabla de previsión escribe los campos pegados
+## BUG-0002 — la tabla de previsión escribe los campos pegados (ARREGLADO)
 
 **Encontrado:** 2026-11-12, en la fase P2 de la previsión (`docs/TODO.md`),
 al llevar a drtran el formato de esta tabla. Apuntado el 2026-11-13.
+**Arreglado:** 2026-11-15: el diseño de drtran, drvarma y drvec, con un espacio
+garantizado entre campos (`%11.4f`, `%9.4f`, `%8.4f`, separados). La tabla de
+los cuatro motores es la misma. Las 14 salidas de referencia de `tests/golden`
+cambian solo en la tabla (todo lo demás, byte a byte igual), y se han
+regenerado. `repro.py` sale con 0.
 
 ### Síntoma
 
@@ -85,3 +93,30 @@ no lo heredan. Arreglarlo cambia las salidas de referencia de fuf.
 niveles de unos 2000. En logaritmos el modelo de las diferencias es el mismo;
 solo cambia el ancho del nivel. Sale con 1 mientras alguna fila no se parta en
 fecha y sus campos.
+
+## BUG-0003 — con una serie anual no hay tabla de previsión (ARREGLADO)
+
+**Encontrado:** 2026-11-15, al escribir `atsw-cli prever` para el asistente,
+con el visón de Jenkins y Alavi (`docs/ejemplos/jenkins_alavi`, MINK/m01).
+**Arreglado:** 2026-11-15, con el BUG-0001 y el BUG-0002. `repro.py` sale con 0.
+
+### Síntoma
+
+`forecast_table_acii` (`src/usfo.c`) solo escribía la tabla con `freq > 1`, o
+la propia de una Box-Cox negativa. Una serie anual en niveles o en logaritmos
+se quedaba sin FORECAST REPORT en el `.out`: los números solo salían en la
+tabla LaTeX y en el PDF. El porte de Python (fue-python,
+`report._fuf_section_forecast_table`) sí la escribe.
+
+### Arreglo
+
+La tabla de siempre se escribe con `freq > 1 || boxlam >= 0`. Con un periodo
+por año, la fecha es el año («1912», y «FORECAST ORIGIN : 1911») y las
+columnas anuales van con «-»: repetirían las del periodo. Con una Box-Cox
+negativa sigue su tabla propia, sin cambios.
+
+### Reproducción
+
+`bugs/BUG-0003-repro/repro.py`: `fue -f` sobre el `.pre` de MINK/m01 y fuf
+sobre lo que escribe. Salía con 1 mientras el `.out` no trajera la tabla.
+

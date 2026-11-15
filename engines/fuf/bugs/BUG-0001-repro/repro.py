@@ -36,13 +36,11 @@ def corre(d, nombre):
     for l in tabla:
         if not FECHA.match(l):
             continue
-        if l[17:24].strip() == "-":
-            # observada: fecha valor - var - anual - ERR (niveles < 1000)
-            obs.append(l.split())
-        else:
-            # prevista: anchos fijos, que los campos van pegados (BUG-0002)
-            prev.append([l[0:8], l[8:17], l[17:24], l[24:32], l[32:40],
-                         l[40:49], l[49:56]])
+        # desde el arreglo del BUG-0002 los campos van separados: se parten
+        # por espacios. Observada: fecha valor - var - anual - ERR; prevista:
+        # fecha valor dt var dt anual dt -
+        f = l.split()
+        (obs if f[2] == "-" else prev).append(f)
     inp = (d / "x.inp").read_text().split("\n")
     i = next(k for k, l in enumerate(inp) if "innovation variance" in l)
     sigma = math.sqrt(float(inp[i + 1].split()[1]))

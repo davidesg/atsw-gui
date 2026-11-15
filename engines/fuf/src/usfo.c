@@ -355,35 +355,56 @@ void forecast_table_acii ( FILE *outputv,int nobs, int freq, int begyear, int be
 	double ***v2, double ***v3, double boxlam, double refactor, char * variable_name)
 
 {
-int i, j, Aper1, Asub1;
+int i, Aper1, Asub1;
 
-if ( freq > 1 ){
+/* LA TABLA DE SIEMPRE, CON TRES ARREGLOS (BUGS.md, 2026-11-15):
+ *
+ *  BUG-0001  LA ESCALA. Todo se multiplicaba por 100: en logaritmos eso
+ *            pasa las variaciones a porcentaje, que es lo que se quiere, pero
+ *            en niveles las dejaba cien veces mas grandes. Ahora vs = 100 /
+ *            refactor con lambda = 0 y 1 / refactor si no --la convencion de
+ *            drvarma y drvec--, en las variaciones, sus d.t., la d.t. del
+ *            nivel y ERR. El nivel no cambia.
+ *  BUG-0002  LOS CAMPOS PEGADOS. Anchos fijos y sin separador: un nivel de
+ *            1000 se juntaba con la fecha. Ahora el diseño de drtran,
+ *            drvarma y drvec, con un espacio garantizado entre campos: la
+ *            tabla de los cuatro motores es la misma y lib/outfcst la lee.
+ *  BUG-0003  LAS SERIES ANUALES. Solo habia tabla con freq > 1: una serie
+ *            anual en niveles o en logaritmos no tenia ninguna. Ahora si,
+ *            con la fecha «1912» y sin las columnas anuales, que con un
+ *            periodo por año repetirian las del periodo.
+ *
+ * Con una Box-Cox negativa sigue su tabla propia, la de abajo.          */
+if ( freq > 1 || boxlam >= 0.0 ){
+   double vs = ( fabs( boxlam ) < 1.0e-8 ? 100.0 : 1.0 ) / refactor;
+
+          ObsToDate( begyear, begtime, nobs, freq, &Aper1, &Asub1 );
           fprintf( outputv, "FORECAST REPORT: \n" );
           fprintf( outputv, "VARIABLE NAME: %s\n", variable_name );
-          ObsToDate( begyear, begtime, nobs, freq, &Aper1, &Asub1 );
-          fprintf( outputv, "FORECAST ORIGIN : %2d/%4d\n", Asub1, Aper1);
-          fprintf( outputv, "LEAD TIME FOR FORECASTING: %d\n", L);
-          fprintf( outputv, "\n" );
-          fprintf( outputv, " +---------------------------------------------------------------+\n" );
-          fprintf( outputv, " |      |     LEVEL      |           VARIATION           |       |\n" );
-          fprintf( outputv, " | DATE +----------------+-------------------------------+  ERR  |\n" );
-          fprintf( outputv, " |      |  VALUE   | STD | TRIMEST | STD |  ANUAL  | STD |       |\n" );
-          fprintf( outputv, " |      |          |     | /MONT   |     |         |     |       |\n" );
-          fprintf( outputv, " +---------------------------------------------------------------+\n" );
-	  
+          if ( freq > 1 ) fprintf( outputv, "FORECAST ORIGIN : %2d/%4d\n", Asub1, Aper1 );
+          else            fprintf( outputv, "FORECAST ORIGIN : %4d\n", Aper1 );
+          fprintf( outputv, "LEAD TIME FOR FORECASTING: %d\n\n", L );
+          fprintf( outputv, " +----------------------------------------------------------------------------+\n" );
+          fprintf( outputv, " |       |       LEVEL        |              VARIATION              |         |\n" );
+          fprintf( outputv, " | DATE  +--------------------+-------------------------------------+   ERR   |\n" );
+          fprintf( outputv, " |       |   VALUE   |  STD   | TRIMEST |  STD   |  ANUAL  |  STD   |         |\n" );
+          fprintf( outputv, " |       |           |        |  /MONT  |        |         |        |         |\n" );
+          fprintf( outputv, " +----------------------------------------------------------------------------+\n" );
+
        for ( i = nobs - L; i <= nobs; i++ )   /* Print data and errors:     */
            {
-	     ObsToDate( begyear, begtime, i, freq, &Aper1, &Asub1 );
-	     fprintf( outputv," %2d/%4d", Asub1, Aper1);
-	     if (boxlam==0) fprintf( outputv,"%9.4f", exp(data[i]/refactor) );
-             else fprintf( outputv,"%9.4f",  data[i]/refactor );
-	     fprintf( outputv,"     - ");
-	     fprintf( outputv,"%8.4f ", 100*(data[i] - data[i-1] )/refactor);
-	     fprintf( outputv,"     - ");
-	     fprintf( outputv,"%9.4f  ",100*(data[i] - data[i-freq])/refactor );
-	     fprintf( outputv,"   - ");
-	     fprintf( outputv,"%8.4f \n", 100*a[1][i-ornsop]/refactor );
-	   }
+             if ( i < 1 ) continue;
+             ObsToDate( begyear, begtime, i, freq, &Aper1, &Asub1 );
+             if ( freq > 1 ) fprintf( outputv, "  %2d/%4d", Asub1, Aper1 );
+             else            fprintf( outputv, "     %4d", Aper1 );
+             fprintf( outputv, " %11.4f %8s", boxlam == 0 ? exp( data[i] / refactor ) : data[i] / refactor, "-" );
+             if ( i > 1 ) fprintf( outputv, " %9.4f %8s", vs * ( data[i] - data[i-1] ), "-" );
+             else         fprintf( outputv, " %9s %8s", "-", "-" );
+             if ( freq > 1 && i > freq ) fprintf( outputv, " %9.4f %8s", vs * ( data[i] - data[i-freq] ), "-" );
+             else                        fprintf( outputv, " %9s %8s", "-", "-" );
+             if ( i - ornsop >= 1 ) fprintf( outputv, " %9.4f\n", vs * a[1][i-ornsop] );
+             else                   fprintf( outputv, " %9s\n", "-" );
+           }
 /* LOS ERRORES TIPICOS, EN double Y CON %f. Se imprimian con sqrtl() y %Lf
    (long double): con MinGW, el printf de la biblioteca de Microsoft lee un
    long double como un double de 64 bits y gcc se lo pasa de 80, asi que en
@@ -392,17 +413,17 @@ if ( freq > 1 ){
    long double no anadia precision que imprimir.                          */
        for ( i = 1; i <= L; i++ )              /* Print forecasts and sds:   */
            {
-	     ObsToDate( begyear, begtime, nobs+i, freq, &Aper1, &Asub1 );
-	     fprintf( outputv," %2d/%4d", Asub1, Aper1);
-	     if (boxlam==0)fprintf( outputv,"%9.4f", exp(f1[1][i]/refactor) );
-             else fprintf( outputv,"%9.4f",  f1[1][i]/refactor );
-	     fprintf( outputv,"%7.4f", 100*sqrt( v1[i][1][1] )/refactor );
-	     fprintf( outputv,"%8.4f", 100*f2[1][i]/refactor );
-	     fprintf( outputv,"%8.4f", 100*sqrt( v2[i][1][1] )/refactor );
-	     fprintf( outputv,"%9.4f", 100*f3[1][i]/refactor );
-	     fprintf( outputv,"%7.4f \n", 100*sqrt( v3[i][1][1] )/refactor );
-	   }
-
+             ObsToDate( begyear, begtime, nobs+i, freq, &Aper1, &Asub1 );
+             if ( freq > 1 ) fprintf( outputv, "  %2d/%4d", Asub1, Aper1 );
+             else            fprintf( outputv, "     %4d", Aper1 );
+             fprintf( outputv, " %11.4f %8.4f", boxlam == 0 ? exp( f1[1][i] / refactor ) : f1[1][i] / refactor,
+                      vs * sqrt( v1[i][1][1] ) );
+             fprintf( outputv, " %9.4f %8.4f", vs * f2[1][i], vs * sqrt( v2[i][1][1] ) );
+             if ( freq > 1 ) fprintf( outputv, " %9.4f %8.4f", vs * f3[1][i], vs * sqrt( v3[i][1][1] ) );
+             else            fprintf( outputv, " %9s %8s", "-", "-" );
+             fprintf( outputv, " %9s\n", "-" );
+           }
+          fprintf( outputv, " +----------------------------------------------------------------------------+\n" );
 }
 if ( boxlam < 0.0 ){
             fprintf( outputv, "FORECAST REPORT: \n" );

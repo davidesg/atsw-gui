@@ -192,12 +192,13 @@ decidir:
    porte (p. ej. `estimate` ↔ `estimate`, `forecast` ↔ `forecast`,
    `case-estimate` ↔ el `estimate` de drtran/sima), de modo que el golden de
    una sea la salida de la otra con la misma orden.
-4. **Abiertas, sin preferencia del analista todavía:** si las claves del JSON
+4. **Abierta, sin preferencia del analista todavía:** si las claves del JSON
    que devuelve atsw-cli (`serie`, `modelo`, `prevision`,
-   `frente_al_diagonal`…) pasan al inglés, y si los nombres de las
-   herramientas MCP de atsw-us y atsw-mt (`derivar`, `especificar`,
-   `estimar`, `prever`, `estimar_caso`…) pasan al inglés como los de art,
-   drtran y sima.
+   `frente_al_diagonal`…) pasan al inglés.
+5. **Decidido y hecho ya (15-nov-2026):** las herramientas MCP de atsw-us y
+   atsw-mt se llaman como sus parejas de art y drtran (ver «PENDIENTE: el
+   asistente»). No espera al plan, porque el asistente es lo que se está
+   construyendo.
 
 Lo que **no** cambia: los valores que van al manifiesto y a `costes.csv`
 (`por: asistente`/`analista`, el paso) son datos del proyecto, no palabras de

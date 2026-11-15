@@ -23,6 +23,7 @@ SRC = src/main.c \
       $(LIB)/engine/engine.c \
       $(LIB)/sitio/sitio.c \
       $(LIB)/ficha/ficha.c \
+      $(LIB)/outfcst/outfcst.c \
       $(LIB)/netfile/netfile.c \
       $(LIB)/outdiag/outdiag.c \
       $(LIB)/artcand/artcand.c \
@@ -40,7 +41,7 @@ SRC = src/main.c \
 
 INC = -I$(LIB)/proyecto -I$(LIB)/gesto -I$(LIB)/outfile -I$(LIB)/dictamen -I$(LIB)/intervencion \
       -I$(LIB)/inpdet -I$(LIB)/raices -I$(LIB)/formales -I$(LIB)/inpcheck -I$(LIB)/coste \
-      -I$(LIB)/engine -I$(LIB)/sitio -I$(LIB)/ficha -I$(LIB)/netfile -I$(LIB)/outdiag -I$(LIB)/artcand -I../../engines/fug/src -I$(LIB)/anomalos -I$(LIB)/fugplot \
+      -I$(LIB)/engine -I$(LIB)/sitio -I$(LIB)/ficha -I$(LIB)/outfcst -I$(LIB)/netfile -I$(LIB)/outdiag -I$(LIB)/artcand -I../../engines/fug/src -I$(LIB)/anomalos -I$(LIB)/fugplot \
       -I$(LIB)/prewhiten -I$(LIB)/fuepre -I$(LIB)/fuedet -I$(LIB)/diagmv -I$(LIB)/dates -I$(LIB)/lik \
       -I../../engines/drtran/include
 

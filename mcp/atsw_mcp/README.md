@@ -34,6 +34,7 @@ los `.inp`: lo hace `atsw-cli`, con `lib/proyecto` y `lib/inpdet`.
 | `especificar` | la transformación, el ARMA, las intervenciones y la media de un modelo sin estimar | `especifica` |
 | `estimar` | fue, con su coste, y el dictamen | `estima` |
 | `dictamen`, `formales`, `anomalos`, `raices`, `ficha` | la evidencia | las órdenes del mismo nombre |
+| `prever` | la previsión, fue -f y fuf desde el .pre, sin tocar el modelo | `prever` |
 | `razon`, `elegir` | dejar escrito el porqué y el elegido | `proyecto razon` / `elige` |
 | `ver` | la ventana de la madre, y en texto lo que enseña | `atsw_gui --ver` |
 

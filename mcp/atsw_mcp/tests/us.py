@@ -45,7 +45,7 @@ async def corre(raiz: Path, w: Path) -> None:
     binarios = w / "bin"
     binarios.mkdir()
     for b in (raiz / "gui/atsw-cli/atsw-cli", raiz / "engines/fue/bin/fue",
-              raiz / "engines/art/bin/art",
+              raiz / "engines/art/bin/art", raiz / "engines/fuf/bin/fuf",
               raiz / "gui/atsw/atsw_gui"):
         shutil.copy2(str(b) + exe, binarios / (b.name + exe))
     proy = w / "proy"
@@ -60,7 +60,8 @@ async def corre(raiz: Path, w: Path) -> None:
                   str(len(ini.instructions or "")))
             ts = {t.name for t in (await s.list_tools()).tools}
             quiero = {"proyecto_resumen", "identificar", "derivar", "especificar", "estimar", "dictamen",
-                      "formales", "anomalos", "raices", "ficha", "razon", "elegir", "ver"}
+                      "formales", "anomalos", "raices", "ficha", "razon", "elegir", "ver",
+                      "prever"}
             check(quiero <= ts, "las herramientas del camino en C", str(sorted(ts)))
 
             async def t(nombre, **a):
@@ -100,6 +101,9 @@ async def corre(raiz: Path, w: Path) -> None:
             check("Anómalos de MINK/m02" in res and "Q(" in res, "anomalos", res)
             res = await t("ficha", serie="MINK", modelo="m02")
             check("m02" in res and "asistente" in res, "ficha: el paso es del asistente", res)
+
+            res = await t("prever", serie="MINK", modelo="m02")
+            check("FORECAST REPORT" in res and "1912" in res, "prever: la tabla de fuf, anual", res)
 
             res = await t("razon", serie="MINK", modelo="m02", texto="el AR(1) basta")
             check(not res.startswith("No se pudo"), "razon", res)

@@ -148,6 +148,28 @@ fi
 mira "raices factorizado: el ya factorizado no se vuelve a partir (estado 1)" \
      '! "$CLI" raices factorizado "$Y" en4 "$(echo "$J" | campo "d[\"modelo\"]")" 2>/dev/null'
 
+# prever: fue -f y fuf desde el .pre, sin tocar el modelo (fue -f reestima y
+# reescribia el .out: la C3 de AUDITORIA-procesos). Una serie mensual (RIPC) y
+# una anual (MINK, de docs/ejemplos: la tabla anual es el BUG-0003 de fuf).
+FUF="$R/engines/fuf/bin/fuf$EXE"
+if [ -x "$FUE" ] && [ -x "$FUF" ]; then
+    PV="$WORK/proy_prever"; cp -R "$P" "$PV"; YV="$PV/proyecto.yaml"; rm -f "$PV/costes.csv"
+    H=$(cksum < "$PV/RIPC/work/RIPC_m01.out")
+    J=$("$CLI" --json prever "$YV" RIPC m01 --por asistente)
+    mira "prever: la tabla de fuf, 24 meses desde 6/2008" \
+         '[ "$(echo "$J" | campo "(d[\"origen\"], len(d[\"prevision\"]), d[\"prevision\"][0][\"fecha\"])")" = "('"'"'6/2008'"'"', 24, '"'"'7/2008'"'"')" ]'
+    mira "prever no toca el modelo: su .out queda igual" '[ "$H" = "$(cksum < "$PV/RIPC/work/RIPC_m01.out")" ]'
+    mira "prever deja forecast_RIPC_m01.inp y .out junto al modelo" \
+         '[ -f "$PV/RIPC/work/forecast_RIPC_m01.inp" ] && [ -f "$PV/RIPC/work/forecast_RIPC_m01.out" ]'
+    mira "prever: las dos corridas, en costes.csv como «prever»" \
+         '[ "$(grep -c ",atsw-cli,asistente,RIPC/m01,prever," "$PV/costes.csv")" = 2 ]'
+    PA="$WORK/proy_anual"; cp -R "$R/docs/ejemplos/jenkins_alavi" "$PA"
+    J=$("$CLI" --json prever "$PA/proyecto.yaml" MINK m01)
+    mira "prever de una serie anual: la fecha es el año, sin columnas anuales" \
+         '[ "$(echo "$J" | campo "(d[\"origen\"], d[\"prevision\"][0][\"fecha\"], d[\"prevision\"][0][\"var_anual\"])")" = "('"'"'1911'"'"', '"'"'1912'"'"', None)" ]'
+fi
+mira "prever de un modelo sin estimar: estado 1" '! "$CLI" prever "$Y" RIPC m00 2>/dev/null'
+
 # identifica: lo que art propone, con las mismas funciones que la ventana de
 # identificacion (lib/artcand/artrun.c). Propone y no escribe nada.
 ART="$R/engines/art/bin/art$EXE"

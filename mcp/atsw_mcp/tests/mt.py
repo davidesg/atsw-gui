@@ -75,6 +75,8 @@ async def corre(raiz: Path, w: Path) -> None:
             res = await t("estimar_caso", caso="C2", razon="un omega más", desde="c00",
                           enlaces=["MUSKRAT->MINK:0,0,1"])
             check("C2/c01" in res and "enlaces dados" in res, "estimar_caso: c01, con el enlace dado", res)
+            res = await t("estimar_caso", caso="C2", razon="con previsión", desde="c01", prever=5)
+            check("C2/c02" in res and "FORECAST REPORT" in res, "estimar_caso prever: la tabla de la salida", res)
             res = await t("estimar_caso", caso="C2", razon="mal", enlaces=["MUSKRAT-MINK:0,0,1"])
             check(res.startswith("No se pudo") and "ENTRADA->SALIDA" in res,
                   "estimar_caso con un enlace mal escrito: lo dice", res)

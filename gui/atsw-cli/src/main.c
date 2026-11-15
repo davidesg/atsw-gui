@@ -42,6 +42,7 @@
 #include "outfcst.h"
 #include "netfile.h"
 #include "outdiag.h"
+#include "fcomp.h"
 #include "artrun.h"
 #include "inpfile.h"
 #include "formales.h"
@@ -73,6 +74,7 @@ static const char *k_enlace[NET_MAX_LINK];
 static int         k_nenlace = 0;
 static const char *k_desde = NULL;
 static gboolean    k_diagonal = FALSE;
+static int         k_prever = 0, k_evaluar = 0;   /* caso-estima --prever H --evaluar W */
 static const char *i_resid = NULL;        /* identifica --residuos          */
 static gboolean  comprobar;
 /* especifica: lo que se cambia del .inp (lib/inpdet) */
@@ -1867,6 +1869,10 @@ static int copia_fichero( const char *de, const char *a )
 static int caso_estima( const char *path, const char *caso )
 {
     char            why[512], raiz[PR_RUTA], out[PR_RUTA], dag[PR_RUTA], cns[PR_RUTA], res[PR_RUTA];
+    char            eval_csv[PR_RUTA], uni_csv[PR_RUTA], uni_out[PR_RUTA];
+    FcComp          comp;
+    int             hay_comp = 0;
+    char            sh[16], sw[16];
     char            id[PR_ID], pre[PR_MAX_ENTRADA][PR_RUTA];
     const char     *nom[NET_MAX_SER + 1];
     char            nombre[PR_MAX_ENTRADA][128];
@@ -1881,6 +1887,9 @@ static int caso_estima( const char *path, const char *caso )
     int             i, k, nl = 0, hay_dag = 0, hay_cns = 0;
 
     if ( !p ) { g_string_free( desfase, TRUE ); return falla( "%s", why ); }
+    if ( k_evaluar > 0 && k_prever <= 0 )
+        { g_free( p ); g_string_free( desfase, TRUE );
+          return falla( "--evaluar W necesita el horizonte: --prever H." ); }
     if ( !( c = pr_caso_ver( p, caso ) ) )
         { g_free( p ); g_string_free( desfase, TRUE ); return falla( "«%s» no es un caso del proyecto.", caso ); }
     if ( strcmp( c->motor, "drtran" ) != 0 )
@@ -1948,6 +1957,9 @@ static int caso_estima( const char *path, const char *caso )
     pr_corrida_ruta( p, caso, id, ".dag", dag, sizeof dag );
     pr_corrida_ruta( p, caso, id, ".cns", cns, sizeof cns );
     pr_corrida_ruta( p, caso, id, "_res.txt", res, sizeof res );
+    pr_corrida_ruta( p, caso, id, "_eval.csv", eval_csv, sizeof eval_csv );
+    pr_corrida_ruta( p, caso, id, "_uni_eval.csv", uni_csv, sizeof uni_csv );
+    pr_corrida_ruta( p, caso, id, "_uni_eval.out", uni_out, sizeof uni_out );
     dir = g_path_get_dirname( out );
     g_mkdir_with_parents( dir, 0700 );
     if ( !k_diagonal )
@@ -1974,6 +1986,8 @@ static int caso_estima( const char *path, const char *caso )
             }
         }
 
+    g_snprintf( sh, sizeof sh, "%d", k_prever );
+    g_snprintf( sw, sizeof sw, "%d", k_evaluar );
     av = g_ptr_array_new();
     for ( i = 0; i < c->nen; i++ ) g_ptr_array_add( av, pre[i] );
     g_ptr_array_add( av, "-o" ); g_ptr_array_add( av, out );
@@ -1981,6 +1995,15 @@ static int caso_estima( const char *path, const char *caso )
     if ( hay_cns ) { g_ptr_array_add( av, "-c" ); g_ptr_array_add( av, cns ); }
     g_ptr_array_add( av, "-e" ); g_ptr_array_add( av, res );
     if ( k_diagonal ) g_ptr_array_add( av, "-0" );
+    /* LA PREVISION Y LA EVALUACION, EN LA MISMA CORRIDA: el motor las hace
+       en la misma pasada (drtran_gui, arma_argv).                       */
+    if ( k_prever > 0 )
+        { g_ptr_array_add( av, "-f" ); g_ptr_array_add( av, sh ); }
+    if ( k_evaluar > 0 )
+        {
+        g_ptr_array_add( av, "-estwin" ); g_ptr_array_add( av, sw );
+        g_ptr_array_add( av, "-C" );      g_ptr_array_add( av, eval_csv );
+        }
     g_ptr_array_add( av, NULL );
 
     engine_set_finder( hermano );
@@ -1997,7 +2020,7 @@ static int caso_estima( const char *path, const char *caso )
         /* sin resultados no hay corrida: no se guarda el manifiesto, y los
            ficheros que se escribieron para ella, fuera                   */
         gchar *m = g_strdup( r.message );
-        g_remove( out ); g_remove( dag ); g_remove( cns ); g_remove( res );
+        g_remove( out ); g_remove( dag ); g_remove( cns ); g_remove( res ); g_remove( eval_csv );
         engine_result_clear( &r ); g_free( obj ); g_free( p );
         falla( "%s No queda la corrida.", m );
         g_free( m );
@@ -2006,8 +2029,36 @@ static int caso_estima( const char *path, const char *caso )
     if ( guarda( p, why, sizeof why ) != 0 )
         { engine_result_clear( &r ); g_free( obj ); g_free( p ); return falla( "%s", why ); }
 
+    /* FRENTE AL UNIVARIANTE (drtran_gui, fase P3): el diagonal (-0) con la
+       MISMA ventana y el mismo horizonte, para que la unica diferencia
+       entre los dos sea la transferencia; y lib/fcomp los compara: el
+       cociente de RMSE y Diebold-Mariano por horizonte.                */
+    if ( k_evaluar > 0 && !k_diagonal && g_file_test( eval_csv, G_FILE_TEST_EXISTS ) )
+        {
+        GPtrArray   *au = g_ptr_array_new();
+        EngineResult ru;
+        gchar       *du = g_path_get_dirname( out );
+
+        for ( i = 0; i < c->nen; i++ ) g_ptr_array_add( au, pre[i] );
+        g_ptr_array_add( au, "-o" ); g_ptr_array_add( au, uni_out );
+        g_ptr_array_add( au, "-0" );
+        g_ptr_array_add( au, "-f" ); g_ptr_array_add( au, sh );
+        g_ptr_array_add( au, "-estwin" ); g_ptr_array_add( au, sw );
+        g_ptr_array_add( au, "-C" ); g_ptr_array_add( au, uni_csv );
+        g_ptr_array_add( au, NULL );
+        coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "evaluar" );
+        ru = engine_run_v( du, "drtran", (const char *const *) au->pdata );
+        coste_contexto_limpia();
+        hay_comp = ru.status == 0 && fc_compara_csv( uni_csv, eval_csv, &comp ) == 0;
+        engine_result_clear( &ru );
+        g_ptr_array_free( au, TRUE );
+        g_free( du );
+        }
+
     {
     Diagnosis *d = g_new0( Diagnosis, 1 );
+    Forecast  *fc = g_new0( Forecast, 1 );
+    int        hay_fc = ( k_prever > 0 || k_evaluar > 0 ) && of_parse_file( out, fc ) == 0;
     int        hay = od_parse_file( out, d ) == 0;
     int        noad = hay ? od_no_adecuados( d ) : -1, noex = hay ? od_no_exogenos( d ) : -1;
 
@@ -2022,6 +2073,63 @@ static int caso_estima( const char *path, const char *caso )
                                 r.status, nl, hay_dag ? "true" : "false", k_diagonal ? "true" : "false" );
         js_par( t, "mensaje", r.message ); g_string_append( t, ", " );
         if ( hay ) g_string_append_printf( t, "\"no_adecuados\": %d, \"no_exogenos\": %d, ", noad, noex );
+        if ( hay_fc && fc->ns > 0 )
+            {
+            int a, b;
+
+            g_string_append( t, "\"prevision\": [" );
+            for ( a = 0; a < fc->ns; a++ )
+                {
+                const OfSerie *x = &fc->s[a];
+                int primera = -1;
+
+                for ( b = 0; b < x->nf; b++ ) if ( x->f[b].tiene_sd ) { primera = b; break; }
+                g_string_append_printf( t, "%s{", a ? ", " : "" );
+                js_par( t, "serie", x->nombre ); g_string_append( t, ", " );
+                js_par( t, "origen", x->origen );
+                g_string_append_printf( t, ", \"horizonte\": %d", x->nprev );
+                if ( primera >= 0 )
+                    { g_string_append( t, ", \"primera\": {" ); js_par( t, "fecha", x->f[primera].fecha );
+                      g_string_append( t, ", " ); js_num( t, "nivel", x->f[primera].nivel );
+                      g_string_append( t, ", " ); js_num( t, "sd", x->f[primera].sd_nivel ); g_string_append( t, "}" ); }
+                g_string_append( t, "}" );
+                }
+            g_string_append( t, "], " );
+            }
+        if ( hay_fc && fc->tiene_ev )
+            {
+            int a;
+
+            g_string_append( t, "\"evaluacion\": {" );
+            js_par( t, "salida", fc->ev.salida );
+            g_string_append_printf( t, ", \"origenes\": %d, \"horizontes\": [", fc->ev.origenes );
+            for ( a = 0; a < fc->ev.nh; a++ )
+                {
+                g_string_append_printf( t, "%s{\"h\": %d, \"n\": %d, ", a ? ", " : "", fc->ev.h[a].h, fc->ev.h[a].n );
+                js_num( t, "rmse", fc->ev.h[a].rmse ); g_string_append( t, ", " );
+                js_num( t, "mae", fc->ev.h[a].mae ); g_string_append( t, "}" );
+                }
+            g_string_append( t, "]}, " );
+            }
+        if ( hay_comp )
+            {
+            int a;
+
+            g_string_append_printf( t, "\"frente_al_diagonal\": {\"origenes\": %d, \"horizontes\": [", comp.origenes );
+            for ( a = 0; a < comp.nh; a++ )
+                {
+                const FcHoriz *z = &comp.h[a];
+
+                g_string_append_printf( t, "%s{\"h\": %d, \"n\": %d, ", a ? ", " : "", z->h, z->n );
+                js_num( t, "rmse_diagonal", z->rmse_a ); g_string_append( t, ", " );
+                js_num( t, "rmse_modelo", z->rmse_b ); g_string_append( t, ", " );
+                js_num( t, "cociente", z->ratio ); g_string_append( t, ", " );
+                if ( z->dm_ok ) { js_num( t, "dm", z->dm ); g_string_append( t, ", " ); js_num( t, "p", z->p ); }
+                else g_string_append( t, "\"dm\": null, \"p\": null" );
+                g_string_append( t, "}" );
+                }
+            g_string_append( t, "]}, " );
+            }
         js_par( t, "out", out ); g_string_append( t, "}\n" );
         }
     else
@@ -2033,11 +2141,49 @@ static int caso_estima( const char *path, const char *caso )
         if ( hay )
             g_string_append_printf( t, "  diagnosis: %d contraste%s de adecuación sin pasar, %d de exogeneidad\n",
                                     noad, noad == 1 ? "" : "s", noex );
+        if ( hay_fc && fc->ns > 0 )
+            {
+            char tb[16384];
+
+            /* la tabla de la SALIDA, tal cual: la primera serie del caso, con
+               el nombre que lleva su .pre (el .out puede listar otra antes) */
+            if ( of_tabla_file( out, nombre[0], tb, sizeof tb ) == 0 ||
+                 of_tabla_file( out, fc->s[0].nombre, tb, sizeof tb ) == 0 )
+                g_string_append_printf( t, "\n%s\n", tb );
+            }
+        if ( hay_fc && fc->tiene_ev )
+            {
+            int a;
+
+            g_string_append_printf( t, "  evaluación de %s fuera de muestra, %d orígenes:\n", fc->ev.salida, fc->ev.origenes );
+            for ( a = 0; a < fc->ev.nh; a++ )
+                g_string_append_printf( t, "    h = %2d  RMSE %.4f  MAE %.4f  (%d)\n", fc->ev.h[a].h,
+                                        fc->ev.h[a].rmse, fc->ev.h[a].mae, fc->ev.h[a].n );
+            }
+        if ( hay_comp )
+            {
+            int a;
+
+            g_string_append_printf( t, "  frente al diagonal (sin transferencias, la misma ventana), %d orígenes:\n",
+                                    comp.origenes );
+            for ( a = 0; a < comp.nh; a++ )
+                {
+                const FcHoriz *z = &comp.h[a];
+
+                if ( z->dm_ok )
+                    g_string_append_printf( t, "    h = %2d  RMSE %.4f frente a %.4f, cociente %.3f; DM %.2f (p = %.3f)\n",
+                                            z->h, z->rmse_b, z->rmse_a, z->ratio, z->dm, z->p );
+                else
+                    g_string_append_printf( t, "    h = %2d  RMSE %.4f frente a %.4f, cociente %.3f; DM no calculable\n",
+                                            z->h, z->rmse_b, z->rmse_a, z->ratio );
+                }
+            g_string_append( t, "    (un cociente < 1 es que la transferencia prevé mejor; DM > 0, con su p)\n" );
+            }
         g_string_append_printf( t, "  %s\n", out );
         }
     fputs( t->str, stdout );
     g_string_free( t, TRUE );
-    g_free( d );
+    g_free( d ); g_free( fc );
     }
     engine_result_clear( &r );
     g_free( obj ); g_free( p );
@@ -2197,7 +2343,8 @@ static void uso( FILE *f )
            "  proyecto razon P SERIE MODELO TEXTO\n"
            "  proyecto elige P SERIE MODELO RAZON\n"
            "  proyecto caso-nuevo P SERIE/MODELO SERIE/MODELO...   (la salida primero)\n"
-           "  caso-estima P CASO [--enlace E->S:b,r,s]... [--desde cNN] [--diagonal]   drtran sobre el caso\n"
+           "  caso-estima P CASO [--enlace E->S:b,r,s]... [--desde cNN] [--diagonal]\n"
+           "              [--prever H [--evaluar W]]   drtran sobre el caso\n"
            "  dictamen P SERIE MODELO               la diagnosis del .out\n"
            "  raices factores P SERIE MODELO        la factorización del AR\n"
            "  raices factorizado P SERIE MODELO     deriva el modelo factorizado\n"
@@ -2247,6 +2394,8 @@ int main( int argc, char **argv )
             { if ( k_nenlace < NET_MAX_LINK ) k_enlace[k_nenlace++] = argv[++i]; else i++; }
         else if ( !strcmp( argv[i], "--desde" ) && i + 1 < argc ) k_desde = argv[++i];
         else if ( !strcmp( argv[i], "--diagonal" ) ) k_diagonal = TRUE;
+        else if ( !strcmp( argv[i], "--prever" ) && i + 1 < argc ) k_prever = atoi( argv[++i] );
+        else if ( !strcmp( argv[i], "--evaluar" ) && i + 1 < argc ) k_evaluar = atoi( argv[++i] );
         else if ( !strcmp( argv[i], "--residuos" ) && i + 1 < argc ) i_resid = argv[++i];
         else if ( !strcmp( argv[i], "--arma" ) && i + 1 < argc ) e_arma = argv[++i];
         else if ( !strcmp( argv[i], "--anade-arma" ) && i + 1 < argc ) e_anade = argv[++i];

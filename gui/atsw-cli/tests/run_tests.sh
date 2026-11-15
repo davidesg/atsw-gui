@@ -405,7 +405,20 @@ if [ -x "$DRT" ]; then
     mira "caso-estima con una red que drtran rechaza: no queda la corrida" \
          '! "$CLI" caso-estima "$YP" C1 --enlace "WTI->ES:0,0,1" --enlace "ES->WTI:0,0,1" 2>/dev/null &&
           [ "$H" = "$(cksum < "$YP")" ] && ! ls "$PW/_casos/C1/work" | grep -q "c03"'
+    # la prevision y la evaluacion, en la misma corrida; y frente al diagonal
+    # con la misma ventana (lib/fcomp), como la pestaña Prevision de drtran_gui
+    J=$("$CLI" --json caso-estima "$YP" C1 --desde c01 --prever 6 --evaluar 180 --razon "con prevision")
+    mira "caso-estima --prever: la previsión de las dos series, a 6" \
+         '[ "$(echo "$J" | campo "sorted((x[\"serie\"], x[\"horizonte\"]) for x in d[\"prevision\"])")" = "[('"'"'ES_CPI'"'"', 6), ('"'"'WTI'"'"', 6)]" ]'
+    mira "caso-estima --evaluar: la evaluación de la salida, h = 1..6" \
+         '[ "$(echo "$J" | campo "(d[\"evaluacion\"][\"salida\"], len(d[\"evaluacion\"][\"horizontes\"]))")" = "('"'"'ES_CPI'"'"', 6)" ]'
+    mira "caso-estima --evaluar: frente al diagonal, el cociente de RMSE y DM por horizonte" \
+         '[ "$(echo "$J" | campo "len(d[\"frente_al_diagonal\"][\"horizontes\"]) == 6 and d[\"frente_al_diagonal\"][\"horizontes\"][0][\"cociente\"] > 0")" = True ]'
+    mira "caso-estima --evaluar: la corrida del diagonal, en costes.csv como «evaluar»" \
+         'grep -q ",atsw-cli,analista,C1/c03,evaluar,drtran" "$PW/costes.csv"'
 fi
+mira "caso-estima --evaluar sin --prever: estado 1, y lo dice" \
+     '"$CLI" caso-estima "$YP" C1 --evaluar 150 2>&1 | grep -q "prever H"'
 
 # formales: los contrastes del modelo estimado, con las mismas funciones que
 # las dos ventanas de la madre (lib/formales). Los numeros son los de art que

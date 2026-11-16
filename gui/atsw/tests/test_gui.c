@@ -3163,11 +3163,16 @@ static gchar *cuaderno_md( void );
 typedef struct { char activo[PR_ID]; gboolean nota, puesto; char fallo[1024]; } RutaU;
 
 /* Si el alta fallo, el dialogo sigue abierto con el motivo: se cancela, y
-   el motivo queda para el check.                                       */
+   el motivo queda para el check. MIENTRAS SE HACE EL MODELO DE PARTIDA el
+   dialogo tambien sigue abierto --la madre bombea eventos para decir que
+   art y fue estan corriendo--: eso no es un fallo, se espera (FALSE: el
+   turno se vuelve a mirar). En Windows, mas lento, se cancelaba a medias. */
 static gboolean ruta_u_cancela( GtkWindow *w, gpointer d )
 {
     RutaU *x = d;
 
+    if ( atendiendo && strstr( atendiendo->visto, "art lo identifica y fue lo estima…" ) )
+        return FALSE;
     g_snprintf( x->fallo, sizeof x->fallo, "%s", atendiendo ? atendiendo->visto : "?" );
     gtk_dialog_response( GTK_DIALOG(w), GTK_RESPONSE_CANCEL );
     return TRUE;

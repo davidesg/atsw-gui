@@ -1041,8 +1041,14 @@ VARMA: es un caso de SIM, no de MT.
 Lo normal es llegar aquí con los univariantes hechos y elegidos, como en el
 ejemplo. Pero una serie que todavía **no tiene modelo estimado** también puede
 entrar en un sistema. En **SIM ▸ Nuevo sistema…**, su fila sale con **modelo de
-partida (ruta U)** en el desplegable. Al darlo de alta, la madre le hace uno
-como lo harías tú con sus herramientas, pero sin preguntar:
+partida (ruta U)** en el desplegable. En el proyecto del IPC, con la muestra
+completa, ninguna de las dos series tiene modelo estimado: sus modelos están
+en Pre-Covid.
+
+![Nuevo sistema, con dos series sin modelo](img/sim-partida.png)
+
+Al darlo de alta, la madre le hace uno a cada serie como lo harías tú con sus
+herramientas, pero sin preguntar:
 
 - **λ**, por la correlación media–desviación típica, en niveles y en
   logaritmos (el gráfico de la media y la desviación típica del capítulo 5);

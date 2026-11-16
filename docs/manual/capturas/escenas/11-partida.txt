@@ -1,0 +1,22 @@
+#! atsw_gui --proyecto @PROYECTO@/proyecto.yaml
+# «Nuevo sistema…» con series sin modelo (la ruta U, DISENO-sim.md §5.5). En
+# la muestra completa ni ipc ni wti tienen modelo estimado: las dos salen con
+# «modelo de partida». Se cancela: la foto es del dialogo, y el proyecto de
+# las capturas no cambia.
+ventana ATSW
+tamano 1100 700
+espera 800
+pestana Completa
+espera 500
+barra SIM
+espera 500
+menu Nuevo sistema…
+ventana Nuevo sistema
+espera 500
+casilla ipc | 1
+casilla wti | 1
+espera 500
+foto sim-partida
+boton Cancelar
+ventana ATSW
+salir

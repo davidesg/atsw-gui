@@ -883,19 +883,6 @@ Los encontraron las pruebas conducidas y la CI de 2026-10-04; se dejaron
 sin tocar porque no bloqueaban las pruebas o porque son del motor. Por
 programa:
 
-**atsw_gui, la madre**
-
-- **BUG-0004, una muestra no se recorta por el principio** (16-nov-2026, lo
-  vio el analista con el IPC de Portugal). Una muestra «desde 1/2010 hasta
-  12/2019» sigue empezando en 2002, el principio de los datos; el final sí
-  se recorta. El `.inp` de su nodo de datos sale de `atsw_genera_inp`
-  (`gui/atsw/src/genera.c`), que sólo recibe el `hasta`: el `desde` de la
-  muestra no se usa en ningún sitio. Pasa al poblar la muestra
-  (`atsw_puebla_muestra`) y al derivar un modelo en ella (`gestos.c`), así
-  que art, fue y los casos de esa muestra trabajan desde 2002. Repro:
-  `gui/atsw/bugs/BUG-0004-repro/repro.py` (sale con 1 mientras esté
-  abierto; acepta otro `.csv` como argumento). Sin arreglar.
-
 **fue / fue_gui**
 
 - Al abrir la ventana, Diagnosis, Anómalos y Ganancia salen **encendidos**

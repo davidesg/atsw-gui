@@ -516,7 +516,7 @@ gboolean atsw_en_muestra( Atsw *a, const char *serie, const char *padre,
     g_mkdir_with_parents( dir, 0700 );
     g_free( dir );
 
-    if ( atsw_genera_inp( csv, destino, serie,
+    if ( atsw_genera_inp( csv, destino, serie, mu ? mu->desde : "",
                           mu ? mu->hasta : "", why, n ) != 0 )
         { pr_borra( a->p, serie, muestra, id, &e ); return FALSE; }
 

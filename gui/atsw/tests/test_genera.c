@@ -23,6 +23,7 @@
 
 #include "datos.h"
 #include "atsw.h"
+#include "inpfile.h"
 
 
 
@@ -104,6 +105,16 @@ int main( int argc, char **argv )
     esn( atsw_hasta_n( 4, 2000, 1, 40, "5/2005" ), -1,
          "ni 5 un trimestre" );
 
+    printf( "\nY EL DESDE: LA OTRA PUNTA DE LA VENTANA (BUG-0004)\n" );
+    esn( atsw_desde_i( 12, 2002, 1, 288, "" ), 0, "sin desde, desde el principio" );
+    esn( atsw_desde_i( 12, 2002, 1, 288, "1/2010" ), 96, "1/2010 es la 97.ª desde 1/2002" );
+    esn( atsw_desde_i( 12, 2002, 1, 288, "1/2002" ), 0, "el mismo comienzo" );
+    esn( atsw_desde_i( 12, 2002, 1, 288, "6/1999" ), 0, "antes de los datos: desde el principio" );
+    esn( atsw_desde_i( 12, 2002, 1, 288, "1/2030" ), 288, "despues del final: no pilla nada" );
+    esn( atsw_desde_i( 4, 2000, 3, 40, "1/2001" ), 2, "trimestral que empieza en el 3.º" );
+    esn( atsw_desde_i( 1, 1980, 0, 40, "1989" ), 9, "anual" );
+    esn( atsw_desde_i( 12, 2002, 1, 288, "2010-01" ), -1, "una fecha que no se entiende no se adivina" );
+
     printf( "\nEL IDA Y VUELTA DEL .csv\n" );
     d = calloc( 1, sizeof *d );
     r = calloc( 1, sizeof *r );
@@ -133,6 +144,27 @@ int main( int argc, char **argv )
           if ( x > peor ) peor = x; }
     ok( peor == 0.0, "Y LOS NUMEROS VUELVEN EXACTOS: si el viaje perdiera "
                      "algo, el .csv no seria el dato" );
+    }
+
+    printf( "\nEL .inp DE UNA VENTANA RECORTADA POR LOS DOS LADOS (BUG-0004)\n" );
+    {
+    /* ida.csv: 40 mensuales desde 7/1996. La ventana 1/1997 - 12/1997. */
+    char    inp[1024], err[256];
+    InpFile in;
+
+    snprintf( inp, sizeof inp, "%s/ventana.inp", dir );
+    ok( atsw_genera_inp( path, inp, "Alemania", "1/1997", "12/1997", NULL, 0 ) == 0,
+        "se genera" );
+    memset( &in, 0, sizeof in );
+    ok( inp_read( inp, &in, err, sizeof err ) == 0, "y se lee" );
+    esn( in.begyear, 1997, "  empieza en 1997, no en 1996" );
+    esn( in.begtime, 1, "  en enero" );
+    esn( in.nobs, 12, "  con las 12 de la ventana" );
+    ok( in.data && in.data[0] == d->v[0][6] && in.data[11] == d->v[0][17],
+        "  y son las de la ventana, no las del principio" );
+    free( in.data );
+    ok( atsw_genera_inp( path, inp, "Alemania", "1/2001", "", NULL, 0 ) != 0,
+        "una ventana que empieza despues del final no pilla nada, y se dice" );
     }
 
     printf( "\nUNA SERIE SIN FRECUENCIA SE ESCRIBE IGUAL, SIN INVENTARLA\n" );

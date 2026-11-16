@@ -18,6 +18,11 @@ datos del manual (el IPC de España, que tambien empieza en 2002), declara
 la muestra 1/2010 - 12/2019, la puebla como la madre y lee el .inp. Sale
 con 1 mientras no empiece en 1/2010 con 120 observaciones; con 0 cuando si.
 
+ARREGLADO (16-nov-2026): atsw_genera_inp recibe tambien el desde, y
+atsw_desde_i (la otra punta de atsw_hasta_n) da la primera observacion de
+la ventana. Las muestras creadas antes del arreglo conservan su nodo de
+datos viejo, desde el principio: hay que crearlas de nuevo.
+
 Con un argumento, otro .csv (fecha y una serie; la primera columna de datos
 es la que se usa), mensual y que empiece antes de 2010:
 

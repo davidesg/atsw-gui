@@ -180,7 +180,7 @@ static int da_de_alta( Atsw *a, const DtDatos *d, int col, const char *serie,
     g_mkdir_with_parents( dir, 0700 );
     g_free( dir );
 
-    if ( atsw_genera_inp( csv, ruta, serie, "", why, n ) != 0 ) return 1;
+    if ( atsw_genera_inp( csv, ruta, serie, "", "", why, n ) != 0 ) return 1;
 
     /* Y EN LAS VENTANAS QUE YA ESTUVIERAN DECLARADAS. Una serie que llega
        tarde tiene que aparecer en todas las hojas, o su hoja se queda

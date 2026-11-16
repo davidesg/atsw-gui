@@ -70,15 +70,51 @@ int atsw_hasta_n( int freq, int anio, int per, int nobs, const char *hasta )
 }
 
 
+/* La posicion (desde 0) de la primera observacion en <desde> o despues,
+ * contando desde el comienzo declarado. Es la otra punta de atsw_hasta_n,
+ * con sus mismas reglas (BUG-0004: el desde de la muestra no se usaba, y
+ * una muestra «desde 1/2010» seguia empezando donde los datos).
+ *
+ *   ""    0: desde el principio.
+ *   -1    la fecha no se entiende.
+ *   nobs  la ventana empieza despues del final: no pilla nada.
+ *
+ * Una fecha anterior al comienzo da 0: pedir antes de lo que hay es querer
+ * todo lo que hay, como un hasta que se pasa del final.                 */
+int atsw_desde_i( int freq, int anio, int per, int nobs, const char *desde )
+{
+    int p = 1, y, i;
+    char sobra;
+
+    if ( desde == NULL || !*desde ) return 0;
+    if ( freq <= 0 || anio <= 0 )   return 0;   /* sin fechas no hay corte */
+
+    if ( freq == 1 )
+        { if ( sscanf( desde, "%d %c", &y, &sobra ) != 1 ) return -1; }
+    else if ( sscanf( desde, "%d/%d %c", &p, &y, &sobra ) != 2 )
+        return -1;
+
+    if ( p < 1 || p > freq ) return -1;
+    if ( y < 1 )             return -1;
+
+    if ( per <= 0 ) per = 1;
+    i = ( y - anio ) * freq + ( p - per );
+
+    if ( i < 0 )    return 0;
+    if ( i > nobs ) return nobs;
+    return i;
+}
+
+
 /* Genera el .inp de <serie> en <destino>, con los datos de <csv> recortados
- * hasta <hasta> ("" = todo). 0 si pudo.                                */
+ * a la ventana <desde> - <hasta> ("" = sin corte por ese lado). 0 si pudo. */
 int atsw_genera_inp( const char *csv, const char *destino, const char *serie,
-                     const char *hasta, char *why, size_t n )
+                     const char *desde, const char *hasta, char *why, size_t n )
 {
     DtDatos *d;
     DtError  e;
     InpFile  inp;
-    int      i, nobs, rc;
+    int      i, i0, nobs, rc;
 
     if ( why && n ) why[0] = '\0';
     if ( csv == NULL || destino == NULL ) return 1;
@@ -92,22 +128,27 @@ int atsw_genera_inp( const char *csv, const char *destino, const char *serie,
           g_free( d ); return 1; }
 
     nobs = atsw_hasta_n( d->freq, d->anio, d->per, d->nobs, hasta );
-    if ( nobs < 0 )
+    i0   = atsw_desde_i( d->freq, d->anio, d->per, d->nobs, desde );
+    if ( nobs < 0 || i0 < 0 )
         {
         /* NO SE ADIVINA. Antes esto era la muestra entera y nadie se
            enteraba de que la ventana no se habia aplicado.           */
         if ( why ) g_snprintf( why, n, "«%s» no es una fecha de este "
                                "proyecto. Se escriben como en los ficheros "
-                               "del motor: %s.", hasta,
+                               "del motor: %s.", nobs < 0 ? hasta : desde,
                                d->freq == 1 ? "«2019»" : "«12/2019»" );
         g_free( d ); return 1;
         }
+    /* LA VENTANA EMPIEZA EN i0: nobs pasa a ser cuantas hay entre las dos
+       puntas. Si el desde cae despues del hasta, o del final, no queda
+       ninguna y se dice abajo.                                       */
+    nobs -= i0;
     if ( nobs < 1 )
         {
         /* SE DICE QUE LA VENTANA NO PILLA NADA. Un .inp de cero
            observaciones lo rechazaria el motor mucho mas lejos de aqui. */
-        if ( why ) g_snprintf( why, n, "La muestra que pides acaba antes de "
-                               "que empiece «%s».", serie );
+        if ( why ) g_snprintf( why, n, "La muestra que pides no tiene "
+                               "observaciones de «%s».", serie );
         g_free( d ); return 1;
         }
 
@@ -118,12 +159,19 @@ int atsw_genera_inp( const char *csv, const char *destino, const char *serie,
     inp.nobs     = nobs;
     inp.begtime  = d->per  > 0 ? d->per  : 1;
     inp.begyear  = d->anio > 0 ? d->anio : 1;
+    if ( i0 > 0 )         /* el comienzo de la ventana, no el de los datos */
+        {
+        int k = ( inp.begtime - 1 ) + i0;
+
+        inp.begyear += k / inp.freq;
+        inp.begtime  = k % inp.freq + 1;
+        }
     inp.boxlam   = 1.0;        /* sin transformar: la decide el analista  */
     inp.refactor = 1.0;
     snprintf( inp.name, sizeof inp.name, "%s", serie ? serie : "" );
 
     inp.data = g_new( double, nobs );
-    for ( i = 0; i < nobs; i++ ) inp.data[i] = d->v[0][i];
+    for ( i = 0; i < nobs; i++ ) inp.data[i] = d->v[0][i0 + i];
 
     rc = inp_write_bare( destino, &inp );
     g_free( inp.data );
@@ -265,7 +313,7 @@ int atsw_puebla_muestra( Atsw *a, const char *muestra, char *why, size_t n )
         g_mkdir_with_parents( dir, 0700 );
         g_free( dir );
 
-        if ( atsw_genera_inp( csv, ruta, serie,
+        if ( atsw_genera_inp( csv, ruta, serie, mu ? mu->desde : "",
                               mu ? mu->hasta : "", why, n ) != 0 )
             {
             /* SI LA VENTANA NO PILLA NADA DE ESTA SERIE, se deshace el nodo

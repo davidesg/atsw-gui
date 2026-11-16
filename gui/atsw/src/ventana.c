@@ -614,7 +614,7 @@ static void pinta_hoja( Atsw *a, GtkWidget *vista, const char *muestra )
         const PrModelo *m = &a->p->m[i];
         const AtRes    *r;
         char            sd[32], q[48], pv[16];
-        gchar          *globo;
+        gchar          *globo, *razon;
 
         if ( strcmp( m->serie, a->serie ) != 0 ) continue;
         if ( strcmp( m->muestra, muestra ) != 0 ) continue;
@@ -654,6 +654,20 @@ static void pinta_hoja( Atsw *a, GtkWidget *vista, const char *muestra )
                 : "Sin estimar todavía. Doble clic para abrirlo en fue." );
             }
 
+        /* SIN REVISAR SE VE, aunque el analista le cambie la razon: es un
+           modelo de partida de la ruta U de SIM que nadie ha mirado.   */
+        {
+        gchar *t = m->sin_revisar
+            ? g_strdup_printf( "%s\n\nSin revisar: un modelo de partida que hizo la madre para "
+                               "que la serie entrara en un sistema SIM (la ruta U). Revísalo en "
+                               "fue; elegirlo quita la marca.", globo )
+            : NULL;
+        if ( t ) { g_free( globo ); globo = t; }
+        }
+        razon = m->rol == PR_DATOS ? g_strdup( "tal como entraron — no se editan" )
+              : m->sin_revisar && !strstr( m->razon, "sin revisar" )
+              ? g_strdup_printf( "[sin revisar] %s", m->razon[0] ? m->razon : "(sin razón)" )
+              : g_strdup( m->razon[0] ? m->razon : "(sin razón)" );
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it,
             M_ID,       m->id,
@@ -665,13 +679,12 @@ static void pinta_hoja( Atsw *a, GtkWidget *vista, const char *muestra )
             M_P,        pv,
             /* "SIN RAZON" SE VE COMO SIN RAZON. Nunca se infiere ni se
                rellena: es la regla de la huella vacia del guion.        */
-            M_RAZON,    m->rol == PR_DATOS
-                        ? "tal como entraron — no se editan"
-                        : ( m->razon[0] ? m->razon : "(sin razón)" ),
+            M_RAZON,    razon,
             M_ESTRELLA, ( eleg && !strcmp( eleg, m->id ) ) ? "★" : "",
             M_GLOBO,    globo,
             -1 );
         g_free( globo );
+        g_free( razon );
 
         /* Se repone la marca; y si no habia, se marca el de por defecto
          * DE ESTA HOJA, para que los botones tengan a que apuntar.    */

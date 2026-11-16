@@ -457,6 +457,8 @@ const char *atsw_modelo_por_defecto_en( const Proyecto *p, const char *serie,
 
 /* La muestra de la hoja que esta delante. "" es la completa.           */
 const char *atsw_muestra_actual( Atsw *a );
+/* La cache de la madre (vistazo.c): ficheros de paso, no del proyecto. g_free. */
+gchar *atsw_cache_dir( void );
 
 /* Rehace las hojas del cuaderno segun las muestras del proyecto.        */
 void       atsw_hojas( Atsw *a );

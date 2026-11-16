@@ -88,6 +88,12 @@ static const char *k_norma = NULL;      /* --normaliza "A,B": el bloque Y1      
 static const char *k_casodet = NULL;    /* --caso-det 1|2|3|pre                    */
 static int         k_boot = 0;          /* caso-rango --bootstrap B                */
 static gboolean    k_aparte, k_rehacer, k_estado;
+static double      k_t = 1.0;           /* caso-simplifica --t: el umbral de |t|  */
+static gboolean    k_pasar_mt;          /* caso-estructura --pasar-mt             */
+/* caso-simplifica: la corrida contra la que caso_estima_sis da la LR */
+static double      k_contra_ll = 0.0;
+static int         k_contra_k = 0;
+static const char *k_contra_id = NULL;
 static const char *k_desde = NULL;
 static gboolean    k_diagonal = FALSE;
 static int         k_prever = 0, k_evaluar = 0;   /* caso-estima --prever H --evaluar W */
@@ -2954,6 +2960,14 @@ static int caso_estima_sis( const char *path, const char *caso )
             { js_num( t, "hosking_p", o->diag.hosking.p ); g_string_append( t, ", " ); }
         if ( o->tiene_diag && o->diag.jb.hay )
             { js_num( t, "jb_p", o->diag.jb.p ); g_string_append( t, ", " ); }
+        if ( k_contra_id && o->tiene_logl )
+            {
+            double lr = 2.0 * ( k_contra_ll - o->logl );
+            int    df = k_contra_k - o->npar;
+            js_par( t, "contra", k_contra_id ); g_string_append( t, ", " );
+            js_num( t, "lr_contra", lr ); g_string_append_printf( t, ", \"df_contra\": %d, ", df );
+            js_num( t, "p_contra", sis_chi2_p( lr > 0 ? lr : 0, df ) ); g_string_append( t, ", " );
+            }
         js_num( t, "raiz_ar_max", o->raiz_ar_max ); g_string_append( t, ", " );
         js_num( t, "raiz_ma_max", o->raiz_ma_max ); g_string_append( t, ", " );
         js_par( t, "tabla", tb->str ); g_string_append( t, ", " );
@@ -2976,12 +2990,317 @@ static int caso_estima_sis( const char *path, const char *caso )
                                     o->diag.jb.q, o->diag.jb.df, o->diag.jb.p );
         if ( o->n_raices_ar || o->n_raices_ma )
             g_string_append_printf( t, "  la raíz inversa mayor: AR %.4f, MA %.4f\n", o->raiz_ar_max, o->raiz_ma_max );
+        if ( k_contra_id && o->tiene_logl )
+            {
+            double lr = 2.0 * ( k_contra_ll - o->logl ), pv;
+            int    df = k_contra_k - o->npar;
+
+            pv = sis_chi2_p( lr > 0 ? lr : 0, df );
+            g_string_append_printf( t, "  contra %s (antes de simplificar): LR = %.4f, %d g.l., p = %.4f; AIC %.2f -> %.2f. %s\n",
+                                    k_contra_id, lr, df, pv, -2 * k_contra_ll + 2 * k_contra_k,
+                                    -2 * o->logl + 2 * o->npar,
+                                    pv > 0.05 ? "Los ceros se sostienen: el modelo simple vale lo mismo."
+                                              : "Los ceros NO se sostienen: el modelo simple pierde ajuste." );
+            }
         g_string_append_printf( t, "\n%s  %s\n", tb->str, out );
         }
     fputs( t->str, stdout );
     g_string_free( t, TRUE ); g_string_free( tb, TRUE );
     }
     engine_result_clear( &r ); g_free( mo ); g_free( o ); g_free( sis ); g_free( p );
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
+/* SIM: simplificar y «¿es una red?» (N4s y N4t de sima; sim_gui,            */
+/* estructura.c), sobre un VARMA estimado                                   */
+/* ------------------------------------------------------------------------ */
+
+/* Un coeficiente cruzado: «AR1[A<-B]» o «MA2[A<-B]». */
+static int es_cruzado( const char *nom )
+{
+    char k[3];
+    int  l;
+
+    return sscanf( nom, "%2[ARM]%d[", k, &l ) == 2 && strstr( nom, "<-" ) &&
+           ( !strcmp( k, "AR" ) || !strcmp( k, "MA" ) );
+}
+
+/* El VARMA de una corrida: su .out leido y su modelo (p, q, Sigma, enlaces y
+   los ceros que ya tenia, de su cabecera «Zero coefficients:»). 0 si es un
+   VARMA estimado.                                                         */
+static int varma_de_corrida( Proyecto *p, const char *caso, const char *corrida, const Sistema *sis,
+                             SisModelo *mo, VarmaOut *v, char *out, size_t nout, char *why, size_t n )
+{
+    gchar *txt = NULL;
+    char  *z;
+
+    if ( pr_corrida_idx( p, caso, corrida ) < 0 ) { g_snprintf( why, n, "«%s» no es un modelo de %s.", corrida, caso ); return 1; }
+    pr_corrida_ruta( p, caso, corrida, ".out", out, nout );
+    if ( ov_parse_file( out, v ) != 0 || v->fallo || !v->tiene_logl )
+        { g_snprintf( why, n, "%s/%s no es un VARMA estimado (simplificar y la estructura son del VARMA; "
+                      "en un VEC, caso-exogeneidad).", caso, corrida ); return 1; }
+    sis_modelo_defecto( mo, sis->n );
+    mo->p = v->p; mo->q = v->q; mo->diagcov = v->sigma_diagonal;
+    mo->redet = v->det_reestimados; mo->fixarma = v->arma_fijos;
+    sis_enlaces_de_texto( sis, mo, v->enlaces );
+    mo->zero[0] = '\0';
+    if ( g_file_get_contents( out, &txt, NULL, NULL ) && ( z = strstr( txt, "Zero coefficients:" ) ) )
+        {
+        z += strlen( "Zero coefficients:" );
+        while ( *z == ' ' ) z++;
+        g_snprintf( mo->zero, sizeof mo->zero, "%.*s", (int) strcspn( z, "\r\n" ), z );
+        g_strstrip( mo->zero );
+        }
+    g_free( txt );
+    return 0;
+}
+
+/* caso-simplifica P CASO cNN [--t 1]: Tiao y Box (1981, §4). Los cruzados
+   con |t| < t a cero, ademas de los que ya estaban, y una estimacion nueva,
+   hija de cNN, contrastada contra ella por LR. Varias rondas son normales.
+   Un ajuste parado en la pared MA no se simplifica: sus t no son de un
+   optimo.                                                               */
+static int caso_simplifica( const char *path, const char *caso, const char *corrida )
+{
+    char          why[1024], out[PR_RUTA], razon_s[512];
+    Proyecto     *p = abre( path, why, sizeof why );
+    const PrCaso *c;
+    Sistema      *sis;
+    SisModelo    *mo;
+    VarmaOut     *v;
+    GString      *z;
+    gchar       **en = NULL;
+    int           i, n = 0, rc;
+
+    if ( !p ) return falla( "%s", why );
+    if ( !( c = caso_sis( p, caso, why, sizeof why ) ) ) { g_free( p ); return falla( "%s", why ); }
+    sis = g_new0( Sistema, 1 ); mo = g_new0( SisModelo, 1 ); v = g_new0( VarmaOut, 1 );
+    if ( sis_del_caso( p, c, sis, why, sizeof why ) != 0 ||
+         varma_de_corrida( p, caso, corrida, sis, mo, v, out, sizeof out, why, sizeof why ) != 0 )
+        { g_free( v ); g_free( mo ); g_free( sis ); g_free( p ); return falla( "%s", why ); }
+    if ( v->optim == OV_OPT_PARED_MA )
+        { g_free( v ); g_free( mo ); g_free( sis ); g_free( p );
+          return falla( "%s/%s se paró en la pared de invertibilidad MA: sus t no son de un óptimo. Antes, otro "
+                        "modelo.", caso, corrida ); }
+    z = g_string_new( mo->zero );
+    for ( i = 0; i < v->npar; i++ )
+        {
+        const OvParam *x = &v->par[i];
+        if ( !es_cruzado( x->nombre ) || !x->tiene_se || x->se <= 0 || fabs( x->t ) >= k_t ) continue;
+        g_string_append_printf( z, "%s%s", z->len ? "," : "", x->nombre );
+        n++;
+        }
+    if ( n == 0 )
+        { g_string_free( z, TRUE ); g_free( v ); g_free( mo ); g_free( sis ); g_free( p );
+          return falla( "Ningún coeficiente cruzado de %s/%s tiene |t| < %g: no hay qué simplificar.", caso, corrida, k_t ); }
+    /* A caso_estima_sis, como si lo pidiera la linea de ordenes: el modelo de
+       la corrida, sus ceros y los nuevos, hijo de ella, y la LR contra ella */
+    k_p = mo->p; k_q = mo->q; k_diagcov = mo->diagcov;
+    k_nenlace = 0;
+    if ( v->enlaces[0] )
+        {
+        en = g_strsplit( v->enlaces, ",", -1 );
+        for ( i = 0; en[i] && k_nenlace < NET_MAX_LINK; i++ ) { g_strstrip( en[i] ); k_enlace[k_nenlace++] = en[i]; }
+        }
+    {
+    gchar **zz = g_strsplit( z->str, ",", -1 );
+    k_ncero = 0;
+    for ( i = 0; zz[i] && k_ncero < K_MAX_RESTR; i++ ) { g_strstrip( zz[i] ); if ( zz[i][0] ) k_cero[k_ncero++] = zz[i]; }
+    k_desde = corrida;
+    k_contra_ll = v->logl; k_contra_k = v->npar; k_contra_id = corrida;
+    g_snprintf( razon_s, sizeof razon_s, "Simplificación (Tiao y Box): %d coeficiente%s cruzado%s de %s con |t| < %g a "
+                "cero.%s%s", n, n == 1 ? "" : "s", n == 1 ? "" : "s", corrida, k_t, razon ? " " : "", razon ? razon : "" );
+    razon = razon_s;
+    g_string_free( z, TRUE ); g_free( v ); g_free( mo ); g_free( sis ); g_free( p );
+    rc = caso_estima_sis( path, caso );
+    g_strfreev( zz );
+    }
+    g_strfreev( en );
+    return rc;
+}
+
+/* Las permutaciones de 0..m-1, en orden lexicografico (estructura.c). */
+static int perm_siguiente( int *a, int n )
+{
+    int i = n - 2, j = n - 1, t;
+
+    while ( i >= 0 && a[i] >= a[i + 1] ) i--;
+    if ( i < 0 ) return 0;
+    while ( a[j] <= a[i] ) j--;
+    t = a[i]; a[i] = a[j]; a[j] = t;
+    for ( j = n - 1, i++; i < j; i++, j-- ) { t = a[i]; a[i] = a[j]; a[j] = t; }
+    return 1;
+}
+
+/* caso-estructura P CASO cNN [--pasar-mt]: Tiao y Box (§3.1, §5.2). Sobre el
+   VARMA de cNN, la LR de cada par a cero (B no entra en la ecuacion de A) y,
+   con hasta cuatro series, la de cada ORDEN TRIANGULAR. Si un orden se
+   sostiene, es una RED DE TRANSFERENCIA: un caso de MT. --pasar-mt lo da de
+   alta (la salida primero, con el caso de SIM como padre); sin el, solo se
+   ofrece. Las corridas restringidas son artefactos, <C>_<cNN>_est<k>.    */
+static int caso_estructura( const char *path, const char *caso, const char *corrida )
+{
+    char          why[1024], out[PR_RUTA], raiz[PR_RUTA], buf[4096];
+    Proyecto     *p = abre( path, why, sizeof why );
+    const PrCaso *c;
+    Sistema      *sis;
+    SisModelo    *mo, *jobs;
+    VarmaOut     *v, *w;
+    char        (*etiq)[160];
+    int         (*perms)[SIS_MAX_SER];
+    int          *orden, *kk, nj = 0, a, b, i, perm[SIS_MAX_SER], tri = 0, perm_tri[SIS_MAX_SER], mejor = -1, max;
+    double       *ll, pm = -1;
+    GString      *t, *tb;
+    gchar        *dir;
+
+    if ( !p ) return falla( "%s", why );
+    if ( !( c = caso_sis( p, caso, why, sizeof why ) ) ) { g_free( p ); return falla( "%s", why ); }
+    sis = g_new0( Sistema, 1 ); mo = g_new0( SisModelo, 1 ); v = g_new0( VarmaOut, 1 );
+    if ( sis_del_caso( p, c, sis, why, sizeof why ) != 0 ||
+         varma_de_corrida( p, caso, corrida, sis, mo, v, out, sizeof out, why, sizeof why ) != 0 )
+        { g_free( v ); g_free( mo ); g_free( sis ); g_free( p ); return falla( "%s", why ); }
+    if ( mo->p + mo->q == 0 || sis_enlaces( mo, sis->n ) == 0 )
+        { g_free( v ); g_free( mo ); g_free( sis ); g_free( p );
+          return falla( "%s/%s no tiene dinámica cruzada: no hay qué contrastar.", caso, corrida ); }
+    max = sis->n * ( sis->n - 1 ) + ( sis->n <= 4 ? 24 : 0 );
+    jobs = g_new0( SisModelo, max ); ll = g_new0( double, max ); kk = g_new0( int, max );
+    orden = g_new0( int, max ); etiq = g_malloc0( sizeof *etiq * (size_t) max );
+    perms = g_malloc0( sizeof *perms * (size_t) max );
+    for ( a = 0; a < sis->n; a++ )
+        for ( b = 0; b < sis->n; b++ )
+            {
+            if ( a == b || !mo->enlace[a][b] ) continue;
+            sis_modelo_sin_par( mo, &jobs[nj], a, b );
+            g_snprintf( etiq[nj], sizeof etiq[0], "%s no entra en %s", sis->s[b].nombre, sis->s[a].nombre );
+            nj++;
+            }
+    if ( sis->n <= 4 )
+        {
+        for ( i = 0; i < sis->n; i++ ) perm[i] = i;
+        do {
+            SisModelo r;
+            GString  *g;
+
+            if ( sis_modelo_triangular( mo, &r, perm, sis->n ) == 0 )
+                { if ( !tri ) { tri = 1; memcpy( perm_tri, perm, sizeof perm ); } continue; }
+            g = g_string_new( "orden " );
+            for ( i = 0; i < sis->n; i++ ) g_string_append_printf( g, "%s%s", i ? " -> " : "", sis->s[perm[i]].nombre );
+            jobs[nj] = r; orden[nj] = 1; memcpy( perms[nj], perm, sizeof perm );
+            g_snprintf( etiq[nj], sizeof etiq[0], "%s", g->str );
+            g_string_free( g, TRUE );
+            nj++;
+            } while ( perm_siguiente( perm, sis->n ) );
+        }
+    dir = g_path_get_dirname( out );
+    raiz_de( path, raiz, sizeof raiz );
+    engine_set_finder( hermano );
+    w = g_new0( VarmaOut, 1 );
+    for ( i = 0; i < nj; i++ )
+        {
+        const char  *av[SIS_MAX_SER + 32];
+        gchar       *sal = g_strdup_printf( "%s/%s_%s_est%d", dir, caso, corrida, i ), *wo = g_strdup_printf( "%s.out", sal );
+        gchar       *obj = g_strdup_printf( "%s/%s", caso, corrida );
+        int          k = sis_orden_modelo( sis, &jobs[i], sal, buf, sizeof buf, av, G_N_ELEMENTS( av ) - 1 );
+        EngineResult r;
+
+        ll[i] = NAN;
+        if ( k >= 0 )
+            {
+            av[k] = NULL;
+            g_remove( wo );
+            coste_contexto( raiz, "atsw-cli", c_por ? c_por : "analista", obj, "estructura" );
+            r = engine_run_v( dir, "drvarma", av );
+            coste_contexto_limpia();
+            memset( w, 0, sizeof *w );
+            if ( ov_parse_file( wo, w ) == 0 && w->tiene_logl && !w->fallo ) { ll[i] = w->logl; kk[i] = w->npar; }
+            engine_result_clear( &r );
+            }
+        g_free( sal ); g_free( wo ); g_free( obj );
+        }
+    g_free( dir );
+
+    t = g_string_new( "" ); tb = g_string_new( "" );
+    g_string_append_printf( tb, "%-46s %10s %4s %8s\n", "restricción", "LR", "gl", "p" );
+    if ( json ) { g_string_append( t, "{\"ok\": true, " ); js_par( t, "caso", caso ); g_string_append( t, ", " );
+                  js_par( t, "corrida", corrida ); g_string_append( t, ", \"restricciones\": [" ); }
+    for ( i = 0; i < nj; i++ )
+        {
+        double lr, pv;
+        int    df;
+
+        if ( isnan( ll[i] ) )
+            {
+            g_string_append_printf( tb, "%-46s   (falló la estimación)\n", etiq[i] );
+            if ( json ) { g_string_append( t, i ? ", {" : "{" ); js_par( t, "que", etiq[i] ); g_string_append( t, ", \"lr\": null}" ); }
+            continue;
+            }
+        lr = 2.0 * ( v->logl - ll[i] ); df = v->npar - kk[i];
+        pv = sis_chi2_p( lr > 0 ? lr : 0, df );
+        g_string_append_printf( tb, "%-46s %10.4f %4d %8.4f%s\n", etiq[i], lr, df, pv, pv > 0.05 ? "   se sostiene" : "" );
+        if ( orden[i] && pv > 0.05 && pv > pm ) { pm = pv; mejor = i; }
+        if ( json )
+            {
+            g_string_append( t, i ? ", {" : "{" ); js_par( t, "que", etiq[i] ); g_string_append( t, ", " );
+            js_num( t, "lr", lr ); g_string_append_printf( t, ", \"gl\": %d, ", df ); js_num( t, "p", pv );
+            g_string_append_printf( t, ", \"orden\": %s}", orden[i] ? "true" : "false" );
+            }
+        }
+    {
+    GString *o = g_string_new( "" ), *ver = g_string_new( "" );
+    int     *pr = tri ? perm_tri : mejor >= 0 ? perms[mejor] : NULL;
+
+    if ( pr ) for ( i = 0; i < sis->n; i++ ) g_string_append_printf( o, "%s%s", i ? " -> " : "", sis->s[pr[i]].nombre );
+    if ( tri )
+        g_string_append_printf( ver, "ES UNA RED: el modelo ya es triangular (orden %s): ninguna serie recibe de las "
+                                "que van después. Se puede estimar como transferencia (atsw-mt).", o->str );
+    else if ( mejor >= 0 )
+        g_string_append_printf( ver, "ES UNA RED: el orden %s se sostiene (p = %.4f): un VARMA triangular es un modelo "
+                                "de transferencia (atsw-mt). Ofrécelo; no vayas solo.", o->str, pm );
+    else
+        g_string_append( ver, "Es un sistema SIMULTÁNEO: ningún orden triangular se sostiene. (El veredicto vale lo "
+                              "que valga el orden del ajuste: con orden bajo puede salir una retroalimentación espuria.)" );
+    /* PASAR A MT, si se pide y hay red: la salida primero (la ultima del
+       orden, que recibe de todas), con el caso de SIM como padre      */
+    if ( k_pasar_mt )
+        {
+        if ( !pr ) g_string_append( ver, " No se pasa a MT: no hay red." );
+        else
+            {
+            PrEntrada en[PR_MAX_ENTRADA];
+            char      id[PR_ID], rz[PR_RAZON];
+            PrError   e;
+            int       kc;
+
+            for ( i = 0; i < sis->n; i++ ) en[i] = c->en[pr[sis->n - 1 - i]];
+            g_snprintf( rz, sizeof rz, "Pasado de %s (SIM, %s): %s; es una red de transferencia.", caso, corrida,
+                        tri ? "el modelo ya es triangular" : etiq[mejor] );
+            if ( pr_caso_add( p, en, sis->n, c->muestra, "drtran", c->titulo, rz, id, sizeof id, &e ) == 0 )
+                {
+                if ( ( kc = pr_caso_idx( p, id ) ) >= 0 ) g_snprintf( p->ca[kc].padre, PR_ID, "%s", caso );
+                if ( guarda( p, why, sizeof why ) == 0 )
+                    g_string_append_printf( ver, " Pasado a MT: el caso %s, con %s como salida.", id, en[0].serie );
+                }
+            else { pr_error_es( &e, why, sizeof why ); g_string_append_printf( ver, " No se pudo pasar a MT: %s", why ); }
+            }
+        }
+    if ( json )
+        {
+        g_string_append( t, "], " );
+        g_string_append_printf( t, "\"red\": %s, ", pr ? "true" : "false" );
+        js_par( t, "orden", o->str ); g_string_append( t, ", " );
+        js_par( t, "veredicto", ver->str ); g_string_append( t, "}\n" );
+        }
+    else
+        g_string_append_printf( t, "%s/%s: ¿es una red? Cada par a cero y cada orden triangular, contra el VARMA "
+                                "(logL %.6f, %d parámetros), por LR\n\n%s\n%s\n", caso, corrida, v->logl, v->npar,
+                                tb->str, ver->str );
+    g_string_free( o, TRUE ); g_string_free( ver, TRUE );
+    }
+    fputs( t->str, stdout );
+    g_string_free( t, TRUE ); g_string_free( tb, TRUE );
+    g_free( w ); g_free( jobs ); g_free( ll ); g_free( kk ); g_free( orden ); g_free( etiq ); g_free( perms );
+    g_free( v ); g_free( mo ); g_free( sis ); g_free( p );
     return 0;
 }
 
@@ -3520,6 +3839,8 @@ static void uso( FILE *f )
            "  caso-rango P CASO [--p N --q N --caso-det C] [--bootstrap B --aparte] [--rehacer] | --estado\n"
            "                                        SIM: el rango de cointegración (drvec -lrtest)\n"
            "  caso-exogeneidad P CASO cNN           SIM: la exogeneidad débil de cada serie en el VEC cNN\n"
+           "  caso-simplifica P CASO cNN [--t 1]    SIM: los cruzados con |t| < 1 a cero, un hijo, y la LR\n"
+           "  caso-estructura P CASO cNN [--pasar-mt]   SIM: cada par a cero y cada orden triangular, por LR\n"
            "  dictamen P SERIE MODELO               la diagnosis del .out\n"
            "  ecuacion P SERIE MODELO               el modelo estimado: el bloque del .out, con sus t\n"
            "  raices factores P SERIE MODELO        la factorización del AR\n"
@@ -3577,6 +3898,8 @@ int main( int argc, char **argv )
         else if ( !strcmp( argv[i], "--aparte" ) ) k_aparte = TRUE;
         else if ( !strcmp( argv[i], "--rehacer" ) ) k_rehacer = TRUE;
         else if ( !strcmp( argv[i], "--estado" ) ) k_estado = TRUE;
+        else if ( !strcmp( argv[i], "--t" ) && i + 1 < argc ) k_t = g_ascii_strtod( argv[++i], NULL );
+        else if ( !strcmp( argv[i], "--pasar-mt" ) ) k_pasar_mt = TRUE;
         else if ( !strcmp( argv[i], "--cero" ) && i + 1 < argc )
             { if ( k_ncero < K_MAX_RESTR ) k_cero[k_ncero++] = argv[++i]; else i++; }
         else if ( !strcmp( argv[i], "--restriccion" ) && i + 1 < argc )
@@ -3659,6 +3982,8 @@ int main( int argc, char **argv )
     if ( ES( 0, "caso-estima" ) && npos == 3 ) return caso_estima( pos[1], pos[2] );
     if ( ES( 0, "caso-puerta" ) && npos == 3 ) return caso_puerta( pos[1], pos[2] );
     if ( ES( 0, "caso-rango" ) && npos == 3 ) return caso_rango( pos[1], pos[2] );
+    if ( ES( 0, "caso-simplifica" ) && npos == 4 ) return caso_simplifica( pos[1], pos[2], pos[3] );
+    if ( ES( 0, "caso-estructura" ) && npos == 4 ) return caso_estructura( pos[1], pos[2], pos[3] );
     if ( ES( 0, "caso-exogeneidad" ) && npos == 4 ) return caso_exogeneidad( pos[1], pos[2], pos[3] );
     if ( ES( 0, "identifica" ) && npos == 3 ) return identifica( pos[1], pos[2] );
     if ( ES( 0, "especifica" ) && npos == 4 ) return especifica( pos[1], pos[2], pos[3] );

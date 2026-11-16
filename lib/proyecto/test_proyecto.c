@@ -990,6 +990,40 @@ int main( int argc, char **argv )
     ok( !t.m[2].por_elegido[0] && !t.m[1].por_elegido[0],
         "elegir otro borra quien eligio el anterior" );
     }
+
+    /* SIN REVISAR (la ruta U de SIM): un modelo de partida lleva la marca,
+       solo si la tiene, de ida y vuelta; elegirlo la quita, y un hijo
+       derivado nace sin ella.                                         */
+    {
+    static Proyecto r, t;
+    PrError         e;
+    char            id0[PR_ID], id1[PR_ID], id2[PR_ID], a[PR_RUTA];
+    FILE           *f;
+    char            l[256];
+    int             hay = 0;
+
+    printf( "\nSIN REVISAR\n" );
+    pr_nuevo( &r, "sinrev", "ruta U", "." );
+    snprintf( a, sizeof a, "%s/sinrev.yaml", DIR );
+    pr_serie_add( &r, "S", &e );
+    pr_deriva_rol( &r, "S", "", NULL, PR_DATOS, id0, sizeof id0, NULL, 0, &e );
+    pr_deriva( &r, "S", "", id0, id1, sizeof id1, NULL, 0, &e );
+    ok( pr_pon_sin_revisar( &r, "S", "", id1, 1, &e ) == 0 && r.m[1].sin_revisar,
+        "un modelo de partida se marca sin revisar" );
+    ok( pr_pon_sin_revisar( &r, "S", "", "m77", 1, &e ) != 0, "un modelo que no existe, no" );
+    pr_deriva( &r, "S", "", id1, id2, sizeof id2, NULL, 0, &e );
+    ok( !r.m[2].sin_revisar, "su hijo nace revisado: lo hizo el analista" );
+    pr_escribir( &r, a, &e );
+    f = fopen( a, "r" );
+    while ( f && fgets( l, sizeof l, f ) )
+        if ( strstr( l, "sin_revisar" ) ) hay++;
+    if ( f ) fclose( f );
+    ok( hay == 1, "en el yaml, una marca: solo el que la tiene" );
+    ok( pr_leer( a, &t, &e ) == 0 && t.m[1].sin_revisar && !t.m[2].sin_revisar,
+        "se vuelve a leer, con la marca donde estaba" );
+    pr_elige( &t, "S", "", id1, "revisado", &e );
+    ok( !t.m[1].sin_revisar, "elegirlo es haberlo revisado: la marca se va" );
+    }
     concurrencia();
 
     printf( "\n%d fallos\n", fallos );

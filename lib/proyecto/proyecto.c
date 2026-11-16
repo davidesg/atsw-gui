@@ -363,6 +363,7 @@ int pr_elige( Proyecto *p, const char *serie, const char *muestra,
    if ( k >= 0 )
        {
        p->m[k].elegido = 1;
+       p->m[k].sin_revisar = 0;          /* elegirlo es haberlo revisado */
        if ( razon ) snprintf( p->m[k].razon_elegido, PR_RAZON, "%s", razon );
        }
    return 0;
@@ -393,6 +394,16 @@ int pr_pon_por_elegido( Proyecto *p, const char *serie, const char *muestra,
    if ( i < 0 || !p->m[i].elegido )
        { falla( e, PR_ENOMODELO, 0, id ? id : "" ); return 1; }
    pon_por( p->m[i].por_elegido, por );
+   return 0;
+}
+
+int pr_pon_sin_revisar( Proyecto *p, const char *serie, const char *muestra,
+                        const char *id, int si, PrError *e )
+{
+   int i = pr_modelo_idx( p, serie, muestra, id );
+
+   if ( i < 0 ) { falla( e, PR_ENOMODELO, 0, id ? id : "" ); return 1; }
+   p->m[i].sin_revisar = si != 0;
    return 0;
 }
 
@@ -1291,6 +1302,8 @@ static int vuelca( const Proyecto *p, const char *path, PrError *e )
            }
        /* QUIEN, SOLO SI NO ES EL ANALISTA: como el rol (§7.2). */
        escribe_campo( f, "por", p->m[i].por );
+       /* SIN REVISAR, solo si lo esta: un modelo de partida (ruta U). */
+       if ( p->m[i].sin_revisar ) fprintf( f, "    sin_revisar: si\n" );
        if ( p->m[i].creado[0] )
            { fprintf( f, "    creado: " ); escribe_valor( f, p->m[i].creado );
              fputc( '\n', f ); }
@@ -1634,6 +1647,9 @@ static int leer_crudo( const char *path, Proyecto *p, PrError *e )
                    pon_por( p->m[cur].por, valor );
                else if ( strcmp( clave, "por_elegido" ) == 0 )
                    pon_por( p->m[cur].por_elegido, valor );
+               else if ( strcmp( clave, "sin_revisar" ) == 0 )
+                   p->m[cur].sin_revisar = ( strcmp( valor, "si" ) == 0 ||
+                                             strcmp( valor, "sí" ) == 0 );
                else
                    { falla( e, PR_ECLAVE, nl, clave ); fclose( f ); return 1; }
                }
@@ -2245,7 +2261,7 @@ static int ig_modelo( const void *x, const void *y )
    const PrModelo *a = x, *b = y;
    return S_(id) && S_(serie) && I_(version) && S_(padre) && S_(razon) &&
           S_(creado) && I_(rol) && S_(muestra) && I_(elegido) &&
-          S_(razon_elegido) && S_(por) && S_(por_elegido);
+          S_(razon_elegido) && S_(por) && S_(por_elegido) && I_(sin_revisar);
 }
 static int cl_modelo( const void *x, const void *y )
 { const PrModelo *a = x, *b = y; return S_(id) && S_(serie) && S_(muestra); }

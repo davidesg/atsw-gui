@@ -511,6 +511,23 @@ if [ -x "$DRV" ]; then
          '"$CLI" caso-estima "$YS" C1 --p 1 --q 0 --enlace "MINK-MUSKRAT" 2>&1 | grep -q "A<-B"'
     mira "caso-estima de SIM: el motor es el de C (drvarma 5), no el de Python" \
          'grep -q "^Program *: drvarma 5" "$PS/_casos/C1/work/C1_c00.out"'
+    # simplificar y «¿es una red?» (Tiao y Box), sobre el VARMA(2,0): los
+    # numeros de la bateria de sim_gui
+    "$CLI" caso-estima "$YS" C1 --p 2 --q 0 --razon "el VARMA(2,0)" > /dev/null
+    J=$("$CLI" --json caso-simplifica "$YS" C1 c03 --por asistente)
+    mira "caso-simplifica: c04, hija de c03, LR = 0.4761 con 1 g.l. (los ceros se sostienen)" \
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"corrida\"], d[\"padre\"], round(d[\"lr_contra\"], 4), d[\"df_contra\"])")" = "('"'"'c04'"'"', '"'"'c03'"'"', 0.4761, 1)" ]'
+    mira "caso-simplifica: los ceros quedan en el .out de la hija" \
+         'grep -q "^Zero coefficients:" "$PS/_casos/C1/work/C1_c04.out"'
+    mira "caso-simplifica sin nada que simplificar: estado 1, y lo dice" \
+         '"$CLI" caso-simplifica "$YS" C1 c00 2>&1 | grep -q "no hay qué simplificar"'
+    J=$("$CLI" --json caso-estructura "$YS" C1 c03)
+    mira "caso-estructura: dos pares y dos órdenes, y es un sistema simultáneo" \
+         '[ "$(printf "%s\n" "$J" | campo "(len(d[\"restricciones\"]), d[\"red\"])")" = "(4, False)" ]'
+    J=$("$CLI" --json caso-estructura "$YS" C1 c01 --pasar-mt)
+    mira "caso-estructura de un modelo triangular: es una red, y --pasar-mt da de alta el caso de MT" \
+         '[ "$(printf "%s\n" "$J" | campo "d[\"red\"] and \"Pasado a MT: el caso C2, con MINK como salida\" in d[\"veredicto\"]")" = True ] &&
+          grep -q "padre: C1" "$YS"'
 fi
 mira "caso-rango con una serie I(0): drvec no la admite (estado 1)" \
      '! "$CLI" caso-rango "$YS" C1 >/dev/null 2>&1'
@@ -558,6 +575,8 @@ if [ -x "$DVC" ] && [ -x "$DRV" ]; then
     mira "caso-estima --r con una normalización que no es del caso (estado 1)" \
          '"$CLI" caso-estima "$YJ" C1 --r 1 --p 2 --q 0 --normaliza OTRA 2>&1 | grep -q "no es una serie del caso"'
     J=$("$CLI" --json caso-exogeneidad "$YJ" C1 c00)
+    mira "caso-simplifica de un VEC: es del VARMA (estado 1)" \
+         '"$CLI" caso-simplifica "$YJ" C1 c00 2>&1 | grep -q "no es un VARMA"'
     mira "caso-exogeneidad: IBO e IDE no corrigen; LRY y LRM sí (Johansen y Juselius)" \
          '[ "$(printf "%s\n" "$J" | campo "sorted(x[\"serie\"] for x in d[\"series\"] if x[\"exogena\"])")" = "['"'"'IBO'"'"', '"'"'IDE'"'"']" ]'
 fi

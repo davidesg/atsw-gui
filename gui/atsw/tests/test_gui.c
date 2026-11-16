@@ -3155,6 +3155,123 @@ static Proyecto *relee_manifiesto( void )
 
 static gchar *cuaderno_md( void );
 
+/* --- S6b: LA RUTA U (DISENO-sim.md §5.5) --------------------------------- */
+/* «Nuevo sistema…» con una serie que no tiene modelo: entra con uno de
+   partida, que la madre hace al aceptar (lib/partida), y queda en sus
+   modelos marcado «sin revisar». El sistema mezcla el elegido de ipc y el
+   de partida de ipc2.                                                  */
+typedef struct { char activo[PR_ID]; gboolean nota, puesto; char fallo[1024]; } RutaU;
+
+/* Si el alta fallo, el dialogo sigue abierto con el motivo: se cancela, y
+   el motivo queda para el check. MIENTRAS SE HACE EL MODELO DE PARTIDA el
+   dialogo tambien sigue abierto --la madre bombea eventos para decir que
+   art y fue estan corriendo--: eso no es un fallo, se espera (FALSE: el
+   turno se vuelve a mirar). En Windows, mas lento, se cancelaba a medias. */
+static gboolean ruta_u_cancela( GtkWindow *w, gpointer d )
+{
+    RutaU *x = d;
+
+    if ( atendiendo && strstr( atendiendo->visto, "art lo identifica y fue lo estima…" ) )
+        return FALSE;
+    g_snprintf( x->fallo, sizeof x->fallo, "%s", atendiendo ? atendiendo->visto : "?" );
+    gtk_dialog_response( GTK_DIALOG(w), GTK_RESPONSE_CANCEL );
+    return TRUE;
+}
+
+static gboolean ruta_u_dialogo( GtkWindow *w, gpointer d )
+{
+    RutaU      *x = d;
+    GtkWidget  *m2 = llamado( GTK_WIDGET(w), "modelo-ipc2" );
+    GtkWidget  *c1 = llamado( GTK_WIDGET(w), "incluye-ipc" );
+    GtkWidget  *c2 = llamado( GTK_WIDGET(w), "incluye-ipc2" );
+    GtkWidget  *no = llamado( GTK_WIDGET(w), "nota-partida" );
+    const char *s;
+
+    if ( m2 && ( s = gtk_combo_box_get_active_id( GTK_COMBO_BOX(m2) ) ) )
+        g_snprintf( x->activo, sizeof x->activo, "%s", s );
+    x->nota = no && gtk_widget_get_visible( no );
+    x->puesto = c1 && c2;
+    if ( c1 ) gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c1), TRUE );
+    if ( c2 ) gtk_toggle_button_set_active( GTK_TOGGLE_BUTTON(c2), TRUE );
+    gtk_dialog_response( GTK_DIALOG(w), GTK_RESPONSE_OK );
+    return TRUE;
+}
+
+static void ruta_u( void )
+{
+    RutaU    x = { "", FALSE, FALSE, "" };
+    PrError  e;
+    char     d0[PR_ID], ruta[PR_RUTA], sid[PR_ID] = "";
+    gchar   *datos = ruta_de( "ipc", "", pr_datos_de( A.p, "ipc", "" ), ".inp" ), *c = NULL;
+    gsize    n = 0;
+    int      i, k = -1, nca = A.p->nca;
+    const PrCaso *cs = NULL;
+
+    /* el terreno: ipc2, con los datos de ipc y ningun modelo */
+    pr_serie_add( A.p, "ipc2", &e );
+    pr_deriva_rol( A.p, "ipc2", "", NULL, PR_DATOS, d0, sizeof d0, ruta, sizeof ruta, &e );
+    g_file_get_contents( datos, &c, &n, NULL );
+    {
+    gchar *dir = g_path_get_dirname( ruta );
+    g_mkdir_with_parents( dir, 0755 );
+    g_free( dir );
+    }
+    g_file_set_contents( ruta, c ? c : "", (gssize) n, NULL );
+    g_free( c ); g_free( datos );
+    atsw_guarda( &A, &e );
+    atsw_refresca( &A );
+    pr_elige( A.p, "ipc", "", "m01", "el de la prueba", &e );
+    atsw_guarda( &A, &e );
+    check( !strcmp( pr_elegido( A.p, "ipc", "" ), "m01" ),
+           "(la prueba parte de ipc con su elegido, m01)", pr_elegido( A.p, "ipc", "" ) );
+
+    olvida();
+    responde( "Nuevo sistema", ruta_u_dialogo, &x );
+    responde( "Nuevo sistema", ruta_u_cancela, &x );
+    atsw_caso_nuevo_sim( &A );
+    pump( 100 );
+    g_queue_clear_full( &turnos, g_free );       /* el segundo, si no hizo falta */
+    check( !x.fallo[0], "el alta no falla", x.fallo );
+
+    check( x.puesto, "el diálogo ofrece ipc, con modelo, e ipc2, sin él", NULL );
+    check( !strcmp( x.activo, "@partida" ), "ipc2 entra con «modelo de partida (ruta U)»", x.activo );
+    check( x.nota, "y el diálogo explica qué es un modelo de partida", NULL );
+    if ( A.p->nca == nca + 1 ) cs = &A.p->ca[A.p->nca - 1];
+    if ( cs ) snprintf( sid, sizeof sid, "%s", cs->id );
+    check( cs && !strcmp( cs->motor, "drvarma" ) && cs->nen == 2, "el sistema queda dado de alta", barra() );
+    for ( i = 0; cs && i < cs->nen; i++ )
+        if ( !strcmp( cs->en[i].serie, "ipc2" ) )
+            k = pr_modelo_idx( A.p, "ipc2", "", cs->en[i].modelo );
+    check( cs && !strcmp( cs->en[0].serie, "ipc" ) && !strcmp( cs->en[0].modelo, "m01" ),
+           "ipc entra con su elegido, m01", NULL );
+    check( k >= 0 && A.p->m[k].sin_revisar && !A.p->m[k].elegido,
+           "ipc2 entra con un modelo nuevo, sin revisar y sin elegir", NULL );
+    check( k >= 0 && strstr( A.p->m[k].razon, "para el sistema" ) && strstr( A.p->m[k].razon, sid ),
+           "su razón dice que es de partida, y para qué sistema", k >= 0 ? A.p->m[k].razon : "" );
+    if ( k >= 0 )
+        {
+        gchar *pre = ruta_de( "ipc2", "", A.p->m[k].id, ".pre" );
+        check( g_file_test( pre, G_FILE_TEST_EXISTS ), "estimado con fue: su .pre está", pre );
+        check( cs && cs->en[1].sha[0], "y el sistema guarda su sha256", NULL );
+        g_free( pre );
+        }
+    {
+    Proyecto *q = relee_manifiesto();
+    int       j = q ? pr_modelo_idx( q, "ipc2", "", k >= 0 ? A.p->m[k].id : "" ) : -1;
+    check( j >= 0 && q->m[j].sin_revisar, "en el manifiesto, «sin_revisar: si»", NULL );
+    g_free( q );
+    }
+    /* en la lista de modelos de ipc2 se ve */
+    snprintf( A.serie, sizeof A.serie, "ipc2" );
+    A.viendo_caso = FALSE;
+    atsw_refresca( &A );
+    {
+    gchar *r = k >= 0 ? celda( A.l_modelos, M_ID, A.p->m[k].id, M_RAZON ) : NULL;
+    check( r && strstr( r, "sin revisar" ), "la lista de modelos dice «sin revisar»", r );
+    g_free( r );
+    }
+}
+
 static void casos( void )
 {
     NuevoCaso x = { "", "", FALSE };
@@ -4925,6 +5042,7 @@ int main( int argc, char **argv )
             fase( "quitados" ); quitados();
             fase( "legados" ); legados();
             fase( "trabajos" ); trabajos();
+            fase( "ruta_u" ); ruta_u();
             }
         }
     fase( "ejemplos" ); ejemplos();

@@ -102,6 +102,9 @@ for d in engines/fue engines/fuf engines/fug engines/drtran engines/drvarma \
     corre "$d" sh -c "cd $d && sh tests/run_tests.sh"
 done
 corre engines/drvec make -s -C engines/drvec test
+# lib/partida (SIM, la ruta U): la regla contra sima y un modelo de partida
+# de verdad, con el art y el fue del arbol.
+corre lib/partida sh -c "sh lib/partida/run_test.sh"
 
 # Los GUIs conducidos desde el codigo que no van dentro de una bateria de
 # arriba (los de gui/fue y gui/drtran si van).

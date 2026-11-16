@@ -78,6 +78,12 @@ El rol se escribe **sólo cuando no es el normal**: un manifiesto lleno de
 asistente` si fue él quien lo eligió. Lo del analista no lleva marca, porque es
 lo normal (`pr_pon_por`, `pr_pon_por_elegido`; `atsw-cli … --por asistente`).
 
+**Sin revisar**: `sin_revisar: si` en un modelo de partida que hizo la madre
+para que una serie sin modelo entrara en un sistema SIM (la ruta U,
+docs/DISENO-sim.md §5.5). Se escribe solo si lo está, y `pr_elige` la quita:
+elegir el modelo es haberlo revisado. Un hijo derivado nace sin ella
+(`pr_pon_sin_revisar`).
+
 ## La cadena que esto registra
 
 ```

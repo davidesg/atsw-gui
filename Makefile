@@ -52,6 +52,10 @@ check: all
 	@# that only its own `make test` builds, so it runs through that target.
 	@printf '\n===== %s\n' engines/drvec
 	@$(MAKE) -s -C engines/drvec test || exit 1
+	@# lib/partida (SIM, la ruta U): la regla contra sima y un modelo de
+	@# partida de verdad, con el art y el fue del arbol.
+	@printf '\n===== %s\n' lib/partida
+	@sh lib/partida/run_test.sh || exit 1
 	@# Los GUIs conducidos desde el codigo que no van en una bateria de arriba
 	@# (gui/fue y gui/drtran llevan los suyos dentro). Sin servidor grafico
 	@# se saltan con una nota.

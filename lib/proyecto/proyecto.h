@@ -167,6 +167,14 @@ typedef struct {
     * por_elegido es lo mismo para la eleccion, que es otro paso.       */
    char  por[PR_ID];
    char  por_elegido[PR_ID];
+
+   /* UN MODELO DE PARTIDA, SIN REVISAR (la ruta U de SIM, DISENO-sim.md
+    * §5.5): lo hizo la madre con su identificador para que una serie sin
+    * modelo pudiera entrar en un sistema, y nadie lo ha mirado. Se escribe
+    * solo si es 1, como el rol. Lo quita pr_elige: elegirlo es haberlo
+    * revisado. Un hijo derivado de el nace sin la marca: ese ya lo hizo
+    * el analista.                                                      */
+   int   sin_revisar;
 } PrModelo;
 
 /* LA SERIE: una CLAVE corta y unos cuantos campos de texto.
@@ -457,6 +465,10 @@ int  pr_pon_por( Proyecto *p, const char *serie, const char *muestra,
                  const char *id, const char *por, PrError *e );
 int  pr_pon_por_elegido( Proyecto *p, const char *serie, const char *muestra,
                          const char *id, const char *por, PrError *e );
+
+/* LA MARCA «SIN REVISAR» de un modelo de partida (ver PrModelo). */
+int  pr_pon_sin_revisar( Proyecto *p, const char *serie, const char *muestra,
+                         const char *id, int si, PrError *e );
 
 /* --- la cadena ---------------------------------------------------------- */
 

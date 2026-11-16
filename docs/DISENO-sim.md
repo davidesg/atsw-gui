@@ -439,7 +439,24 @@ Un sistema puede mezclar las dos cosas. Y si todas las series tienen modelo
 elegido, el diálogo es el de siempre y la ruta U no aparece.
 
 La marca «sin revisar» se quita cuando el analista revisa ese modelo en fue:
-lo deriva o lo elige. sima dice lo mismo de su ruta U: los univariantes de
+lo deriva o lo elige.
+
+**Cómo se hace (S6b, `lib/partida`).** Es la regla de `characterize` y
+`build_univariate` de sima, con el motor de la madre:
+- λ por la correlación media–d.t. de grupos de `freq` observaciones (8 si es
+  anual);
+- d por ADF/KPSS (`lib/raices`, el código del art en C): `recommended_d` de
+  art, 0 → 1 si una recta explica más del 50 % del nivel, y d ≤ 1;
+- D = 0, con los armónicos si la F de art detecta estacionalidad;
+- el ARMA del candidato que propone art, y la media libre por la regla de la
+  ventana de identificación.
+
+Sobre los datos crudos de `jenkins_alavi` y `johansen_juselius`, λ, d y los
+armónicos coinciden con los de sima. La F estacional no: la madre la contrasta
+como la ventana de art, con d = 1 y 100 log, y sima con su λ. Manda la madre,
+y en esas series el veredicto es el mismo. El modelo es hijo del nodo de
+datos y lo estima fue. En el manifiesto lleva `sin_revisar: si`, y su razón
+dice de dónde sale cada cosa. sima dice lo mismo de su ruta U: los univariantes de
 partida se pueden y se deben revisar.
 
 La ruta V tendrá una tercera pestaña en la segunda versión (§8).
@@ -483,7 +500,7 @@ Cada fase en su PR, con la CI en verde en Linux, macOS y Windows.
 | **S4b** ✓ | «Ver modelo»: una página por serie con `lib/equation/eqdraw.c` (§3.4) | sí | una serie sin enlaces no lleva términos cruzados (la página de fue); con enlaces, van en la línea del ruido |
 | **S5** ✓ | Página 7 (Previsión): el gráfico, la evaluación contra los univariantes, IRF y FEVD | sí | el gráfico es el fichero que va al papel; la evaluación se guarda y la siguiente trae la diferencia |
 | **S6** ✓ | La madre: menú SIM, columna Clase, Ctrl+E, «Pasar a SIM» y el linaje. «Pasar a MT» va con S7 (necesita «¿Es una red?») | sí | `gui/atsw/tests/test_gui.c`: fase `sim`; la prueba `barra` cubre el menú SIM; un caso MT con ciclo ofrece «Pasar a SIM» y crea el hermano con las mismas entradas en orden |
-| **S6b** | «Nuevo sistema…» desde series sin modelo (ruta U, §5.5), con la marca «sin revisar» | sí | sobre las series crudas de `jenkins_alavi`, los modelos de partida y la puerta; un sistema que mezcla un modelo elegido y uno de partida |
+| **S6b** ✓ | «Nuevo sistema…» desde series sin modelo (ruta U, §5.5), con la marca «sin revisar» (`lib/partida`: la regla de `characterize` de sima con el art en C, contrastada con sima) | sí | sobre las series crudas de `jenkins_alavi`, los modelos de partida y la puerta; un sistema que mezcla un modelo elegido y uno de partida |
 | **S7** ✓ | Simplificar (con `drvarma -zero`) y «¿Es una red?» (N4s, N4t), con «Pasar a MT»; lo que no necesita ventana, en `lib/sistema` (la orden en `atsw-cli`, con S8) | sí | sobre `jenkins_alavi`, los números coinciden con los de sima |
 | **S8** | `atsw-sis` para VARMA (`ESTUDIO-terminal-mcp.md`) | — | la herramienta y la página dan el mismo resultado, byte a byte donde el texto es el mismo |
 | **S9** ✓ | La documentación (§6): el capítulo «Sistemas», el proyecto de ejemplo `jenkins_alavi` en Ayuda → Ejemplos (`docs/ejemplos/`; la madre abre una copia en «Ejemplos de ATSW»). Retirar `engines/drvarma/gui` del árbol de compilación y de la CI (no `seasonal_detection.c`, que es del motor) | sí | la CI sin el `drvarma_gui` viejo; el manual regenerado en el release |

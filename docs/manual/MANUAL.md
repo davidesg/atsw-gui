@@ -1036,6 +1036,31 @@ VARMA: es un caso de SIM, no de MT.
 > todas las series se explican entre sí. Pero importa, porque es el orden en
 > que se reparte lo que pasa a la vez (la respuesta al impulso).
 
+### Una serie sin modelo: el modelo de partida
+
+Lo normal es llegar aquí con los univariantes hechos y elegidos, como en el
+ejemplo. Pero una serie que todavía **no tiene modelo estimado** también puede
+entrar en un sistema. En **SIM ▸ Nuevo sistema…**, su fila sale con **modelo de
+partida (ruta U)** en el desplegable. Al darlo de alta, la madre le hace uno
+como lo harías tú con sus herramientas, pero sin preguntar:
+
+- **λ**, por la correlación media–desviación típica, en niveles y en
+  logaritmos (el gráfico de la media y la desviación típica del capítulo 5);
+- **d**, por los contrastes ADF y KPSS, **un paso cada vez**: como mucho,
+  una diferencia;
+- **la estacionalidad**, determinista, con armónicos, si la F de art la
+  detecta;
+- **el ARMA**, el candidato que propone art («Identificar la estructura
+  ARIMA…»), y fue lo estima.
+
+El modelo queda en la lista de la serie como uno más, con una razón que dice
+de dónde sale cada cosa y la marca **«sin revisar»**. Es un punto de partida,
+no un análisis univariante terminado: ábrelo en fue y revísalo. Al elegirlo
+desaparece la marca. Si derivas otro de él, el hijo nace sin ella.
+
+Un sistema puede mezclar las dos cosas: unas series con su modelo elegido y
+otras con uno de partida.
+
 Marca **C1** y pulsa **Estimar** (o Ctrl+E): se abre sim_gui con el sistema.
 Como drtran, trabaja en siete pestañas, con la barra arriba: **Estimar**,
 **Ver modelo**, **Diagnosis** y **Prever**.

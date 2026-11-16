@@ -31,6 +31,10 @@
 #include "preview.h"
 #include "vuelta.h"
 #include "netfile.h"
+#include "partida.h"
+#include "sitio.h"
+#include "engine.h"
+#include "coste.h"
 
 void barra_pub( Atsw *a, const char *s );
 
@@ -204,7 +208,7 @@ typedef struct {
 
 typedef struct {
     Atsw      *a;
-    GtkWidget *d, *rej, *mu, *titulo, *razon, *aviso, *vacio;
+    GtkWidget *d, *rej, *mu, *titulo, *razon, *aviso, *vacio, *nota_u;
     NcFila     f[PR_MAX_SERIE];
     int        n;
     char       muestra[PR_ID];
@@ -216,6 +220,29 @@ typedef struct {
 static int es_sim( const char *motor )
 {
     return motor && ( !strcmp( motor, "drvarma" ) || !strcmp( motor, "drvec" ) );
+}
+
+/* LA RUTA U (DISENO-sim.md §5.5): en un sistema, una serie sin modelo
+ * estimado entra con un MODELO DE PARTIDA que la madre hace al aceptar
+ * (lib/partida: λ, d, los armonicos y el ARMA que propone art, estimado con
+ * fue y marcado «sin revisar»). En el desplegable es esta entrada.     */
+#define NC_PARTIDA "@partida"
+
+static gchar *programa_art( void )
+{
+    static const char *const sitio[] = {
+        "../../engines/art/bin/%s", "../art/bin/%s", "./%s", NULL
+    };
+    return sitio_busca( "art", sitio );
+}
+
+/* fue, para estimarlo: el del arbol, el de al lado en un paquete, el PATH. */
+static gchar *motor_hermano( const char *programa )
+{
+    static const char *const sitio[] = {
+        "../../engines/fue/bin/%s", "./%s", NULL
+    };
+    return sitio_busca( programa, sitio );
 }
 
 /* UN SISTEMA QUE PASA A VEC NO CAMBIA DE FILA: CAMBIA LA CLASE (DISENO-sim.md
@@ -327,7 +354,9 @@ static void nc_filas( Nc *x )
         int         nc, k;
 
         nc = candidatos( p, orden[i], x->muestra, ids, PR_MAX_MODELO );
-        if ( nc == 0 ) continue;
+        /* SIN MODELO: en un sistema nuevo, la ruta U; si no, no entra. */
+        if ( nc == 0 && ( !es_sim( x->motor ) || c || !*pr_datos_de( p, orden[i], x->muestra ) ) )
+            continue;
 
         if ( c )
             for ( k = 0; k < c->nen; k++ )
@@ -354,15 +383,32 @@ static void nc_filas( Nc *x )
         g_free( nm );
         for ( k = 0; k < nc; k++ )
             {
+            const PrModelo *mo = &p->m[pr_modelo_idx( p, orden[i], x->muestra, ids[k] )];
             gchar *et = !strcmp( ids[k], hoy )
                       ? g_strdup_printf( "%s  ★ elegido", ids[k] )
+                      : mo->sin_revisar ? g_strdup_printf( "%s  (de partida, sin revisar)", ids[k] )
                       : g_strdup( ids[k] );
 
             gtk_combo_box_text_append( GTK_COMBO_BOX_TEXT(f->combo), ids[k], et );
             g_free( et );
             }
-        def = por_defecto( p, orden[i], x->muestra, del_caso, ids, nc );
-        gtk_combo_box_set_active_id( GTK_COMBO_BOX(f->combo), def );
+        if ( nc == 0 )
+            {
+            gtk_combo_box_text_append( GTK_COMBO_BOX_TEXT(f->combo), NC_PARTIDA,
+                                       "modelo de partida (ruta U)" );
+            gtk_widget_set_tooltip_text( f->combo,
+                "Esta serie no tiene modelo estimado. Al aceptar, la madre le hace uno "
+                "de partida: λ por la media–desviación típica, d por ADF y KPSS, la "
+                "estacionalidad determinista si la F de art la ve, y el ARMA que propone "
+                "art; lo estima con fue. Queda en sus modelos marcado «sin revisar»: "
+                "revísalo en fue." );
+            gtk_combo_box_set_active_id( GTK_COMBO_BOX(f->combo), NC_PARTIDA );
+            }
+        else
+            {
+            def = por_defecto( p, orden[i], x->muestra, del_caso, ids, nc );
+            gtk_combo_box_set_active_id( GTK_COMBO_BOX(f->combo), def );
+            }
 
         f->sube = nc_boton( x, "↑", "sube", orden[i], x->n, -1 );
         f->baja = nc_boton( x, "↓", "baja", orden[i], x->n, +1 );
@@ -376,6 +422,78 @@ static void nc_filas( Nc *x )
 
     gtk_widget_set_visible( x->vacio, x->n == 0 );
     gtk_widget_show_all( x->rej );
+    if ( x->nota_u )
+        {
+        gboolean hay = FALSE;
+
+        for ( i = 0; i < x->n; i++ )
+            {
+            const char *id = gtk_combo_box_get_active_id( GTK_COMBO_BOX(x->f[i].combo) );
+            if ( id && !strcmp( id, NC_PARTIDA ) ) hay = TRUE;
+            }
+        gtk_widget_set_visible( x->nota_u, hay );
+        }
+}
+
+/* LOS MODELOS DE PARTIDA de las filas marcadas que los piden: uno por
+   serie, con lib/partida, y el desplegable pasa a apuntar al nuevo (si el
+   alta falla despues, no se rehace). TRUE si estan todos.            */
+static gboolean nc_partidas( Nc *x, char *why, size_t n )
+{
+    Atsw    *a = x->a;
+    gchar   *art = programa_art(), *cache = atsw_cache_dir();
+    gboolean ok = TRUE, alguno = FALSE;
+    int      i;
+
+    for ( i = 0; i < x->n && ok; i++ )
+        {
+        const char *mod = gtk_combo_box_get_active_id( GTK_COMBO_BOX(x->f[i].combo) );
+        char        id[PR_ID], w[1024];
+        PtPartida   pt;
+        PrError     e;
+        gchar      *m;
+        int         rc;
+
+        if ( !gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(x->f[i].chk) ) ) continue;
+        if ( !mod || strcmp( mod, NC_PARTIDA ) ) continue;
+        if ( !art ) { snprintf( why, n, "No encuentro art: hace falta para el modelo de partida "
+                                "de %s.", x->f[i].serie ); ok = FALSE; break; }
+        m = g_markup_printf_escaped( "<i>El modelo de partida de %s: art lo identifica y fue "
+                                     "lo estima…</i>", x->f[i].serie );
+        gtk_label_set_markup( GTK_LABEL(x->aviso), m );
+        g_free( m );
+        while ( gtk_events_pending() ) gtk_main_iteration();
+        engine_set_finder( motor_hermano );
+        {
+        gchar *raiz = g_path_get_dirname( a->p->path ), *obj = g_strdup_printf( "%s/partida", x->f[i].serie );
+        coste_contexto( raiz, "madre", "analista", obj, "estimar" );
+        rc = pt_construye( a->p, x->f[i].serie, x->muestra, art, cache, NULL, 1,
+                           id, sizeof id, &pt, w, sizeof w );
+        coste_contexto_limpia();
+        g_free( raiz ); g_free( obj );
+        }
+        if ( rc == 1 )
+            { snprintf( why, n, "No pude hacer el modelo de partida de %s: %s.", x->f[i].serie, w );
+              ok = FALSE; break; }
+        alguno = TRUE;
+        {
+        gchar *et = g_strdup_printf( "%s  (de partida, sin revisar)", id );
+        gtk_combo_box_text_append( GTK_COMBO_BOX_TEXT(x->f[i].combo), id, et );
+        gtk_combo_box_set_active_id( GTK_COMBO_BOX(x->f[i].combo), id );
+        g_free( et );
+        }
+        if ( rc == 2 ) { snprintf( why, n, "%s.", w ); ok = FALSE; }
+        (void) e;
+        }
+    if ( alguno )
+        {
+        PrError e;
+        if ( atsw_guarda( a, &e ) != 0 && ok )
+            { pr_error_es( &e, why, n ); ok = FALSE; }
+        }
+    g_free( art );
+    g_free( cache );
+    return ok;
 }
 
 static void nc_muestra( GtkComboBox *cb, Nc *x )
@@ -401,6 +519,16 @@ static gboolean nc_acepta( Nc *x, char *why, size_t n )
     PrError     e;
     GString    *lista;
     int         pos, i, ne = 0;
+
+    /* ANTES DE HACER NADA, que haya al menos dos: un modelo de partida
+       queda en el proyecto aunque el alta no siga.                    */
+    for ( i = 0; i < x->n; i++ )
+        ne += gtk_toggle_button_get_active( GTK_TOGGLE_BUTTON(x->f[i].chk) ) != 0;
+    if ( ne < 2 )
+        { snprintf( why, n, "Un %s cruza al menos dos series: marca las que "
+                    "entran.", es_sim( x->motor ) ? "sistema" : "caso" ); return FALSE; }
+    ne = 0;
+    if ( !nc_partidas( x, why, n ) ) { atsw_refresca( a ); return FALSE; }
 
     for ( pos = 0; pos < x->n; pos++ )
         for ( i = 0; i < x->n; i++ )
@@ -506,6 +634,22 @@ static gboolean nc_acepta( Nc *x, char *why, size_t n )
         g_string_free( lista, TRUE );
         barra_pub( a, why );
         }
+
+    /* LA RAZON DE CADA MODELO DE PARTIDA dice ya para que sistema es. */
+    for ( i = 0; i < ne; i++ )
+        {
+        int k = pr_modelo_idx( a->p, en[i].serie, x->muestra, en[i].modelo );
+        const char *ya = "Modelo de partida (ruta U), sin revisar. ";
+
+        if ( k >= 0 && a->p->m[k].sin_revisar && !strncmp( a->p->m[k].razon, ya, strlen( ya ) ) )
+            {
+            gchar *r = g_strdup_printf( "Modelo de partida (ruta U), sin revisar, para el sistema "
+                                        "%s. %s", id, a->p->m[k].razon + strlen( ya ) );
+            pr_razon( a->p, en[i].serie, x->muestra, en[i].modelo, r, &e );
+            g_free( r );
+            }
+        }
+    atsw_guarda( a, &e );
 
     snprintf( a->caso, sizeof a->caso, "%s", id );
     a->viendo_caso = TRUE;
@@ -620,6 +764,19 @@ static void caso_nuevo( Atsw *a, const char *deriva_de, const char *motor )
                               "en esta muestra." );
     gtk_widget_set_no_show_all( x->vacio, TRUE );
     gtk_box_pack_start( GTK_BOX(caja), x->vacio, FALSE, FALSE, 0 );
+
+    if ( sim && !c )
+        {
+        x->nota_u = gtk_label_new( NULL );
+        gtk_label_set_markup( GTK_LABEL(x->nota_u),
+            "<small>«Modelo de partida»: la serie aún no tiene modelo estimado. Al darlo de\n"
+            "alta, la madre le hace uno (art lo identifica, fue lo estima) y lo deja en\n"
+            "sus modelos marcado <b>sin revisar</b>: es un punto de partida, revísalo en fue.</small>" );
+        gtk_label_set_xalign( GTK_LABEL(x->nota_u), 0.0 );
+        gtk_widget_set_name( x->nota_u, "nota-partida" );
+        gtk_widget_set_no_show_all( x->nota_u, TRUE );
+        gtk_box_pack_start( GTK_BOX(caja), x->nota_u, FALSE, FALSE, 0 );
+        }
 
     rej2 = gtk_grid_new();
     gtk_grid_set_row_spacing( GTK_GRID(rej2), 6 );

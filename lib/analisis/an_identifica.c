@@ -44,6 +44,7 @@
 #include "inpdet.h"
 #include "outfile.h"
 #include "sitio.h"
+#include "partida.h"
 
 enum { C_RANK, C_ORDEN, C_TIPO, C_SIM, C_PESO, C_AICC, C_NOTA, C_IDX, C_N };
 enum { F_TODOS, F_REGULAR, F_ESTACIONAL };
@@ -318,97 +319,16 @@ static gboolean quita_armonicos( const Id *g )
     return g->punto <= 2 && g->D == 0 && g->freq > 1 && !g->sin_armonicos;
 }
 
-/* Los armonicos de fue para la frecuencia s, con los nombres del .inp: cos k
- * y sin k para k < s/2, y alter en s/2. Es el conjunto que retira art y el
- * que pone «Add Seasonals» en fue_gui: 11 terminos en mensual, 3 en
- * trimestral. Devuelve cuantos.                                          */
-static int armonicos_de( int s, char det[][ID_LINEA], int max )
-{
-    int k, n = 0;
-
-    for ( k = 1; 2 * k < s && n + 2 <= max; k++ )
-        {
-        g_snprintf( det[n++], ID_LINEA, "cos %d", k );
-        g_snprintf( det[n++], ID_LINEA, "sin %d", k );
-        }
-    if ( s % 2 == 0 && n < max ) g_snprintf( det[n++], ID_LINEA, "alter" );
-    return n;
-}
-
-/* Al .inp ya escrito le pone los armonicos que no tenga. 0, o 1 con el
-   motivo. Devuelve en *puestos cuantos añadio.                         */
-static int pon_armonicos( const char *inp, int s, int *puestos,
-                          char *porque, size_t n )
-{
-    char        arm[ID_MAX_DET][ID_LINEA], ya[ID_MAX_DET][ID_LINEA];
-    const char *nuevo[ID_MAX_DET];
-    int         na = armonicos_de( s, arm, ID_MAX_DET ), nya, nn = 0, i, j, rc;
-    gchar      *tmp;
-
-    *puestos = 0;
-    nya = id_nombres( inp, ya, ID_MAX_DET, porque, n );
-    if ( nya < 0 ) return 1;
-    for ( i = 0; i < na; i++ )
-        {
-        gboolean esta = FALSE;
-
-        for ( j = 0; j < nya; j++ ) if ( !g_ascii_strcasecmp( ya[j], arm[i] ) ) esta = TRUE;
-        if ( !esta ) nuevo[nn++] = arm[i];
-        }
-    if ( nn == 0 ) return 0;
-    tmp = g_strdup_printf( "%s.arm", inp );
-    rc = id_anade( inp, tmp, nuevo, NULL, nn, porque, n );
-    if ( rc == 0 && g_rename( tmp, inp ) != 0 )
-        { g_snprintf( porque, n, "no pude escribir %s", inp ); rc = 1; }
-    g_unlink( tmp );
-    g_free( tmp );
-    if ( rc == 0 ) *puestos = nn;
-    return rc;
-}
-
-/* ¿EL HIJO ESTIMA LA MEDIA? Sin diferencias, si: es el nivel. Con una
-   (d + D = 1), es la deriva, y solo si la serie diferenciada la tiene:
-   t de su media, con el error tipico corregido por su r1, |t| >= 2. El IPC
-   en primeras diferencias la tiene (t = 3.1): fija en 0, sus residuos
-   salian con media 0.0007, t = 4 (BUG-0002). El WTI no (t = 0.6): el
-   petroleo no tiene deriva. Con d + D = 2, fija.                       */
-static gboolean media_libre( const Id *g )
-{
-    double *w, m = 0.0, v = 0.0, c = 0.0, t;
-    int     n = g->n, i, k, j;
-
-    if ( g->d + g->D == 0 ) return TRUE;
-    if ( g->d + g->D > 1 || g->x == NULL ) return FALSE;
-    w = g_new( double, n );
-    for ( i = 0; i < n; i++ ) w[i] = g->lam == 0.0 ? log( g->x[i] ) : g->x[i];
-    for ( k = 0; k < g->d + g->D; k++ )
-        {
-        int s = k < g->d ? 1 : g->freq;
-
-        for ( j = n - 1; j >= s; j-- ) w[j] -= w[j - s];
-        memmove( w, w + s, (size_t) ( n - s ) * sizeof *w );
-        n -= s;
-        }
-    if ( n < 10 ) { g_free( w ); return FALSE; }
-    for ( i = 0; i < n; i++ ) m += w[i];
-    m /= n;
-    for ( i = 0; i < n; i++ ) v += ( w[i] - m ) * ( w[i] - m );
-    for ( i = 1; i < n; i++ ) c += ( w[i] - m ) * ( w[i - 1] - m );
-    g_free( w );
-    if ( v <= 0.0 ) return FALSE;
-    c /= v;
-    if ( c > 0.9 ) c = 0.9;
-    if ( c < -0.9 ) c = -0.9;
-    t = m / sqrt( v / n / n * ( 1.0 + c ) / ( 1.0 - c ) );
-    return fabs( t ) >= 2.0;
-}
+/* Los armonicos y la media del hijo los pone lib/partida (pt_deriva_inp,
+   pt_media_libre): es la misma derivacion que hace la ruta U de SIM, y
+   una sola copia de la regla.                                          */
 
 static void on_derivar( GtkButton *b, Id *g )
 {
     char     origen[PR_RUTA], destino[PR_RUTA], porque[512], msg[512], nuevo[PR_ID];
     char     tipo[48];
     PrError  e;
-    gchar   *dir, *razon, *tmp = NULL;
+    gchar   *dir, *razon;
     const AcCand *k;
     int      cual, rc, armonicos = 0;
 
@@ -426,32 +346,14 @@ static void on_derivar( GtkButton *b, Id *g )
     g_mkdir_with_parents( dir, 0700 );
     g_free( dir );
 
-    /* E2: the child carries the transformation it was identified on. */
+    /* E2: the child carries the transformation it was identified on, the
+       harmonics art removed before identifying and, when it is needed, a
+       free mean (lib/partida: the same derivation as SIM's route U). */
     if ( g->punto <= 2 )
-        {
-        tmp = g_strdup_printf( "%s.trans", destino );
-        rc = id_pon_transformacion( origen, tmp, g->lam, g->d, g->D, porque, sizeof porque );
-        if ( rc == 0 )
-            rc = id_pon_arma( tmp, destino, k->p, k->phi, k->q, k->theta,
-                              k->P, k->Phi, k->Q, k->Theta, porque, sizeof porque );
-        g_unlink( tmp );
-        g_free( tmp );
-        /* Y LO QUE ART QUITO ANTES DE IDENTIFICAR: los armonicos. Sin
-           ellos el hijo llevaba el AR(1) pero no la estacionalidad que se
-           habia retirado para encontrarlo. Paso con IPC_ES.         */
-        if ( rc == 0 && quita_armonicos( g ) )
-            rc = pon_armonicos( destino, g->freq, &armonicos, porque, sizeof porque );
-        /* Y LA MEDIA, LIBRE cuando hace falta: ver media_libre. */
-        if ( rc == 0 && media_libre( g ) )
-            {
-            tmp = g_strdup_printf( "%s.mu", destino );
-            rc = id_fija_media( destino, tmp, 0.0, 1, porque, sizeof porque );
-            if ( rc == 0 && g_rename( tmp, destino ) != 0 )
-                { g_snprintf( porque, sizeof porque, "no pude escribir %s", destino ); rc = 1; }
-            g_unlink( tmp );
-            g_free( tmp );
-            }
-        }
+        rc = pt_deriva_inp( origen, destino, g->lam, g->d, g->D, g->freq, k,
+                            quita_armonicos( g ),
+                            pt_media_libre( g->x, g->n, g->lam, g->d, g->D, g->freq ),
+                            &armonicos, porque, sizeof porque );
     else       /* E3/E4: what is missing is ADDED to what the model has */
         rc = id_anade_arma( origen, destino, k->p, k->phi, k->q, k->theta,
                             k->P, k->Phi, k->Q, k->Theta, porque, sizeof porque );

@@ -252,6 +252,26 @@ The one reader of `DATA_art.cand`, the line file that `engines/art` writes
 its own against the engine's goldens. The identification window
 (`lib/analisis/an_identifica.c`) uses it.
 
+## `partida/` — a starting model for a series without one (SIM, route U)
+
+When a series enters a SIM system without an estimated model, the mother
+makes it a **starting model** (docs/DISENO-sim.md §5.5). It applies sima's
+`characterize` rule with the mother's engine:
+- λ by the mean–sd correlation;
+- d by ADF/KPSS (`raices/`) with art's one-step policy;
+- deterministic seasonality when art's F sees it;
+- the ARMA that art proposes.
+
+fue estimates the model, and the manifest marks it `sin_revisar`.
+
+The library has two parts:
+- **`partida.c`**: the rule and the child's `.inp` (`pt_deriva_inp`, also
+  used by the identification window).
+- **`construye.c`**: the whole step on a project (`pt_construye`).
+
+`run_test.sh` checks the rule against sima's numbers on the raw data of
+`docs/ejemplos`, and builds a real starting model with art and fue.
+
 ## `inpdet/` — also the ARMA part and the transformation
 
 There are two new functions next to the deterministics:

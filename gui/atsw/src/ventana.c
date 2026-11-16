@@ -380,6 +380,9 @@ gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
        con la ventana ya hecha dejaba sólo «Completa»: las hojas se
        construían una vez, al crearla (paso con ~/atsw-casos).        */
     atsw_hojas( a );
+    /* Y SE VIGILA: lo que el asistente escribe aparece sin tocar la
+       ventana (vigila.c).                                              */
+    atsw_vigila( a );
     return TRUE;
 }
 
@@ -664,10 +667,33 @@ static void pinta_hoja( Atsw *a, GtkWidget *vista, const char *muestra )
             : NULL;
         if ( t ) { g_free( globo ); globo = t; }
         }
+        /* QUIEN DIO EL PASO (ESTUDIO-terminal-mcp §7.2): lo del asistente
+           se ve en la fila, sin abrir el linaje. Lo del analista no lleva
+           marca: es lo normal.                                        */
+        {
+        gboolean as = !strcmp( m->por, "asistente" );
+        gboolean ae = m->elegido && !strcmp( m->por_elegido, "asistente" );
+        gchar   *t  = ( as || ae )
+            ? g_strdup_printf( "%s\n\n%s%s", globo,
+                               as ? "Lo hizo el asistente (por: asistente en el manifiesto)." : "",
+                               ae ? ( as ? " Y lo eligió él." : "Lo eligió el asistente." ) : "" )
+            : NULL;
+        if ( t ) { g_free( globo ); globo = t; }
+        }
+        {
+        GString *pre = g_string_new( NULL );
+
+        if ( m->rol != PR_DATOS )
+            {
+            if ( !strcmp( m->por, "asistente" ) )
+                g_string_append( pre, "[asistente] " );
+            if ( m->sin_revisar && !strstr( m->razon, "sin revisar" ) )
+                g_string_append( pre, "[sin revisar] " );
+            }
         razon = m->rol == PR_DATOS ? g_strdup( "tal como entraron — no se editan" )
-              : m->sin_revisar && !strstr( m->razon, "sin revisar" )
-              ? g_strdup_printf( "[sin revisar] %s", m->razon[0] ? m->razon : "(sin razón)" )
-              : g_strdup( m->razon[0] ? m->razon : "(sin razón)" );
+              : g_strdup_printf( "%s%s", pre->str, m->razon[0] ? m->razon : "(sin razón)" );
+        g_string_free( pre, TRUE );
+        }
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it,
             M_ID,       m->id,

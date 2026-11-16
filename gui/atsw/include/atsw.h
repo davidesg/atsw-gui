@@ -432,6 +432,9 @@ gboolean   atsw_abre( Atsw *a, const char *path, char *why, size_t n );
    Un manifiesto roto NO se traga: se dice y se deja el que hay en memoria,
    que es el bueno.                                                     */
 gboolean   atsw_relee( Atsw *a, char *why, size_t n );
+/* vigila.c: relee solo cuando el proyecto cambia en disco (el asistente). */
+void       atsw_vigila( Atsw *a );
+void       atsw_vigila_para( void );
 
 /* Escribe el manifiesto Y APUNTA SU HUELLA. Lo segundo no es un detalle: sin
    ello, el proximo foco releeria nuestra propia escritura creyendo que la

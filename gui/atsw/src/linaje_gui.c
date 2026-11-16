@@ -25,10 +25,11 @@
 
 void barra_pub( Atsw *a, const char *s );
 
-enum { LN_NODO, LN_ESTADO, LN_DICTAMEN, LN_RAZON, LN_DEBE, LN_COLOR, LN_COLS };
+enum { LN_NODO, LN_ESTADO, LN_DICTAMEN, LN_POR, LN_RAZON, LN_DEBE, LN_COLOR, LN_COLS };
 
 typedef struct {
     int sin_razon, sin_estimar, sin_elegido, cadenas;
+    int del_asistente;      /* pasos con por: asistente (derivar o elegir) */
 } Cuenta;
 
 
@@ -84,15 +85,20 @@ static void cuelga( Atsw *a, GtkTreeStore *st, GtkTreeIter *padre,
             LN_NODO,     m->id,
             LN_ESTADO,   estado,
             LN_DICTAMEN, dict,
+            LN_POR,      !strcmp( m->por, "asistente" ) ? "asistente" : "",
             LN_RAZON,    m->razon[0] ? m->razon : "",
             LN_DEBE,     debe,
             LN_COLOR,    color, -1 );
+        if ( !strcmp( m->por, "asistente" ) ) c->del_asistente++;
 
         if ( m->elegido )
             {
-            char et[PR_ID + 16];
+            char     et[PR_ID + 40];
+            gboolean ae = !strcmp( m->por_elegido, "asistente" );
 
-            g_snprintf( et, sizeof et, "%s  ← elegido", m->id );
+            if ( ae ) c->del_asistente++;
+            g_snprintf( et, sizeof et, "%s  ← elegido%s", m->id,
+                        ae ? " por el asistente" : "" );
             gtk_tree_store_set( st, &it, LN_NODO, et, -1 );
             }
 
@@ -151,7 +157,7 @@ void atsw_linaje( Atsw *a )
 
     st = gtk_tree_store_new( LN_COLS, G_TYPE_STRING, G_TYPE_STRING,
                              G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-                             G_TYPE_STRING );
+                             G_TYPE_STRING, G_TYPE_STRING );
     llena( a, st, &c );
 
     win = gtk_window_new( GTK_WINDOW_TOPLEVEL );
@@ -173,6 +179,10 @@ void atsw_linaje( Atsw *a )
         "Estado", r, "text", LN_ESTADO, "foreground", LN_COLOR, NULL );
     gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(vista), -1,
         "Dictamen", r, "text", LN_DICTAMEN, "foreground", LN_COLOR, NULL );
+
+    /* QUIEN: vacio es el analista, que es lo normal (§7.2). */
+    gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(vista), -1,
+        "Por", r, "text", LN_POR, NULL );
 
     /* LO QUE DEBE, EN ROJO Y ANTES QUE LA RAZON: es lo que se viene a ver. */
     {
@@ -214,6 +224,9 @@ void atsw_linaje( Atsw *a )
         g_string_append_printf( t, " · <b>%d sin razón</b>", c.sin_razon );
     if ( c.sin_elegido )
         g_string_append_printf( t, " · <b>%d sin elegido</b>", c.sin_elegido );
+    if ( c.del_asistente )
+        g_string_append_printf( t, " · %d paso%s del asistente", c.del_asistente,
+                                c.del_asistente == 1 ? "" : "s" );
     if ( !c.sin_estimar && !c.sin_razon && !c.sin_elegido )
         g_string_append( t, " · no debe nada" );
     else

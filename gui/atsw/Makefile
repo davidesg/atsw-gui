@@ -15,7 +15,7 @@ PREFIX  ?= /usr/local
 LIB = ../../lib
 
 SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
-      src/editor.c src/serie_gui.c src/genera.c src/anfitrion.c src/linaje_gui.c src/vigila.c src/asistente.c \
+      src/editor.c src/serie_gui.c src/genera.c src/anfitrion.c src/linaje_gui.c src/vigila.c src/asistente.c src/asistente_ventana.c \
       src/casos_gui.c src/cuaderno_gui.c src/presentacion.c src/trabajos.c \
       $(LIB)/trabajo/trabajo.c \
       $(LIB)/proyecto/proyecto.c \

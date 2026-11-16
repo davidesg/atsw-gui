@@ -902,9 +902,22 @@ afectados.
     lleve `uv` y la fuente de `mcp/atsw_mcp` (`share/atsw/mcp/atsw_mcp`, que
     la madre ya busca). Hoy solo funciona desde el árbol, o con `uv` en el
     PATH.
-  - Lo que queda de la fase 2: la ventana Asistente acoplable, con la página
-    «estado» y `ventanas.ini` (y en el menú, «Ventana del asistente» y
-    «Acoplar a la madre»); y el coste y la ficha en la madre.
+  - **Fase 2, tercer paso: la ventana Asistente, acoplable (17-nov-2026).**
+    `gui/atsw/src/asistente_ventana.c` (§7.6): un solo contenido que se
+    mueve entre su ventana suelta y el lado derecho de la madre (un
+    `GtkPaned` por fuera de todo), con «Acoplar/Desacoplar», sin destruir
+    nada. Cerrar la suelta la esconde. Su estado (visible, acoplada, tamaño,
+    posición y separador) es por proyecto y del usuario, en
+    `ventanas.ini` (`g_get_user_config_dir()/atsw/`); un proyecto en el que
+    nunca se abrió no se apunta. La página «estado»: el botón de la terminal
+    del sistema, si el proyecto está preparado, lo último que ha hecho el
+    asistente (al día con vigila.c) y lo instalado. En el menú, «Ventana
+    del asistente» (Ctrl+Mayús+A) y «Acoplar a la madre». Prueba: la fase
+    `asistente_ventana` de test_gui (diez veces suelta y pegada sin perder
+    el contenido; al reabrir, como estaba).
+  - Lo que queda de la fase 2: el coste y la ficha en la madre. Después, la
+    fase T1: la terminal empotrada con VTE en Linux, en la página
+    «terminal» de la misma pila.
 
 ---
 

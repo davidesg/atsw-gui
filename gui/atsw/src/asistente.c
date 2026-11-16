@@ -733,7 +733,6 @@ static void on_instalar( GtkMenuItem *mi, Atsw *a )
 /* QUE HA HECHO EL ASISTENTE (§7.2)                                          */
 /* ------------------------------------------------------------------------ */
 
-enum { QH_SERIE, QH_MUESTRA, QH_MODELO, QH_QUE, QH_RAZON, QH_COLS };
 
 /* Las filas: cada modelo que derivo y cada eleccion que hizo. Cuantas. */
 int atsw_asistente_pasos( const Proyecto *p, GtkListStore *st )
@@ -811,6 +810,11 @@ static void on_que_ha_hecho( GtkMenuItem *mi, Atsw *a )
     gtk_widget_show_all( win );
 }
 
+/* Lo mismo, desde la ventana Asistente (asistente_ventana.c). */
+void atsw_asistente_terminal( Atsw *a )  { on_terminal( NULL, a ); }
+void atsw_asistente_preparar( Atsw *a )  { on_prepara( NULL, a ); }
+void atsw_asistente_que_ha_hecho( Atsw *a ) { on_que_ha_hecho( NULL, a ); }
+
 /* ------------------------------------------------------------------------ */
 /* EL MENU (§7.1)                                                            */
 /* ------------------------------------------------------------------------ */
@@ -820,11 +824,47 @@ static void separador( GtkWidget *m )
     gtk_menu_shell_append( GTK_MENU_SHELL(m), gtk_separator_menu_item_new() );
 }
 
+static void on_ver_ventana( GtkCheckMenuItem *mi, Atsw *a )
+{
+    atsw_asistente_muestra( a, gtk_check_menu_item_get_active( mi ) );
+}
+
+static void on_acoplar( GtkCheckMenuItem *mi, Atsw *a )
+{
+    atsw_asistente_acopla( a, gtk_check_menu_item_get_active( mi ) );
+}
+
+/* Una casilla del menu, con su globo y su barra como las demas entradas. */
+static GtkWidget *casilla( Atsw *a, GtkWidget *m, const char *txt, const char *tip,
+                           gboolean activa, GCallback cb )
+{
+    GtkWidget *mi = gtk_check_menu_item_new_with_label( txt );
+
+    gtk_check_menu_item_set_active( GTK_CHECK_MENU_ITEM(mi), activa );
+    gtk_widget_set_tooltip_text( mi, tip );
+    g_signal_connect( mi, "toggled", cb, a );
+    g_object_set_data( G_OBJECT(mi), "accion", (gpointer) cb );
+    gtk_menu_shell_append( GTK_MENU_SHELL(m), mi );
+    return mi;
+}
+
 void atsw_menu_asistente( Atsw *a, GtkWidget *m )
 {
     GtkWidget *mi;
     gboolean   inst = atsw_asistente_instalado();
     gchar     *uv = g_find_program_in_path( "uv" ), *src = fuente_mcp();
+
+    /* LA VENTANA (§7.6): verla o no, y suelta o pegada a la madre. */
+    mi = casilla( a, m, "Ventana del asistente",
+                  "La ventana Asistente: la terminal, lo instalado y lo último que ha "
+                  "hecho el asistente en este proyecto.", atsw_asistente_visible( a ),
+                  G_CALLBACK(on_ver_ventana) );
+    atsw_entrada_tecla( mi, "<Primary><Shift>a" );
+    casilla( a, m, "Acoplar a la madre",
+             "Pegada al lado derecho de la madre, o suelta en su propia ventana (en otro "
+             "monitor, junto al cliente).", atsw_asistente_acoplado( a ),
+             G_CALLBACK(on_acoplar) );
+    separador( m );
 
     mi = atsw_entrada( a, m, "Abrir la terminal del sistema",
                        "La terminal de tu sistema, en la carpeta del proyecto: ahí se "

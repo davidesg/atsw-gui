@@ -351,6 +351,8 @@ gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
     Proyecto *nuevo;
 
     if ( why && n ) why[0] = '\0';
+    /* LA VENTANA ASISTENTE ES POR PROYECTO: lo del que se deja, guardado. */
+    if ( a->hay ) atsw_asistente_guarda_estado( a );
 
     /* SE LEE A OTRO SITIO, como en atsw_relee. pr_leer escribe sobre el
        proyecto que se le da a medida que lee, asi que un manifiesto roto
@@ -383,6 +385,7 @@ gboolean atsw_abre( Atsw *a, const char *path, char *why, size_t n )
     /* Y SE VIGILA: lo que el asistente escribe aparece sin tocar la
        ventana (vigila.c).                                              */
     atsw_vigila( a );
+    atsw_asistente_restaura( a );       /* y la del que se abre, como estaba */
     return TRUE;
 }
 

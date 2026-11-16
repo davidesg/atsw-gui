@@ -873,7 +873,19 @@ afectados.
     hoy vive en los ficheros GTK de sim_gui (la clasificación del ajuste, las
     LR de la estructura, el emparejamiento de los errores de la evaluación)
     se mueve a lib/ antes de usarla desde atsw-cli.
-  - Y después, la fase 2.
+  - **Fase 2, primer paso: ver lo que hace el asistente (16-nov-2026).** La
+    madre vigila el proyecto con `GFileMonitor` (gui/atsw/src/vigila.c): la
+    carpeta del manifiesto y las de los modelos, con los avisos agrupados en
+    medio segundo, y relee con la misma función que el foco. Lo nuevo del
+    asistente sale en la barra de estado («m04 de IPC, del asistente», «…
+    elegido por el asistente»). En la rejilla, la razón de un modelo con
+    `por: asistente` empieza con «[asistente]», y su globo lo explica. El
+    linaje tiene la columna «Por» y cuenta los pasos del asistente. Prueba:
+    la fase `asistente_vigila` de test_gui.
+  - Lo que queda de la fase 2: el menú Asistente con «Preparar el proyecto
+    para el asistente…» (el andamiaje), «Abrir la terminal del sistema» e
+    «Instalar/Comprobar el asistente…»; la ventana Asistente acoplable, con
+    la página «estado» y `ventanas.ini`; y el coste y la ficha en la madre.
 
 ---
 

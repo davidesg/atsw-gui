@@ -2991,6 +2991,7 @@ int main( int argc, char **argv )
 
         if ( !proy ) { fprintf( stderr, "%s: --ver necesita --proyecto\n", argv[0] ); return 2; }
         A.solo_ver = TRUE;
+        atsw_vigila_para();      /* una ventana suelta no relee el proyecto */
         snprintf( A.ver_mu, sizeof A.ver_mu, "%s", ver_muestra );
         if ( ( rc = ver_valida( &A, ver_que, ver_obj ) ) != 0 ) return rc;
         sin_pres = TRUE;

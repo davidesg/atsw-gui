@@ -3155,6 +3155,65 @@ static Proyecto *relee_manifiesto( void )
 
 static gchar *cuaderno_md( void );
 
+/* --- FASE 2: LO QUE HACE EL ASISTENTE, EN VIVO (ESTUDIO-terminal-mcp §7.3) */
+/* Un modelo que el asistente escribe POR FUERA --otro Proyecto, al disco,
+   como atsw-cli-- aparece en la rejilla sin tocar la ventana (sin foco ni
+   «Releer»), con su marca, y la barra lo dice. Lo mismo para una eleccion. */
+static gboolean espera_dicho( const char *que, int ms )
+{
+    gint64 hasta = g_get_monotonic_time() + (gint64) ms * 1000;
+
+    while ( !dijo( que ) && g_get_monotonic_time() < hasta ) pump( 50 );
+    return dijo( que ) != NULL;
+}
+
+static void asistente_vigila( void )
+{
+    Proyecto *q = relee_manifiesto();
+    PrError   e;
+    char      id[PR_ID] = "", ruta[PR_RUTA], esperado[PR_ID + 32];
+    gchar    *raz;
+
+    snprintf( A.serie, sizeof A.serie, "ipc" );
+    A.viendo_caso = FALSE;
+    atsw_refresca( &A );
+    pump( 100 );
+    check( q != NULL, "(el manifiesto se relee por fuera)", NULL );
+    if ( q == NULL ) return;
+
+    olvida();
+    check( pr_deriva( q, "ipc", "", "m01", id, sizeof id, ruta, sizeof ruta, &e ) == 0 &&
+           pr_pon_por( q, "ipc", "", id, "asistente", &e ) == 0 &&
+           pr_razon( q, "ipc", "", id, "el MA(12) sobra", &e ) == 0 &&
+           pr_escribir( q, q->path, &e ) == 0,
+           "(un modelo nuevo, escrito por fuera con por: asistente)", e.texto );
+    snprintf( esperado, sizeof esperado, "%s de ipc, del asistente", id );
+    check( espera_dicho( esperado, 5000 ), "la madre lo ve sola y la barra dice de quién es",
+           barra() );
+    raz = celda( A.l_modelos, M_ID, id, M_RAZON );
+    check( raz && g_str_has_prefix( raz, "[asistente] el MA(12) sobra" ),
+           "y en la rejilla lleva la marca [asistente]", raz ? raz : "(no está)" );
+    g_free( raz );
+
+    olvida();
+    check( pr_elige( q, "ipc", "", id, "mejor Q", &e ) == 0 &&
+           pr_pon_por_elegido( q, "ipc", "", id, "asistente", &e ) == 0 &&
+           pr_escribir( q, q->path, &e ) == 0, "(y el asistente lo elige)", e.texto );
+    snprintf( esperado, sizeof esperado, "%s de ipc elegido por el asistente", id );
+    check( espera_dicho( esperado, 5000 ), "la elección también se ve sola", barra() );
+    check( !strcmp( pr_elegido( A.p, "ipc", "" ), id ), "la madre tiene el elegido nuevo",
+           pr_elegido( A.p, "ipc", "" ) );
+
+    /* LO QUE ESCRIBE LA MADRE NO SE ANUNCIA como si fuera de fuera. */
+    olvida();
+    pr_elige( A.p, "ipc", "", "m01", "el de la prueba", &e );
+    atsw_guarda( &A, &e );
+    pump( 1500 );
+    check( !dijo( "fuera de aquí" ) && !dijo( "del asistente" ),
+           "lo que escribe la propia madre no sale como un cambio de fuera", barra() );
+    g_free( q );
+}
+
 /* --- S6b: LA RUTA U (DISENO-sim.md §5.5) --------------------------------- */
 /* «Nuevo sistema…» con una serie que no tiene modelo: entra con uno de
    partida, que la madre hace al aceptar (lib/partida), y queda en sus
@@ -5043,6 +5102,7 @@ int main( int argc, char **argv )
             fase( "legados" ); legados();
             fase( "trabajos" ); trabajos();
             fase( "ruta_u" ); ruta_u();
+            fase( "asistente_vigila" ); asistente_vigila();
             }
         }
     fase( "ejemplos" ); ejemplos();

@@ -3,6 +3,7 @@
 #
 #   bash docs/manual/video/video.sh            el caso del manual (IPC y WTI)
 #   bash docs/manual/video/video.sh es-core    el univariante con intervenciones
+#   bash docs/manual/video/video.sh sim        el sistema de Jenkins y Alavi, con la madre
 #
 # Sin argumento, los guiones de video/escenas/ y ATSW-ipc-wti.mp4. Con un
 # nombre, los de video/escenas-NOMBRE/, su proyecto en /tmp/curso-NOMBRE/NOMBRE

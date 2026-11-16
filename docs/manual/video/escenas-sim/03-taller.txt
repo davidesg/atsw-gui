@@ -1,0 +1,10 @@
+#! atsw_gui --proyecto @EJEMPLOS@/jenkins_alavi/proyecto.yaml
+# EL VIDEO DE SIM, 3: de vuelta en la madre, lo que sim_gui dejó en el caso.
+ventana ATSW
+tamano 1100 700
+espera 1500
+rotulo De vuelta en la madre: lo que se estimó en sim_gui queda en el caso, con su .out.
+fila C1
+espera 4000
+rotulo -
+salir

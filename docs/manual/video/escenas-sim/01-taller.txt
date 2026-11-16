@@ -1,0 +1,45 @@
+#! atsw_gui
+# EL VIDEO DE SIM, 1: la madre. Abre el ejemplo de Jenkins y Alavi (los dos
+# univariantes hechos y el sistema C1 por estimar) y enseña de dónde sale un
+# sistema. Sigue el capítulo 14 del manual.
+portada ATSW · SIM | Un sistema: ratas almizcleras y visones | 4500
+ventana ATSW
+tamano 1100 700
+espera 1500
+rotulo Cuando dos series se afectan en los dos sentidos, no hay transferencia: hay un sistema.
+espera 1500
+rotulo El ejemplo: las pieles de rata almizclera y de visón de la Bahía de Hudson, 1850–1911 (Jenkins y Alavi).
+espera 1500
+rotulo Viene hecho: Ayuda ▸ Ejemplos lo abre, como una copia tuya.
+barra Ayuda
+espera 800
+submenu Ejemplos
+espera 800
+menu Ratas almizcleras y visones (SIM)
+espera 2500
+rotulo Cada serie llega con su modelo univariante, estimado y elegido, como en los capítulos 5 a 10.
+fila MUSKRAT
+espera 3000
+rotulo MUSKRAT, un ARIMA(6,1,1) en logaritmos; MINK, un AR(4) con media.
+fila MINK
+espera 3000
+rotulo El sistema es el caso C1: las dos series, en su orden, cada una con su .pre. Su clase es VARMA.
+fila C1
+espera 3500
+rotulo Con tus series, SIM ▸ Nuevo sistema… lo da de alta, como un caso de transferencia.
+barra SIM
+espera 800
+menu Nuevo sistema…
+ventana Nuevo sistema
+espera 1500
+rotulo Se marcan las series; cada una entra con su modelo. El orden no elige una salida, pero importa.
+espera 4000
+rotulo Una serie sin modelo estimado entra con un modelo de partida (ruta U), que queda «sin revisar».
+espera 4000
+boton Cancelar
+ventana ATSW
+rotulo Este ya está dado de alta. «Estimar», con C1 marcado, abre sim_gui con el sistema.
+fila C1
+espera 3500
+rotulo -
+salir

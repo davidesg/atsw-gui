@@ -381,18 +381,22 @@ gboolean   atsw_pide_texto( Atsw *a, const char *titulo, const char *aviso,
 /* --- el dato y lo que se deriva de el ----------------------------------- */
 
 /* EL .csv ES EL DATO; LOS .inp SE GENERAN DE EL. Un dueño y una derivacion,
-   como .pre -> .inp. <hasta> recorta la ventana ("" = la muestra entera) y
-   recorta el .inp QUE SALE, nunca el .csv: la muestra total es lo que
-   entro y no se toca.                                                   */
+   como .pre -> .inp. <desde> y <hasta> recortan la ventana ("" = sin
+   corte por ese lado) y recortan el .inp QUE SALE, nunca el .csv: la
+   muestra total es lo que entro y no se toca.                           */
 int        atsw_genera_inp( const char *csv, const char *destino,
-                            const char *serie, const char *hasta,
-                            char *why, size_t n );
+                            const char *serie, const char *desde,
+                            const char *hasta, char *why, size_t n );
 
 /* Cuantas observaciones caben hasta esa fecha. Fuera para poder probarlo:
    traducir "hasta 12/2019" a un numero de observaciones es lo unico de
    esto que hay que hacer bien.                                          */
 int        atsw_hasta_n( int freq, int anio, int per, int nobs,
                          const char *hasta );
+/* Y la otra punta: la posicion (desde 0) de la primera observacion de la
+   ventana; nobs si empieza despues del final, -1 si no se entiende.     */
+int        atsw_desde_i( int freq, int anio, int per, int nobs,
+                         const char *desde );
 
 /* Donde vive el .csv de una serie: <raiz>/<serie>/datos.csv, FUERA de
    work/, que es donde se corre y lo que se limpia.                      */

@@ -882,10 +882,29 @@ afectados.
     `por: asistente` empieza con «[asistente]», y su globo lo explica. El
     linaje tiene la columna «Por» y cuenta los pasos del asistente. Prueba:
     la fase `asistente_vigila` de test_gui.
-  - Lo que queda de la fase 2: el menú Asistente con «Preparar el proyecto
-    para el asistente…» (el andamiaje), «Abrir la terminal del sistema» e
-    «Instalar/Comprobar el asistente…»; la ventana Asistente acoplable, con
-    la página «estado» y `ventanas.ini`; y el coste y la ficha en la madre.
+  - **Fase 2, segundo paso: el menú Asistente (17-nov-2026).**
+    `gui/atsw/src/asistente.c`, entre SIM y Ayuda (Alt+A):
+    - «Abrir la terminal del sistema», en la carpeta del proyecto (§5):
+      Windows Terminal o `cmd`, Terminal.app, `$TERMINAL` o
+      `x-terminal-emulator`. La barra dice qué escribir.
+    - «Preparar el proyecto para el asistente…» pregunta los clientes y
+      escribe `AGENTS.md`, `CLAUDE.md`, `.mcp.json`, `.claude/settings.json`,
+      `.gemini/settings.json` e `instrucciones_servidor.md`. Lo que ya existe
+      no se toca y se enseña el bloque. Codex y CodeWhale, globales: se enseña
+      el bloque, no se escribe fuera del proyecto. Sin claves.
+    - «Qué ha hecho el asistente…», los pasos con `por: asistente`.
+    - «Instalar el asistente…» (uv sync del `uv.lock` de `mcp/atsw_mcp` en la
+      carpeta de usuario, §6.2) o «Comprobar el asistente…» (servidores y
+      versión, uv, clientes y si el proyecto está preparado).
+    - La comprobación de arranque mira los servidores, además de uv.
+    Prueba: la fase `asistente_menu` de test_gui.
+  - **Falta para que «Instalar» funcione con el paquete**: que el paquete
+    lleve `uv` y la fuente de `mcp/atsw_mcp` (`share/atsw/mcp/atsw_mcp`, que
+    la madre ya busca). Hoy solo funciona desde el árbol, o con `uv` en el
+    PATH.
+  - Lo que queda de la fase 2: la ventana Asistente acoplable, con la página
+    «estado» y `ventanas.ini` (y en el menú, «Ventana del asistente» y
+    «Acoplar a la madre»); y el coste y la ficha en la madre.
 
 ---
 

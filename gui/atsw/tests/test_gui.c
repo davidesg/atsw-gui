@@ -40,6 +40,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <glib/gstdio.h>
 #ifdef _WIN32
 #  include <sys/utime.h>
 #else
@@ -1034,7 +1035,7 @@ static void instalacion( void )
     check( fue >= 0 && c[fue].ok && strstr( c[fue].ruta, "engines/fue/bin" ),
            "fue se encuentra donde lo busca la madre, en el árbol", fue >= 0 ? c[fue].ruta : NULL );
     g_string_free( falta, TRUE );
-    if ( en_barra( 5, "Comprobar la instalación" ) )
+    if ( en_barra( 6, "Comprobar la instalación" ) )
         {
         GList    *l, *t;
         gboolean  visto = FALSE;
@@ -1058,7 +1059,7 @@ static void ejemplos( void )
     gchar     *pre  = g_build_filename( base, "jenkins_alavi", "MUSKRAT", "work",
                                         "MUSKRAT_m01.pre", NULL );
     GList     *h = gtk_container_get_children( GTK_CONTAINER(A.menubar) );
-    GtkWidget *t = g_list_nth_data( h, 5 ), *e = NULL, *r = NULL;
+    GtkWidget *t = g_list_nth_data( h, 6 ), *e = NULL, *r = NULL;   /* Ayuda */
     int        vez;
 
     g_list_free( h );
@@ -3155,6 +3156,140 @@ static Proyecto *relee_manifiesto( void )
 
 static gchar *cuaderno_md( void );
 
+/* --- FASE 2: EL MENU ASISTENTE (ESTUDIO-terminal-mcp §5 y §7.1) ---------- */
+static gboolean menu_tiene( GtkWidget *m, const char *txt )
+{
+    GList   *h = gtk_container_get_children( GTK_CONTAINER(m) ), *l;
+    gboolean si = FALSE;
+
+    for ( l = h; l && !si; l = l->next )
+        if ( GTK_IS_MENU_ITEM(l->data) )
+            {
+            const char *t = gtk_menu_item_get_label( GTK_MENU_ITEM(l->data) );
+            si = t && strstr( t, txt ) != NULL;
+            }
+    g_list_free( h );
+    return si;
+}
+
+static gchar *lee_de( const char *raiz, const char *rel )
+{
+    gchar *f = g_build_filename( raiz, rel, NULL ), *c = NULL;
+
+    g_file_get_contents( f, &c, NULL, NULL );
+    g_free( f );
+    return c;
+}
+
+static void asistente_menu( void )
+{
+    GtkWidget *m = gtk_menu_new();
+    char       raiz[PR_RUTA];
+    GString   *inf = g_string_new( NULL );
+    gchar     *ag, *mcp, *cl, *gem, *set;
+    int        i, n;
+    static const char *const esc[] = { "AGENTS.md", "CLAUDE.md", ".mcp.json",
+                                       ".claude/settings.json", ".gemini/settings.json" };
+
+    g_object_ref_sink( m );
+    atsw_menu_asistente( &A, m );
+    check( menu_tiene( m, "Abrir la terminal del sistema" ) &&
+           menu_tiene( m, "Preparar el proyecto para el asistente" ) &&
+           menu_tiene( m, "Qué ha hecho el asistente" ) &&
+           menu_tiene( m, "Comprobar el asistente" ),
+           "el menú Asistente tiene sus entradas", NULL );
+    g_object_unref( m );
+
+    check( pr_raiz( A.p, raiz, sizeof raiz ) == 0, "(la raíz del proyecto)", NULL );
+
+    /* EL AGENTS.md DEL USUARIO NO SE PISA. */
+    {
+    gchar *f = g_build_filename( raiz, "AGENTS.md", NULL );
+    g_file_set_contents( f, "# Solo el carril guiado\n", -1, NULL );
+    g_free( f );
+    }
+    atsw_asistente_prepara( &A, AS_CLAUDE | AS_GEMINI | AS_CODEX, inf );
+    ag = lee_de( raiz, "AGENTS.md" );
+    check( ag && !strcmp( ag, "# Solo el carril guiado\n" ), "un AGENTS.md que ya había no se pisa", ag );
+    check( strstr( inf->str, "no se han tocado: AGENTS.md" ) != NULL, "y el informe lo dice", inf->str );
+    g_free( ag );
+
+    /* EL ANDAMIAJE, sin AGENTS.md previo: se escribe entero. */
+    {
+    gchar *f = g_build_filename( raiz, "AGENTS.md", NULL );
+    g_unlink( f );
+    g_free( f );
+    }
+    g_string_truncate( inf, 0 );
+    atsw_asistente_prepara( &A, AS_CLAUDE | AS_GEMINI | AS_CODEX, inf );
+    ag  = lee_de( raiz, "AGENTS.md" );
+    cl  = lee_de( raiz, "CLAUDE.md" );
+    mcp = lee_de( raiz, ".mcp.json" );
+    set = lee_de( raiz, ".claude/settings.json" );
+    gem = lee_de( raiz, ".gemini/settings.json" );
+    check( ag && strlen( ag ) < 50 * 1024 && strstr( ag, "proyecto.yaml" ),
+           "AGENTS.md, por debajo de 50 KB", NULL );
+    check( cl && !strcmp( cl, "@AGENTS.md\n" ), "CLAUDE.md apunta a AGENTS.md", cl );
+    check( mcp && strstr( mcp, "\"mcpServers\"" ) && strstr( mcp, "\"atsw-us\"" ) &&
+           strstr( mcp, "\"atsw-sis\"" ) && strstr( mcp, "ATSW_BIN" ) && strstr( mcp, "ATSW_GUI" ),
+           ".mcp.json con los tres servidores y las rutas del paquete", mcp );
+    check( set && strstr( set, "mcp__atsw-us" ) && strstr( set, "\"Bash\"" ),
+           ".claude/settings.json permite los servidores y niega ejecutar", set );
+    check( gem && strstr( gem, "\"timeout\": 600000" ) && strstr( gem, "AGENTS.md" ),
+           ".gemini/settings.json con su timeout y AGENTS.md", gem );
+    check( strstr( inf->str, "[mcp_servers.atsw-us]" ) && strstr( inf->str, "config.toml" ),
+           "Codex, global: el informe enseña su bloque y no se escribe nada fuera", NULL );
+    for ( i = 0; i < (int) G_N_ELEMENTS(esc); i++ )
+        {
+        gchar *c = lee_de( raiz, esc[i] );
+        gboolean limpio = c && !strstr( c, "API_KEY" ) && !strstr( c, "apiKey" ) &&
+                          !strstr( c, "sk-" ) && !strstr( c, "TOKEN" );
+        char q[96];
+
+        g_snprintf( q, sizeof q, "%s no lleva claves", esc[i] );
+        check( limpio, q, NULL );
+        g_free( c );
+        }
+    g_free( ag ); g_free( cl ); g_free( mcp ); g_free( set ); g_free( gem );
+
+    /* OTRA VEZ: lo que ya está no se pisa, y se enseña el bloque. */
+    g_string_truncate( inf, 0 );
+    atsw_asistente_prepara( &A, AS_CLAUDE, inf );
+    check( strstr( inf->str, ".mcp.json" ) && strstr( inf->str, "— Claude Code, en .mcp.json" ),
+           "una segunda vez no pisa .mcp.json y enseña el bloque", inf->str );
+    g_string_free( inf, TRUE );
+
+    /* LA TERMINAL: la orden, no la ventana (en la CI no se abre nada). */
+    {
+    gchar **v;
+#if defined(G_OS_WIN32)
+    v = atsw_terminal_orden( raiz );
+    check( v && v[0] && g_strv_contains( (const gchar *const *) v, raiz ),
+           "la terminal se abre en la carpeta del proyecto", v ? v[0] : "(nada)" );
+#elif defined(__APPLE__)
+    v = atsw_terminal_orden( raiz );
+    check( v && !strcmp( v[0], "open" ) && !strcmp( v[2], "Terminal" ) && !strcmp( v[3], raiz ),
+           "la terminal: open -a Terminal en el proyecto", v ? v[0] : "(nada)" );
+#else
+    gchar *antes = g_strdup( g_getenv( "TERMINAL" ) );
+    g_setenv( "TERMINAL", "sh", TRUE );
+    v = atsw_terminal_orden( raiz );
+    check( v && g_str_has_suffix( v[0], "/sh" ) && v[1] == NULL,
+           "la terminal: la de $TERMINAL, abierta en la carpeta del proyecto", v ? v[0] : "(nada)" );
+    if ( antes ) g_setenv( "TERMINAL", antes, TRUE ); else g_unsetenv( "TERMINAL" );
+    g_free( antes );
+#endif
+    g_strfreev( v );
+    }
+
+    /* QUE HA HECHO EL ASISTENTE: lo que lleva por: asistente. */
+    for ( i = 0, n = 0; i < A.p->nm; i++ )
+        n += !strcmp( A.p->m[i].por, "asistente" ) ||
+             ( A.p->m[i].elegido && !strcmp( A.p->m[i].por_elegido, "asistente" ) );
+    check( n > 0 && atsw_asistente_pasos( A.p, NULL ) == n,
+           "«Qué ha hecho el asistente» cuenta sus pasos", NULL );
+}
+
 /* --- FASE 2: LO QUE HACE EL ASISTENTE, EN VIVO (ESTUDIO-terminal-mcp §7.3) */
 /* Un modelo que el asistente escribe POR FUERA --otro Proyecto, al disco,
    como atsw-cli-- aparece en la rejilla sin tocar la ventana (sin foco ni
@@ -4126,19 +4261,20 @@ static int fila_de( GtkWidget *tv, int col, const char *v )
 
 static void menus_barra( void )
 {
-    static const char *rot[] = { "_Proyecto", "_Datos", "_US", "_MT", "_SIM", "A_yuda" };
+    static const char *rot[] = { "_Proyecto", "_Datos", "_US", "_MT", "_SIM", "_Asistente", "A_yuda" };
     static const char *glo[] = { "Proyecto —", "Datos —",
                                  "US — Modelo univariante (Box-Jenkins), con fue y fuf",
                                  "MT — Transferencia multivariante, con drtran",
                                  "SIM — Sistemas simultáneos, con drvarma (VARMA) y drvec (VEC)",
+                                 "Asistente — un cliente de LLM con los MCP de ATSW",
                                  "Ayuda —" };
     GtkMenu   *m;
     GtkWidget *mi;
     int        i;
 
-    /* --- los seis títulos, con su nombre completo en el globo --------- */
+    /* --- los siete títulos, con su nombre completo en el globo -------- */
     check( A.menubar && GTK_IS_MENU_BAR(A.menubar), "la madre tiene barra de menús", NULL );
-    for ( i = 0; i < 6; i++ )
+    for ( i = 0; i < 7; i++ )
         {
         GtkWidget  *t = titulo_de( i );
         const char *r = t ? gtk_menu_item_get_label( GTK_MENU_ITEM(t) ) : NULL;
@@ -4150,7 +4286,7 @@ static void menus_barra( void )
                g ? g : r );
         g_free( q ); g_free( g );
         }
-    check( titulo_de( 6 ) == NULL, "y sólo seis: VARMA y VEC van los dos en SIM (DISENO-sim.md)", NULL );
+    check( titulo_de( 7 ) == NULL, "y sólo siete: VARMA y VEC van los dos en SIM (DISENO-sim.md)", NULL );
 
     /* --- US y los dos contextuales ------------------------------------ */
     gtk_notebook_set_current_page( GTK_NOTEBOOK(A.libro), 0 );
@@ -5103,6 +5239,7 @@ int main( int argc, char **argv )
             fase( "trabajos" ); trabajos();
             fase( "ruta_u" ); ruta_u();
             fase( "asistente_vigila" ); asistente_vigila();
+            fase( "asistente_menu" ); asistente_menu();
             }
         }
     fase( "ejemplos" ); ejemplos();

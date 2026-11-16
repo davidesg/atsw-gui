@@ -1893,7 +1893,7 @@ static void on_cuaderno( GtkButton *b, Atsw *a ) { (void) b; atsw_cuaderno( a );
 /* ------------------------------------------------------------------------ */
 /* LA BARRA DE MENUS (ESTUDIO-madre-organizacion §3)                         */
 /*                                                                           */
-/* Proyecto · Datos · US · MT · Ayuda. Por CLASE de modelo y no por objeto:  */
+/* Proyecto · Datos · US · MT · SIM · Asistente · Ayuda. Por CLASE de modelo y no por objeto:  */
 /* las series y sus modelos son US y los casos y los suyos son MT, y decirlo */
 /* asi enseña que hay una escalera y en que peldaño se esta. VARMA y VECM    */
 /* entran con sus GUI (§3.5): una entrada que nunca se enciende enseña que   */
@@ -2309,6 +2309,11 @@ static const struct { const char *rotulo, *globo, *acel; Llena llena; } TITULOS[
       "sistema marcado: varias series que se explican entre sí, cada una con "
       "su modelo univariante. Se estima en sim_gui, con la puerta primero.",
       "<Alt>s", atsw_menu_sim },
+    { "_Asistente",
+      "Asistente — un cliente de LLM con los MCP de ATSW, en una terminal\n\n"
+      "Preparar el proyecto para el asistente, abrir la terminal en su carpeta, "
+      "ver lo que ha hecho, e instalarlo o comprobarlo.",
+      "<Alt>a", atsw_menu_asistente },
     { "A_yuda",
       "Ayuda — el manual, las teclas, los ejemplos y «Acerca de»\n\nF1 abre el manual.",
       "<Alt>y", llena_ayuda } };

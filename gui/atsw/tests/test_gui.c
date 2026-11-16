@@ -3156,6 +3156,99 @@ static Proyecto *relee_manifiesto( void )
 
 static gchar *cuaderno_md( void );
 
+/* --- FASE 2: EL COSTE Y LA FICHA EN LA MADRE (ESTUDIO-terminal-mcp §7.7-8) */
+static GtkWidget *etiqueta_seleccionable( GtkWidget *w )
+{
+    GList     *l, *h;
+    GtkWidget *r = NULL;
+
+    if ( GTK_IS_LABEL(w) && gtk_label_get_selectable( GTK_LABEL(w) ) ) return w;
+    if ( !GTK_IS_CONTAINER(w) ) return NULL;
+    h = gtk_container_get_children( GTK_CONTAINER(w) );
+    for ( l = h; l && !r; l = l->next ) r = etiqueta_seleccionable( l->data );
+    g_list_free( h );
+    return r;
+}
+
+static void ficha_madre( void )
+{
+    gchar     *cli = atsw_programa( "atsw-cli" ), *out = NULL, *md = NULL, *pg;
+    gchar     *argv[] = { cli, A.p->path, (gchar *) "ficha", (gchar *) "ipc", (gchar *) "m01", NULL };
+    gchar     *lin;
+    GtkWidget *w, *l;
+    gint       st = 1;
+    char       why[256];
+
+    /* atsw-cli ficha P SERIE MODELO: la orden es «ficha P S M». */
+    argv[1] = (gchar *) "ficha"; argv[2] = A.p->path;
+    check( cli && g_spawn_sync( NULL, argv, NULL, G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL,
+                                &out, NULL, &st, NULL ) && st == 0 && out && *out,
+           "(atsw-cli ficha corre)", out );
+
+    atsw_ficha( &A, "ipc", "", "m01" );
+    pump( 100 );
+    w = GTK_WIDGET(ventana_titulada( "Ficha de confianza — ipc / m01" ));
+    l = w ? etiqueta_seleccionable( w ) : NULL;
+    pg = out ? atsw_md_pango( g_strchomp( out ) ) : NULL;
+    {
+    gchar *mio = l ? g_strdup( gtk_label_get_label( GTK_LABEL(l) ) ) : NULL;
+    check( w && mio && pg && !strcmp( g_strchomp( mio ), pg ),
+           "Diagnosticar ▸ Ficha de confianza: la misma ficha que atsw-cli", mio );
+    g_free( mio );
+    }
+
+    /* AL CUADERNO, UNA VEZ por pulsación. */
+    md = out ? g_strdup( out ) : g_strdup( "" );
+    {
+    gchar *antes = cuaderno_md(), *despues;
+    int    k = 0;
+    const char *p;
+
+    check( atsw_ficha_al_cuaderno( &A, "ipc", "", "m01", md, why, sizeof why ) == 0,
+           "«Al cuaderno» escribe", why );
+    despues = cuaderno_md();
+    for ( p = despues ? despues + ( antes ? strlen( antes ) : 0 ) : NULL;
+          p && ( p = strstr( p, "Ficha de confianza — ipc / m01" ) ); p++ ) k++;
+    check( k == 1, "y añade la ficha una sola vez", despues );
+    g_free( antes ); g_free( despues );
+    }
+    if ( w ) gtk_widget_destroy( w );
+
+    lin = atsw_coste_linea( &A, "ipc", "", "m01" );
+    check( lin && g_str_has_prefix( lin, "Coste: " ), "«Ver modelo…» lleva la línea de coste", lin );
+    g_free( lin );
+
+    /* EL LINAJE, CON EL COSTE de cada paso y el del camino. */
+    atsw_linaje( &A );
+    pump( 100 );
+    w = GTK_WIDGET(ventana_titulada( "Linaje" ));
+    {
+    gboolean cpu = FALSE, camino = FALSE;
+    GList   *h = NULL, *x;
+
+    if ( w )
+        {
+        GtkWidget *tv = NULL;
+        GList     *t = gtk_container_get_children( GTK_CONTAINER(gtk_bin_get_child( GTK_BIN(w) )) );
+
+        for ( x = t; x && !tv; x = x->next )
+            if ( GTK_IS_SCROLLED_WINDOW(x->data) ) tv = gtk_bin_get_child( GTK_BIN(x->data) );
+        g_list_free( t );
+        if ( tv && GTK_IS_TREE_VIEW(tv) ) h = gtk_tree_view_get_columns( GTK_TREE_VIEW(tv) );
+        }
+    for ( x = h; x; x = x->next )
+        {
+        const char *ti = gtk_tree_view_column_get_title( x->data );
+        cpu    |= !g_strcmp0( ti, "CPU" );
+        camino |= !g_strcmp0( ti, "Camino" );
+        }
+    g_list_free( h );
+    check( cpu && camino, "el linaje enseña el coste de cada paso y el del camino", NULL );
+    }
+    if ( w ) gtk_widget_destroy( w );
+    g_free( cli ); g_free( out ); g_free( md ); g_free( pg );
+}
+
 /* --- FASE 2: LA VENTANA ASISTENTE, ACOPLABLE (ESTUDIO-terminal-mcp §7.6) -- */
 static void asistente_ventana( void )
 {
@@ -5319,6 +5412,7 @@ int main( int argc, char **argv )
             fase( "asistente_vigila" ); asistente_vigila();
             fase( "asistente_menu" ); asistente_menu();
             fase( "asistente_ventana" ); asistente_ventana();
+            fase( "ficha" ); ficha_madre();
             }
         }
     fase( "ejemplos" ); ejemplos();

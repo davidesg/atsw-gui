@@ -866,6 +866,17 @@ static void on_grafico( GtkMenuItem *m, Atsw *a )
         barra_pub( a, t );
         g_free( t );
         }
+    else      /* LO QUE COSTO, al pie (ESTUDIO-terminal-mcp §7.7) */
+        atsw_coste_pie( a, f, a->serie, atsw_muestra_actual( a ), id );
+    g_free( id );
+}
+
+static void on_ficha( GtkMenuItem *m, Atsw *a )
+{
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    (void) m;
+    if ( a->hay && a->serie[0] && id ) atsw_ficha( a, a->serie, atsw_muestra_actual( a ), id );
     g_free( id );
 }
 
@@ -1551,6 +1562,15 @@ static void sec_diagnosticar( Atsw *a, GtkWidget *menu, const char *id )
           "estacional escondido.\n\nDesde ella se deriva el modelo "
           "factorizado."
         : porque, G_CALLBACK(on_factores), a );
+    gtk_widget_set_sensitive( mi, listo );
+
+    /* LA FICHA DE CONFIANZA, al final del submenu: resume lo de arriba. */
+    mi = atsw_entrada( a, sub, "Ficha de confianza…", listo
+        ? "Lo que hace falta para fiarse de este modelo, o no: el recorrido con "
+          "quién dio cada paso (analista o asistente), la adecuación, si se "
+          "reproduce y lo que costó. Sale del linaje, del .out y de costes.csv; "
+          "lo que no se hizo dice «no consta»."
+        : porque, G_CALLBACK(on_ficha), a );
     gtk_widget_set_sensitive( mi, listo );
 
     {

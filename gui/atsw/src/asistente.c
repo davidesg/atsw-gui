@@ -798,10 +798,27 @@ static void on_que_ha_hecho( GtkMenuItem *mi, Atsw *a )
     gtk_container_add( GTK_CONTAINER(sc), tv );
     gtk_box_pack_start( GTK_BOX(caja), sc, TRUE, TRUE, 0 );
 
-    t = n ? g_strdup_printf( "%d paso%s del asistente, leídos del manifiesto (por: asistente). "
-                             "Lo que hace el analista no lleva marca. El recorrido entero, "
-                             "en Proyecto ▸ Linaje.", n, n == 1 ? "" : "s" )
+    /* LA PARTE DEL ASISTENTE EN EL PROYECTO (§7.8): de los pasos --los
+       modelos que no son datos--, cuantos dio el asistente. No limita
+       nada: lo deja a la vista.                                       */
+    {
+    int pasos = 0, suyos = 0;
+
+    for ( i = 0; i < a->p->nm; i++ )
+        {
+        const PrModelo *m = &a->p->m[i];
+
+        if ( pr_es_datos( a->p, m->serie, m->muestra, m->id ) ) continue;
+        pasos++;
+        suyos += !strcmp( m->por, "asistente" );
+        }
+    t = n ? g_strdup_printf( "%d de %d paso%s del proyecto los dio el asistente (%d %%); el resto, "
+                             "el analista. Leído del manifiesto (por: asistente): lo que hace "
+                             "el analista no lleva marca. El recorrido entero, en Proyecto ▸ "
+                             "Linaje.", suyos, pasos, pasos == 1 ? "" : "s",
+                             pasos ? (int) ( 100.0 * suyos / pasos + 0.5 ) : 0 )
           : g_strdup( "El asistente no ha hecho nada en este proyecto." );
+    }
     pie = gtk_label_new( t );
     g_free( t );
     gtk_label_set_xalign( GTK_LABEL(pie), 0.0 );

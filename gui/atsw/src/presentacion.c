@@ -145,9 +145,25 @@ int atsw_comprueba( AtComprob *c, int max )
     if ( n < max ) cargador( &c[n++], "png", "las imágenes PNG", FALSE );
     if ( n < max ) cargador( &c[n++], "svg", "los iconos SVG de las barras", TRUE );
     if ( n < max ) escritorio( &c[n++] );
-    /* EL ASISTENTE (ESTUDIO-terminal-mcp §6.3): opcional; se instala con uv. */
+    /* EL ASISTENTE (ESTUDIO-terminal-mcp §6.3): opcional; sus servidores, y
+       uv, con el que se instala. Lo opcional no se pinta como error.    */
+    if ( n < max )
+        {
+        gchar *s = atsw_asistente_servidor( "atsw-us" );
+
+        memset( &c[n], 0, sizeof c[n] );
+        g_snprintf( c[n].grupo, sizeof c[n].grupo, "Asistente" );
+        g_snprintf( c[n].que, sizeof c[n].que, "atsw-us, atsw-mt, atsw-sis" );
+        c[n].opcional = TRUE;
+        c[n].ok = s != NULL;
+        if ( s ) g_snprintf( c[n].ruta, sizeof c[n].ruta, "%s", s );
+        else     g_snprintf( c[n].arreglo, sizeof c[n].arreglo, "El asistente es opcional y no "
+                             "está instalado: Asistente ▸ Instalar el asistente…" );
+        g_free( s );
+        n++;
+        }
     if ( n < max ) programa( &c[n++], "Asistente", "uv", TRUE,
-                             "El asistente es opcional y no está instalado: hace falta uv "
+                             "Hace falta para instalar el asistente "
                              "(https://docs.astral.sh/uv/)." );
     return n;
 }

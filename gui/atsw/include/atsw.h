@@ -440,6 +440,22 @@ gboolean   atsw_relee( Atsw *a, char *why, size_t n );
 void       atsw_vigila( Atsw *a );
 void       atsw_vigila_para( void );
 
+/* asistente.c: el menu Asistente (ESTUDIO-terminal-mcp §5, §6.2, §7.1). */
+enum { AS_CLAUDE = 1, AS_GEMINI = 2, AS_CODEX = 4, AS_CODEWHALE = 8 };
+void       atsw_menu_asistente( Atsw *a, GtkWidget *m );
+gchar     *atsw_asistente_dir( void );
+gchar     *atsw_asistente_servidor( const char *nombre );
+gboolean   atsw_asistente_instalado( void );
+/* Los servidores en el formato de un cliente: 0 Claude Code (.mcp.json),
+   1 Gemini CLI, 2 CodeWhale, 3 Codex (TOML).                          */
+gchar     *atsw_asistente_bloque( int formato );
+/* Escribe el andamiaje para los clientes AS_*; lo hecho, en informe. */
+int        atsw_asistente_prepara( Atsw *a, unsigned clientes, GString *informe );
+gchar    **atsw_terminal_orden( const char *dir );
+gchar     *atsw_asistente_informe( Atsw *a );
+/* Los pasos del asistente (por: asistente) en st, si no es NULL. Cuantos. */
+int        atsw_asistente_pasos( const Proyecto *p, GtkListStore *st );
+
 /* Escribe el manifiesto Y APUNTA SU HUELLA. Lo segundo no es un detalle: sin
    ello, el proximo foco releeria nuestra propia escritura creyendo que la
    hizo otro -- y lo diria.                                             */

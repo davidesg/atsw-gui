@@ -3156,6 +3156,77 @@ static Proyecto *relee_manifiesto( void )
 
 static gchar *cuaderno_md( void );
 
+/* --- FASE 2: LA VENTANA ASISTENTE, ACOPLABLE (ESTUDIO-terminal-mcp §7.6) -- */
+static void asistente_ventana( void )
+{
+    GtkWidget *linea = A.asis_linea, *pasos = A.asis_pasos;
+    gchar     *ini = NULL, *txt = NULL;
+    gboolean   bien = TRUE;
+    int        i, filas;
+
+    atsw_asistente_muestra( &A, TRUE );
+    pump( 100 );
+    check( A.asis && gtk_widget_get_parent( A.asis ) == A.fuera && gtk_widget_get_visible( A.asis ),
+           "Ventana del asistente: aparece acoplada, a la derecha de la madre", NULL );
+    filas = gtk_tree_model_iter_n_children( gtk_tree_view_get_model( GTK_TREE_VIEW(A.asis_pasos) ), NULL );
+    check( filas > 0 && filas == MIN( atsw_asistente_pasos( A.p, NULL ), 8 ),
+           "y enseña lo último que ha hecho el asistente", NULL );
+    txt = g_strdup( gtk_label_get_text( GTK_LABEL(linea) ) );
+
+    /* DIEZ VECES SUELTA Y PEGADA: el contenido es el mismo y no se pierde. */
+    for ( i = 0; i < 10 && bien; i++ )
+        {
+        atsw_asistente_acopla( &A, FALSE );
+        pump( 30 );
+        bien = gtk_widget_get_parent( A.asis ) == A.asis_win && gtk_widget_get_visible( A.asis_win );
+        atsw_asistente_acopla( &A, TRUE );
+        pump( 30 );
+        bien = bien && gtk_widget_get_parent( A.asis ) == A.fuera && !gtk_widget_get_visible( A.asis_win );
+        }
+    check( bien, "acoplar y desacoplar diez veces la mueve entre la madre y su ventana", NULL );
+    check( A.asis_linea == linea && GTK_IS_LABEL(linea) && A.asis_pasos == pasos &&
+           gtk_widget_is_ancestor( linea, A.asis ) &&
+           !g_strcmp0( gtk_label_get_text( GTK_LABEL(linea) ), txt ),
+           "sin perder el contenido: los mismos widgets, con lo mismo dentro", NULL );
+    g_free( txt );
+
+    /* CERRAR LA SUELTA LA ESCONDE, no la destruye. */
+    atsw_asistente_acopla( &A, FALSE );
+    pump( 30 );
+    {
+    GdkEvent *ev = gdk_event_new( GDK_DELETE );
+    gboolean  r = FALSE;
+
+    ev->any.window = g_object_ref( gtk_widget_get_window( A.asis_win ) );
+    g_signal_emit_by_name( A.asis_win, "delete-event", ev, &r );
+    gdk_event_free( ev );
+    pump( 30 );
+    check( r && GTK_IS_WINDOW(A.asis_win) && !gtk_widget_get_visible( A.asis_win ) &&
+           !atsw_asistente_visible( &A ) && gtk_widget_get_parent( A.asis ) == A.asis_win,
+           "cerrar la ventana suelta la esconde, con su contenido dentro", NULL );
+    }
+
+    /* AL VOLVER AL PROYECTO, COMO ESTABA: suelta y visible. */
+    atsw_asistente_muestra( &A, TRUE );
+    pump( 30 );
+    A.asis_acoplado = TRUE; A.asis_visible = FALSE;       /* lo que fuera */
+    atsw_asistente_restaura( &A );
+    pump( 30 );
+    check( !atsw_asistente_acoplado( &A ) && atsw_asistente_visible( &A ) &&
+           gtk_widget_get_parent( A.asis ) == A.asis_win,
+           "al reabrir el proyecto, la ventana Asistente vuelve como estaba", NULL );
+    g_file_get_contents( g_getenv( "ATSW_VENTANAS_INI" ), &ini, NULL, NULL );
+    check( ini && strstr( ini, "asistente_acoplado=false" ) && !strstr( ini, "proyecto.yaml" ),
+           "el estado va en ventanas.ini, del usuario, y no en el proyecto", ini );
+    g_free( ini );
+
+    /* Y SE DEJA COMO SE ENCONTRO: acoplada y escondida. */
+    atsw_asistente_acopla( &A, TRUE );
+    atsw_asistente_muestra( &A, FALSE );
+    pump( 30 );
+    check( !gtk_widget_get_visible( A.asis ), "escondida, la madre recupera su ancho", NULL );
+}
+
 /* --- FASE 2: EL MENU ASISTENTE (ESTUDIO-terminal-mcp §5 y §7.1) ---------- */
 static gboolean menu_tiene( GtkWidget *m, const char *txt )
 {
@@ -5194,6 +5265,13 @@ int main( int argc, char **argv )
         return 0;
     }
 
+    /* LA VENTANA ASISTENTE GUARDA SU ESTADO en la configuracion del usuario:
+       la prueba, en la suya, que se borra con lo demas.                */
+    {
+    gchar *ini = g_build_filename( T, "ventanas.ini", NULL );
+    g_setenv( "ATSW_VENTANAS_INI", ini, TRUE );
+    g_free( ini );
+    }
     g_thread_new( "vigilante", vigilante, GINT_TO_POINTER(170) );
     historial = g_ptr_array_new_with_free_func( g_free );
     contestados = g_hash_table_new( NULL, NULL );
@@ -5240,6 +5318,7 @@ int main( int argc, char **argv )
             fase( "ruta_u" ); ruta_u();
             fase( "asistente_vigila" ); asistente_vigila();
             fase( "asistente_menu" ); asistente_menu();
+            fase( "asistente_ventana" ); asistente_ventana();
             }
         }
     fase( "ejemplos" ); ejemplos();

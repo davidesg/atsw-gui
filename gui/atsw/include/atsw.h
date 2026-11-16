@@ -188,6 +188,14 @@ typedef struct {
       (AtHijo, en gestos.c). Se van con ella --vigilan su pid, lib/sitio--
       y al cerrarla se le pregunta al analista si los hay.             */
    GPtrArray *hijos;
+
+   /* LA VENTANA ASISTENTE (asistente_ventana.c, ESTUDIO-terminal-mcp §7.6):
+      un solo contenido (asis) que se mueve entre su ventana suelta (asis_win)
+      y el lado derecho de la madre (fuera, el GtkPaned de fuera). Lo demas,
+      la pagina «estado».                                                  */
+   GtkWidget *fuera, *asis, *asis_win;
+   GtkWidget *asis_estado, *asis_inst, *asis_proy, *asis_pasos, *asis_linea;
+   gboolean   asis_acoplado, asis_visible, asis_inst_hecha;
 } Atsw;
 
 GtkWidget *atsw_ventana_new( GtkApplication *app, Atsw *a );
@@ -455,6 +463,22 @@ gchar    **atsw_terminal_orden( const char *dir );
 gchar     *atsw_asistente_informe( Atsw *a );
 /* Los pasos del asistente (por: asistente) en st, si no es NULL. Cuantos. */
 int        atsw_asistente_pasos( const Proyecto *p, GtkListStore *st );
+enum { QH_SERIE, QH_MUESTRA, QH_MODELO, QH_QUE, QH_RAZON, QH_COLS };
+void       atsw_asistente_terminal( Atsw *a );
+void       atsw_asistente_preparar( Atsw *a );
+void       atsw_asistente_que_ha_hecho( Atsw *a );
+
+/* asistente_ventana.c: la ventana Asistente, acoplable (§7.6). */
+GtkWidget *atsw_asistente_fuera( Atsw *a, GtkWidget *madre );
+void       atsw_asistente_muestra( Atsw *a, gboolean si );
+void       atsw_asistente_acopla( Atsw *a, gboolean si );
+gboolean   atsw_asistente_visible( Atsw *a );
+gboolean   atsw_asistente_acoplado( Atsw *a );
+void       atsw_asistente_refresca( Atsw *a );
+/* El estado por proyecto, en ventanas.ini (g_get_user_config_dir()/atsw/;
+   ATSW_VENTANAS_INI lo cambia, para las pruebas).                     */
+void       atsw_asistente_guarda_estado( Atsw *a );
+void       atsw_asistente_restaura( Atsw *a );
 
 /* Escribe el manifiesto Y APUNTA SU HUELLA. Lo segundo no es un detalle: sin
    ello, el proximo foco releeria nuestra propia escritura creyendo que la

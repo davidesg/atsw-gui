@@ -140,6 +140,8 @@ static gboolean al_rato( gpointer d )
 
     /* Los .out se releen aqui, por su huella: si no se movieron, nada. */
     atsw_refresca( a );
+    /* Y lo ultimo del asistente, en su ventana (§7.6). */
+    atsw_asistente_refresca( a );
     g_hash_table_destroy( antes );
     g_hash_table_destroy( eleg );
     return G_SOURCE_REMOVE;

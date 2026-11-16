@@ -2468,6 +2468,23 @@ static GtkWidget *barra_de_menus( Atsw *a )
     return mb;
 }
 
+static gboolean on_atajo_asistente( GtkAccelGroup *g, GObject *o, guint k,
+                                    GdkModifierType m, Atsw *a )
+{
+    (void) g; (void) o; (void) k; (void) m;
+    atsw_asistente_muestra( a, !atsw_asistente_visible( a ) );
+    return TRUE;
+}
+
+/* AL CERRAR, el estado de la ventana Asistente de este proyecto. Va detras
+   de on_cierra_madre: si el analista cancela, no se llega aqui.        */
+static gboolean on_cierra_guarda( GtkWidget *w, GdkEvent *ev, Atsw *a )
+{
+    (void) w; (void) ev;
+    atsw_asistente_guarda_estado( a );
+    return FALSE;
+}
+
 static gboolean on_atajo_relee( GtkAccelGroup *g, GObject *o, guint k,
                                 GdkModifierType m, Atsw *a )
 {
@@ -2665,7 +2682,9 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_box_pack_start( GTK_BOX(caja), a->menubar, FALSE, FALSE, 0 );
     raiz = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     gtk_container_set_border_width( GTK_CONTAINER(raiz), 8 );
-    gtk_box_pack_start( GTK_BOX(caja), raiz, TRUE, TRUE, 0 );
+    /* EL GTKPANED DE FUERA (ESTUDIO-terminal-mcp §7.6): lo de siempre a la
+       izquierda y, acoplada, la ventana Asistente a la derecha.        */
+    gtk_box_pack_start( GTK_BOX(caja), atsw_asistente_fuera( a, raiz ), TRUE, TRUE, 0 );
     }
 
     /* --- la barra --- */
@@ -2704,6 +2723,9 @@ static void activate( GtkApplication *app, gpointer d )
                              g_cclosure_new( G_CALLBACK(on_atajo_sale), a, NULL ) );
     gtk_accel_group_connect( atajos, GDK_KEY_e, prim, 0,
                              g_cclosure_new( G_CALLBACK(on_atajo_estima), a, NULL ) );
+    /* Ctrl+Mayús+A, la ventana Asistente (§7.1). */
+    gtk_accel_group_connect( atajos, GDK_KEY_a, prim | GDK_SHIFT_MASK, 0,
+                             g_cclosure_new( G_CALLBACK(on_atajo_asistente), a, NULL ) );
     /* F1, el manual: en TASTE decia «NO HAY AYUDA DISPONIBLE». */
     gtk_accel_group_connect( atajos, GDK_KEY_F1, 0, 0,
                              g_cclosure_new( G_CALLBACK(on_atajo_manual), a, NULL ) );
@@ -2918,6 +2940,8 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_box_pack_start( GTK_BOX(raiz), pie, FALSE, FALSE, 0 );
     }
 
+    g_signal_connect( w, "delete-event", G_CALLBACK(on_cierra_guarda), a );
+    atsw_asistente_restaura( a );
     atsw_refresca( a );
     /* Los menus nacen llenos: se rehacen al abrirse, pero un menu vacio
        no deberia asomar nunca, ni la primera vez.                     */

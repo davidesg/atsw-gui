@@ -3185,6 +3185,14 @@ static void ficha_madre( void )
                                 &out, NULL, &st, NULL ) && st == 0 && out && *out,
            "(atsw-cli ficha corre)", out );
 
+    /* EN WINDOWS, atsw-cli escribe en modo texto: \r\n. El Markdown es el
+       mismo; los finales de linea, del sistema.                     */
+    if ( out )
+        {
+        char *r, *w;
+        for ( r = w = out; *r; r++ ) if ( *r != '\r' ) *w++ = *r;
+        *w = '\0';
+        }
     atsw_ficha( &A, "ipc", "", "m01" );
     pump( 100 );
     w = GTK_WIDGET(ventana_titulada( "Ficha de confianza — ipc / m01" ));

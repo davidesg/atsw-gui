@@ -46,6 +46,9 @@ static const char *const SERVIDORES[] = { "atsw-us", "atsw-mt", "atsw-sis" };
  * ATSW/asistente, y en Linux ~/.local/share/ATSW/asistente.             */
 gchar *atsw_asistente_dir( void )
 {
+    const char *e = g_getenv( "ATSW_ASISTENTE_DIR" );   /* las pruebas */
+
+    if ( e && *e ) return g_strdup( e );
 #ifdef __APPLE__
     return g_build_filename( g_get_home_dir(), "Library", "Application Support",
                              "ATSW", "asistente", NULL );
@@ -104,12 +107,24 @@ gboolean atsw_asistente_instalado( void )
     return si;
 }
 
-/* La fuente de atsw-gui-mcp, con su uv.lock: en el arbol, o junto al
- * paquete (share/atsw/mcp/atsw_mcp, cuando el paquete la lleve).        */
-static gchar *fuente_mcp( void )
+/* uv: el del paquete, al lado de la madre (packaging/asistente.sh), y si
+ * no, el del PATH. NULL si no esta.                                     */
+gchar *atsw_asistente_uv( void )
+{
+    gchar *r = atsw_programa( "uv" );
+
+    if ( r && g_file_test( r, G_FILE_TEST_IS_EXECUTABLE ) ) return r;
+    g_free( r );
+    return NULL;
+}
+
+/* La fuente de atsw-gui-mcp, con su uv.lock: la del paquete, en
+ * bin/../asistente/atsw_mcp en los tres sistemas (packaging/asistente.sh),
+ * o la del arbol.                                                        */
+gchar *atsw_asistente_fuente( void )
 {
     static const char *const sitios[] = {
-        "../../mcp/atsw_mcp", "../share/atsw/mcp/atsw_mcp", "mcp/atsw_mcp", NULL };
+        "../asistente/atsw_mcp", "../../mcp/atsw_mcp", "mcp/atsw_mcp", NULL };
     gchar *yo = sitio_mi_dir();
     guint  i;
 
@@ -597,7 +612,7 @@ static void on_prepara( GtkMenuItem *mi, Atsw *a )
 gchar *atsw_asistente_informe( Atsw *a )
 {
     GString *t = g_string_new( "LOS SERVIDORES\n\n" );
-    gchar   *dir = atsw_asistente_dir(), *uv = g_find_program_in_path( "uv" );
+    gchar   *dir = atsw_asistente_dir(), *uv = atsw_asistente_uv();
     guint    i;
 
     for ( i = 0; i < NSERV; i++ )
@@ -683,31 +698,141 @@ static void al_instalar( GPid pid, gint st, gpointer d )
     g_free( t ); g_free( x->dir ); g_free( x );
 }
 
+/* COPIA UN ARBOL, sin seguir enlaces. La fuente del paquete puede ser de
+ * solo lectura (/usr/lib, una .app firmada): uv construye sobre la copia. */
+static gboolean copia_arbol( GFile *de, GFile *a, GError **err )
+{
+    GFileEnumerator *en;
+    GFileInfo       *fi;
+    gboolean         ok = TRUE;
+
+    if ( !g_file_make_directory_with_parents( a, NULL, err ) )
+        {
+        if ( !g_error_matches( *err, G_IO_ERROR, G_IO_ERROR_EXISTS ) ) return FALSE;
+        g_clear_error( err );
+        }
+    en = g_file_enumerate_children( de, "standard::name,standard::type",
+                                    G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL, err );
+    if ( en == NULL ) return FALSE;
+    while ( ok && ( fi = g_file_enumerator_next_file( en, NULL, err ) ) != NULL )
+        {
+        const char *n = g_file_info_get_name( fi );
+        GFile      *x = g_file_get_child( de, n ), *y = g_file_get_child( a, n );
+
+        if ( g_file_info_get_file_type( fi ) == G_FILE_TYPE_DIRECTORY )
+            ok = strcmp( n, "__pycache__" ) == 0 || copia_arbol( x, y, err );
+        else if ( g_file_info_get_file_type( fi ) == G_FILE_TYPE_REGULAR )
+            ok = g_file_copy( x, y, G_FILE_COPY_OVERWRITE, NULL, NULL, NULL, err );
+        g_object_unref( x ); g_object_unref( y ); g_object_unref( fi );
+        }
+    g_object_unref( en );
+    return ok && ( err == NULL || *err == NULL );
+}
+
+/* Borra un arbol (la copia de la fuente de una instalacion anterior). */
+static void borra_arbol( GFile *f )
+{
+    GFileEnumerator *en = g_file_enumerate_children( f, "standard::name,standard::type",
+                              G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL, NULL );
+    GFileInfo       *fi;
+
+    while ( en && ( fi = g_file_enumerator_next_file( en, NULL, NULL ) ) != NULL )
+        {
+        GFile *x = g_file_get_child( f, g_file_info_get_name( fi ) );
+
+        if ( g_file_info_get_file_type( fi ) == G_FILE_TYPE_DIRECTORY ) borra_arbol( x );
+        else g_file_delete( x, NULL, NULL );
+        g_object_unref( x ); g_object_unref( fi );
+        }
+    if ( en ) g_object_unref( en );
+    g_file_delete( f, NULL, NULL );
+}
+
+/* LA ORDEN DE LA INSTALACION, preparada: copia la fuente a DIR/fuente y
+ * devuelve la orden de uv y su entorno (g_strfreev los dos) y DIR. Aparte
+ * para la prueba, que la comprueba sin descargar nada. NULL si no se puede,
+ * con el porque en why.
+ *
+ * TODO EN LA CARPETA DEL ASISTENTE (§6.2): el entorno (.venv), el Python que
+ * baje uv (python/) y su cache (cache/). Borrar la carpeta lo quita entero,
+ * y no se toca ni el PATH ni el Python del sistema. El Python, el del ensayo
+ * de la CI (.github/workflows/asistente.yml), con sus versiones fijadas. */
+#define ASISTENTE_PYTHON "3.12"
+
+gchar **atsw_asistente_orden_instalar( gchar ***envp, gchar **dir_out, char *why, size_t n )
+{
+    gchar   *uv = atsw_asistente_uv(), *src = atsw_asistente_fuente();
+    gchar   *dir = atsw_asistente_dir(), *copia;
+    GFile   *de, *a;
+    GError  *err = NULL;
+    gchar  **env, **argv;
+    gboolean ok;
+
+    if ( uv == NULL || src == NULL )
+        {
+        g_snprintf( why, n, "%s", uv ? "No encuentro la fuente del asistente (asistente/atsw_mcp)."
+                                     : "Para instalar el asistente hace falta uv: https://docs.astral.sh/uv/" );
+        g_free( uv ); g_free( src ); g_free( dir );
+        return NULL;
+        }
+    copia = g_build_filename( dir, "fuente", NULL );
+    de = g_file_new_for_path( src );
+    a  = g_file_new_for_path( copia );
+    borra_arbol( a );
+    ok = copia_arbol( de, a, &err );
+    g_object_unref( de ); g_object_unref( a );
+    if ( !ok )
+        {
+        g_snprintf( why, n, "No pude copiar la fuente del asistente a %s: %s", copia,
+                    err ? err->message : "?" );
+        g_clear_error( &err );
+        g_free( uv ); g_free( src ); g_free( dir ); g_free( copia );
+        return NULL;
+        }
+
+    env = g_get_environ();
+    {
+    gchar *venv = g_build_filename( dir, ".venv", NULL );
+    gchar *py   = g_build_filename( dir, "python", NULL );
+    gchar *ca   = g_build_filename( dir, "cache", NULL );
+
+    env = g_environ_setenv( env, "UV_PROJECT_ENVIRONMENT", venv, TRUE );
+    env = g_environ_setenv( env, "UV_PYTHON_INSTALL_DIR", py, TRUE );
+    env = g_environ_setenv( env, "UV_CACHE_DIR", ca, TRUE );
+    g_free( venv ); g_free( py ); g_free( ca );
+    }
+    argv = g_new0( gchar *, 12 );
+    argv[0] = uv;
+    argv[1] = g_strdup( "sync" );
+    argv[2] = g_strdup( "--frozen" );
+    argv[3] = g_strdup( "--no-dev" );
+    argv[4] = g_strdup( "--no-editable" );
+    argv[5] = g_strdup( "--managed-python" );
+    argv[6] = g_strdup( "--python" );
+    argv[7] = g_strdup( ASISTENTE_PYTHON );
+    argv[8] = g_strdup( "--project" );
+    argv[9] = copia;
+    g_free( src );
+    *envp = env;
+    *dir_out = dir;
+    return argv;
+}
+
 static void on_instalar( GtkMenuItem *mi, Atsw *a )
 {
-    gchar   *uv = g_find_program_in_path( "uv" ), *src = fuente_mcp();
-    gchar   *dir = atsw_asistente_dir(), *venv;
-    gchar  **env;
+    gchar  **argv, **env = NULL, *dir = NULL;
+    char     why[512];
     GPid     pid;
     GError  *err = NULL;
 
     (void) mi;
-    if ( uv == NULL || src == NULL )
-        {
-        barra_pub( a, uv ? "No encuentro la fuente del asistente (mcp/atsw_mcp)."
-                         : "Para instalar el asistente hace falta uv: https://docs.astral.sh/uv/" );
-        g_free( uv ); g_free( src ); g_free( dir );
-        return;
-        }
-    g_mkdir_with_parents( dir, 0755 );
-    venv = g_build_filename( dir, ".venv", NULL );
-    env  = g_environ_setenv( g_get_environ(), "UV_PROJECT_ENVIRONMENT", venv, TRUE );
-    {
-    gchar *argv[] = { uv, (gchar *) "sync", (gchar *) "--frozen", (gchar *) "--no-dev",
-                      (gchar *) "--no-editable", (gchar *) "--project", src, NULL };
+    argv = atsw_asistente_orden_instalar( &env, &dir, why, sizeof why );
+    if ( argv == NULL ) { barra_pub( a, why ); return; }
 
-    /* SIN SHELL Y CON LA ENTRADA CERRADA, como lib/engine. */
-    if ( !g_spawn_async( dir, argv, env, G_SPAWN_DO_NOT_REAP_CHILD | G_SPAWN_STDIN_FROM_DEV_NULL,
+    /* SIN SHELL Y CON LA ENTRADA CERRADA, como lib/engine: sin
+       G_SPAWN_CHILD_INHERITS_STDIN, GLib la pone en /dev/null (el flag
+       explicito es de GLib 2.74, y el .deb se compila con la 2.72). */
+    if ( !g_spawn_async( dir, argv, env, G_SPAWN_DO_NOT_REAP_CHILD,
                          NULL, NULL, &pid, &err ) )
         {
         gchar *t = g_strdup_printf( "No pude lanzar uv: %s", err->message );
@@ -721,12 +846,10 @@ static void on_instalar( GtkMenuItem *mi, Atsw *a )
 
         x->a = a; x->dir = g_strdup( dir );
         g_child_watch_add( pid, al_instalar, x );
-        barra_pub( a, "Instalando el asistente con uv: un Python y atsw-gui-mcp. "
-                      "La barra dirá cuándo acaba." );
+        barra_pub( a, "Instalando el asistente con uv: un Python y atsw-gui-mcp, en tu carpeta "
+                      "de usuario. Hace falta la red. La barra dirá cuándo acaba." );
         }
-    }
-    g_strfreev( env );
-    g_free( uv ); g_free( src ); g_free( dir ); g_free( venv );
+    g_strfreev( argv ); g_strfreev( env ); g_free( dir );
 }
 
 /* ------------------------------------------------------------------------ */
@@ -869,7 +992,7 @@ void atsw_menu_asistente( Atsw *a, GtkWidget *m )
 {
     GtkWidget *mi;
     gboolean   inst = atsw_asistente_instalado();
-    gchar     *uv = g_find_program_in_path( "uv" ), *src = fuente_mcp();
+    gchar     *uv = atsw_asistente_uv(), *src = atsw_asistente_fuente();
 
     /* LA VENTANA (§7.6): verla o no, y suelta o pegada a la madre. */
     mi = casilla( a, m, "Ventana del asistente",
@@ -916,7 +1039,7 @@ void atsw_menu_asistente( Atsw *a, GtkWidget *m )
             atsw_apaga( mi, "Hace falta uv (https://docs.astral.sh/uv/). En Windows: "
                             "winget install astral-sh.uv." );
         else if ( src == NULL )
-            atsw_apaga( mi, "Este ATSW no lleva la fuente del asistente (mcp/atsw_mcp)." );
+            atsw_apaga( mi, "Este ATSW no lleva la fuente del asistente (asistente/atsw_mcp, junto a bin/)." );
         atsw_entrada( a, m, "Comprobar el asistente…",
                       "Qué falta del asistente y los clientes que hay.",
                       G_CALLBACK(on_comprobar), a );

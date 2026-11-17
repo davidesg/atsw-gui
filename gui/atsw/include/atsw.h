@@ -454,6 +454,13 @@ void       atsw_menu_asistente( Atsw *a, GtkWidget *m );
 gchar     *atsw_asistente_dir( void );
 gchar     *atsw_asistente_servidor( const char *nombre );
 gboolean   atsw_asistente_instalado( void );
+/* uv (el del paquete, o el del PATH) y la fuente de atsw-gui-mcp (la del
+   paquete, bin/../asistente/atsw_mcp, o la del arbol). NULL si no estan. */
+gchar     *atsw_asistente_uv( void );
+gchar     *atsw_asistente_fuente( void );
+/* La orden de «Instalar el asistente…»: copia la fuente a la carpeta del
+   asistente y da la orden de uv, su entorno y la carpeta. NULL y why.  */
+gchar    **atsw_asistente_orden_instalar( gchar ***envp, gchar **dir, char *why, size_t n );
 /* Los servidores en el formato de un cliente: 0 Claude Code (.mcp.json),
    1 Gemini CLI, 2 CodeWhale, 3 Codex (TOML).                          */
 gchar     *atsw_asistente_bloque( int formato );

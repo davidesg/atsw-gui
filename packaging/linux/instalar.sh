@@ -10,6 +10,8 @@
 #   PREFIJO/bin/atsw            enlace a la madre
 #   PREFIJO/share/applications  ATSW, fue, drtran y fug en el menu
 #   PREFIJO/share/doc/atsw/     el LEEME, el manual y sus datos
+#   PREFIJO/lib/atsw/asistente/ la fuente del asistente (y uv en bin/, en
+#                               el .deb): la madre lo instala si se pide
 set -e
 D=$1 P=${2:-/usr/local}
 R=$(cd "$(dirname "$0")/../.." && pwd)
@@ -57,4 +59,12 @@ install -m 644 "$R"/docs/manual/datos/ipc_wti.csv "$R"/docs/manual/datos/ipc_wti
 mkdir -p "$D$P/share/doc/atsw/Ejemplos"
 cp -R "$R"/docs/ejemplos/* "$D$P/share/doc/atsw/Ejemplos/"
 find "$D$P/share/doc/atsw/Ejemplos" -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
+# EL ASISTENTE (packaging/asistente.sh): la fuente de atsw-gui-mcp, siempre;
+# y uv solo si se pide (ATSW_UV_TRIPLE: el .deb). Instalando desde las
+# fuentes no se descarga nada: la madre usa el uv del PATH, si lo hay.
+. "$R/packaging/asistente.sh"
+asistente_fuente "$R" "$D$P/lib/atsw/asistente/atsw_mcp"
+find "$D$P/lib/atsw/asistente" -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
+[ -n "${ATSW_UV_TRIPLE:-}" ] && asistente_uv "$ATSW_UV_TRIPLE" "$B"
+
 echo "instalado en $D$P"

@@ -924,9 +924,19 @@ afectados.
     los datos), y el botón «Ficha de confianza…» (y doble clic); y en «Qué
     ha hecho el asistente…», la parte del asistente en el proyecto. Prueba:
     la fase `ficha` de test_gui. **Con esto la fase 2 está completa.**
-  - Lo siguiente: la fase T1, la terminal empotrada con VTE en Linux, en la
-    página «terminal» de la misma pila; y que el paquete lleve `uv` y
-    `mcp/atsw_mcp` para que «Instalar el asistente…» funcione instalado.
+  - **El asistente en el paquete (17-nov-2026).** `packaging/asistente.sh`
+    pone en los tres paquetes el `uv` del ensayo (0.12.24, comprobado con
+    su sha256) en `bin/` y la fuente de `atsw-gui-mcp` en
+    `bin/../asistente/atsw_mcp`. «Instalar el asistente…» copia esa fuente
+    a la carpeta del usuario y corre `uv sync --frozen --managed-python
+    --python 3.12`, con el entorno, el Python y la caché dentro de esa
+    carpeta: unos 140 MB, 8 s con red. El .deb se comprueba en
+    `linux-prueba`. Desde las fuentes no se descarga uv: se usa el del PATH.
+  - **La terminal, externa en los tres sistemas (decisión del analista,
+    17-nov-2026):** las tres distribuciones equivalentes. T1 (VTE) y T2
+    (libvterm) quedan para más adelante; ver la nota en §5.1 del estudio.
+  - Lo siguiente: el vídeo del asistente, ya con él instalado desde la
+    madre.
 
 ---
 

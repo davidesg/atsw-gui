@@ -37,7 +37,8 @@ fi
 
 P=$R/dist/deb
 rm -rf "$P"
-sh "$R/packaging/linux/instalar.sh" "$P" /usr
+# Con el uv del asistente (packaging/asistente.sh), descargado y comprobado.
+ATSW_UV_TRIPLE=x86_64-unknown-linux-gnu bash "$R/packaging/linux/instalar.sh" "$P" /usr
 install -d "$P/DEBIAN"
 cat > "$P/DEBIAN/control" <<CONTROL
 Package: atsw

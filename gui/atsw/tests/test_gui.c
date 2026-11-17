@@ -3454,6 +3454,50 @@ static void asistente_menu( void )
     g_strfreev( v );
     }
 
+    /* «INSTALAR EL ASISTENTE…»: la orden, sin descargar nada. Con un uv de
+       mentira en el PATH, si no hay ninguno: lo que se mira es la orden y
+       la copia de la fuente, no uv.                                   */
+    {
+    gchar  *uvp = atsw_asistente_uv(), *falso = NULL, *antes = g_strdup( g_getenv( "PATH" ) );
+    gchar **ord, **env = NULL, *dir = NULL;
+    char    why[512] = "";
+
+    if ( uvp == NULL )
+        {
+        gchar *d = g_build_filename( T, "uv-falso", NULL ), *p;
+        g_mkdir_with_parents( d, 0755 );
+        falso = g_build_filename( d, "uv", NULL );
+        g_file_set_contents( falso, "#!/bin/sh\nexit 0\n", -1, NULL );
+        g_chmod( falso, 0755 );
+        p = g_strdup_printf( "%s%c%s", d, G_SEARCHPATH_SEPARATOR, antes ? antes : "" );
+        g_setenv( "PATH", p, TRUE );
+        g_free( p ); g_free( d );
+        }
+    ord = atsw_asistente_orden_instalar( &env, &dir, why, sizeof why );
+#ifndef G_OS_WIN32
+    check( ord && g_strv_contains( (const gchar *const *) ord, "--frozen" ) &&
+           g_strv_contains( (const gchar *const *) ord, "--managed-python" ) &&
+           g_strv_contains( (const gchar *const *) ord, "3.12" ),
+           "«Instalar el asistente…»: uv sync del uv.lock, con el Python fijado", why );
+#endif
+    if ( ord )
+        {
+        gchar *lock = g_build_filename( dir, "fuente", "uv.lock", NULL );
+        const gchar *venv = g_environ_getenv( env, "UV_PROJECT_ENVIRONMENT" );
+        const gchar *py   = g_environ_getenv( env, "UV_PYTHON_INSTALL_DIR" );
+
+        check( g_file_test( lock, G_FILE_TEST_EXISTS ),
+               "con la fuente copiada a la carpeta del asistente (la del paquete puede ser de "
+               "solo lectura)", lock );
+        check( venv && py && g_str_has_prefix( venv, dir ) && g_str_has_prefix( py, dir ),
+               "y todo --el entorno y el Python-- dentro de la carpeta del asistente", venv );
+        g_free( lock );
+        }
+    if ( falso ) { g_setenv( "PATH", antes ? antes : "", TRUE ); g_unlink( falso ); }
+    g_strfreev( ord ); g_strfreev( env );
+    g_free( dir ); g_free( uvp ); g_free( falso ); g_free( antes );
+    }
+
     /* QUE HA HECHO EL ASISTENTE: lo que lleva por: asistente. */
     for ( i = 0, n = 0; i < A.p->nm; i++ )
         n += !strcmp( A.p->m[i].por, "asistente" ) ||
@@ -5370,8 +5414,11 @@ int main( int argc, char **argv )
        la prueba, en la suya, que se borra con lo demas.                */
     {
     gchar *ini = g_build_filename( T, "ventanas.ini", NULL );
+    gchar *as  = g_build_filename( T, "asistente-usuario", NULL );
     g_setenv( "ATSW_VENTANAS_INI", ini, TRUE );
-    g_free( ini );
+    /* Y la carpeta del asistente (Instalar), tambien en la de la prueba. */
+    g_setenv( "ATSW_ASISTENTE_DIR", as, TRUE );
+    g_free( ini ); g_free( as );
     }
     g_thread_new( "vigilante", vigilante, GINT_TO_POINTER(170) );
     historial = g_ptr_array_new_with_free_func( g_free );

@@ -87,4 +87,10 @@ mkdir -p "$D/Datos del manual"
 cp -R "$R/docs/ejemplos" "$D/Ejemplos"
 cp "$R"/docs/manual/datos/{ipc_wti,es_core}.{csv,xlsx} "$D/Datos del manual/"
 
+# EL ASISTENTE (packaging/asistente.sh): uv y la fuente de atsw-gui-mcp.
+# Despues de recoger las DLL: uv.exe no pide ninguna de MSYS2.
+. "$R/packaging/asistente.sh"
+asistente_uv x86_64-pc-windows-msvc "$D/bin"
+asistente_fuente "$R" "$D/asistente/atsw_mcp"
+
 echo "paquete en $D: $(ls "$D/bin" | wc -l) ficheros en bin/, $(du -sh "$D" | cut -f1)"

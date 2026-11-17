@@ -480,6 +480,19 @@ void       atsw_asistente_refresca( Atsw *a );
 void       atsw_asistente_guarda_estado( Atsw *a );
 void       atsw_asistente_restaura( Atsw *a );
 
+/* ficha_gui.c: el coste y la ficha de confianza (ESTUDIO-terminal-mcp §7.7,
+   §7.8), con lib/ficha y lib/coste, las de atsw-cli.                  */
+gchar     *atsw_coste_linea( Atsw *a, const char *serie, const char *muestra, const char *id );
+void       atsw_coste_pie( Atsw *a, const char *f, const char *serie, const char *muestra,
+                           const char *id );
+gchar     *atsw_coste_objeto( const char *serie, const char *muestra, const char *id );
+GHashTable *atsw_coste_por_objeto( Atsw *a );
+gchar     *atsw_segundos( double s, gboolean consta );
+gchar     *atsw_md_pango( const char *md );
+void       atsw_ficha( Atsw *a, const char *serie, const char *muestra, const char *id );
+int        atsw_ficha_al_cuaderno( Atsw *a, const char *serie, const char *muestra,
+                                   const char *id, const char *md, char *why, size_t n );
+
 /* Escribe el manifiesto Y APUNTA SU HUELLA. Lo segundo no es un detalle: sin
    ello, el proximo foco releeria nuestra propia escritura creyendo que la
    hizo otro -- y lo diria.                                             */

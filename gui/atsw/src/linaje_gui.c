@@ -25,11 +25,13 @@
 
 void barra_pub( Atsw *a, const char *s );
 
-enum { LN_NODO, LN_ESTADO, LN_DICTAMEN, LN_POR, LN_RAZON, LN_DEBE, LN_COLOR, LN_COLS };
+enum { LN_NODO, LN_ESTADO, LN_DICTAMEN, LN_POR, LN_CPU, LN_CAMINO, LN_RAZON, LN_DEBE, LN_COLOR,
+       LN_SERIE, LN_MUESTRA, LN_ID, LN_COLS };
 
 typedef struct {
     int sin_razon, sin_estimar, sin_elegido, cadenas;
     int del_asistente;      /* pasos con por: asistente (derivar o elegir) */
+    GHashTable *coste;      /* objeto -> s de CPU (atsw_coste_por_objeto)  */
 } Cuenta;
 
 
@@ -37,7 +39,7 @@ typedef struct {
  * larga pero no es ancha, y la recursión es lo que dice la forma.      */
 static void cuelga( Atsw *a, GtkTreeStore *st, GtkTreeIter *padre,
                     const char *serie, const char *muestra, const char *de,
-                    Cuenta *c )
+                    double hasta_aqui, Cuenta *c )
 {
     int i;
 
@@ -80,7 +82,21 @@ static void cuelga( Atsw *a, GtkTreeStore *st, GtkTreeIter *padre,
             g_strlcat( debe, "escribir su razón", sizeof debe );
             }
 
+        /* LO QUE COSTO ESTE PASO y el camino hasta el (§7.7): el tiempo de
+           CPU de sus corridas en costes.csv.                          */
+        {
+        gchar   *obj = atsw_coste_objeto( serie, muestra, m->id );
+        gdouble *v = c->coste ? g_hash_table_lookup( c->coste, obj ) : NULL;
+        double   camino = hasta_aqui + ( v ? *v : 0.0 );
+        gchar   *s1 = atsw_segundos( v ? *v : 0.0, v != NULL );
+        gchar   *s2 = atsw_segundos( camino, camino > 0.0 );
+
         gtk_tree_store_append( st, &it, padre );
+        gtk_tree_store_set( st, &it, LN_CPU, s1, LN_CAMINO, s2, LN_SERIE, serie,
+                            LN_MUESTRA, muestra, LN_ID, m->id, -1 );
+        g_free( obj ); g_free( s1 ); g_free( s2 );
+        hasta_aqui = camino;
+        }
         gtk_tree_store_set( st, &it,
             LN_NODO,     m->id,
             LN_ESTADO,   estado,
@@ -102,7 +118,7 @@ static void cuelga( Atsw *a, GtkTreeStore *st, GtkTreeIter *padre,
             gtk_tree_store_set( st, &it, LN_NODO, et, -1 );
             }
 
-        cuelga( a, st, &it, serie, muestra, m->id, c );
+        cuelga( a, st, &it, serie, muestra, m->id, hasta_aqui, c );
         }
 }
 
@@ -111,6 +127,7 @@ static void llena( Atsw *a, GtkTreeStore *st, Cuenta *c )
     int s, u;
 
     memset( c, 0, sizeof *c );
+    c->coste = atsw_coste_por_objeto( a );
 
     for ( s = 0; s < a->p->ns; s++ )
         for ( u = 0; u <= a->p->nmu; u++ )
@@ -139,12 +156,45 @@ static void llena( Atsw *a, GtkTreeStore *st, Cuenta *c )
                 gtk_tree_store_set( st, &it, LN_DEBE,
                     "ninguno declarado EL modelo de esta ventana", -1 );
                 }
-            cuelga( a, st, &it, serie, mu, "", c );
+            cuelga( a, st, &it, serie, mu, "", 0.0, c );
             }
 }
 
 
 /* ------------------------------------------------------------------------ */
+
+/* La ficha de la fila: las cabeceras de cadena no tienen modelo. */
+static void ficha_de( Atsw *a, GtkTreeModel *mo, GtkTreeIter *it )
+{
+    gchar *se = NULL, *mu = NULL, *id = NULL;
+
+    gtk_tree_model_get( mo, it, LN_SERIE, &se, LN_MUESTRA, &mu, LN_ID, &id, -1 );
+    if ( se && id ) atsw_ficha( a, se, mu ? mu : "", id );
+    else            barra_pub( a, "Marca un modelo de la cadena, no su cabecera." );
+    g_free( se ); g_free( mu ); g_free( id );
+}
+
+static void on_ficha_b( GtkButton *b, GtkWidget *vista )
+{
+    Atsw         *a = g_object_get_data( G_OBJECT(b), "atsw" );
+    GtkTreeModel *mo;
+    GtkTreeIter   it;
+
+    if ( gtk_tree_selection_get_selected(
+             gtk_tree_view_get_selection( GTK_TREE_VIEW(vista) ), &mo, &it ) )
+        ficha_de( a, mo, &it );
+    else
+        barra_pub( a, "Marca un modelo en el linaje." );
+}
+
+static void on_ficha_fila( GtkTreeView *tv, GtkTreePath *p, GtkTreeViewColumn *c, Atsw *a )
+{
+    GtkTreeModel *mo = gtk_tree_view_get_model( tv );
+    GtkTreeIter   it;
+
+    (void) c;
+    if ( gtk_tree_model_get_iter( mo, &it, p ) ) ficha_de( a, mo, &it );
+}
 
 void atsw_linaje( Atsw *a )
 {
@@ -157,8 +207,11 @@ void atsw_linaje( Atsw *a )
 
     st = gtk_tree_store_new( LN_COLS, G_TYPE_STRING, G_TYPE_STRING,
                              G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-                             G_TYPE_STRING, G_TYPE_STRING );
+                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
+                             G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
+                             G_TYPE_STRING );
     llena( a, st, &c );
+    if ( c.coste ) g_hash_table_destroy( c.coste );
 
     win = gtk_window_new( GTK_WINDOW_TOPLEVEL );
     gtk_window_set_transient_for( GTK_WINDOW(win), GTK_WINDOW(a->ventana) );
@@ -183,6 +236,20 @@ void atsw_linaje( Atsw *a )
     /* QUIEN: vacio es el analista, que es lo normal (§7.2). */
     gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(vista), -1,
         "Por", r, "text", LN_POR, NULL );
+
+    /* EL COSTE: el del paso y el del camino desde los datos (§7.7). */
+    {
+    GtkCellRenderer *rc = gtk_cell_renderer_text_new();
+    GtkTreeViewColumn *col;
+
+    g_object_set( rc, "xalign", 1.0, NULL );
+    gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(vista), -1,
+        "CPU", rc, "text", LN_CPU, NULL );
+    gtk_tree_view_insert_column_with_attributes( GTK_TREE_VIEW(vista), -1,
+        "Camino", rc, "text", LN_CAMINO, NULL );
+    col = gtk_tree_view_get_column( GTK_TREE_VIEW(vista), 4 );
+    if ( col ) gtk_tree_view_column_set_alignment( col, 1.0 );
+    }
 
     /* LO QUE DEBE, EN ROJO Y ANTES QUE LA RAZON: es lo que se viene a ver. */
     {
@@ -239,6 +306,20 @@ void atsw_linaje( Atsw *a )
     g_string_free( t, TRUE );
     }
     gtk_box_pack_start( GTK_BOX(raiz), pie, FALSE, FALSE, 0 );
+
+    /* LA FICHA DEL NODO MARCADO (§7.8), y doble clic en el nodo. */
+    {
+    GtkWidget *h = gtk_box_new( GTK_ORIENTATION_HORIZONTAL, 6 );
+    GtkWidget *b = gtk_button_new_with_label( "Ficha de confianza…" );
+
+    gtk_widget_set_tooltip_text( b, "La del modelo marcado: el recorrido con quién dio cada "
+                                    "paso, la adecuación, si se reproduce y lo que costó." );
+    g_object_set_data( G_OBJECT(b), "atsw", a );
+    g_signal_connect( b, "clicked", G_CALLBACK(on_ficha_b), vista );
+    g_signal_connect( vista, "row-activated", G_CALLBACK(on_ficha_fila), a );
+    gtk_box_pack_start( GTK_BOX(h), b, FALSE, FALSE, 0 );
+    gtk_box_pack_start( GTK_BOX(raiz), h, FALSE, FALSE, 0 );
+    }
 
     gtk_widget_show_all( win );
 }

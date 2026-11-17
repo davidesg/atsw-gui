@@ -915,9 +915,18 @@ afectados.
     del asistente» (Ctrl+Mayús+A) y «Acoplar a la madre». Prueba: la fase
     `asistente_ventana` de test_gui (diez veces suelta y pegada sin perder
     el contenido; al reabrir, como estaba).
-  - Lo que queda de la fase 2: el coste y la ficha en la madre. Después, la
-    fase T1: la terminal empotrada con VTE en Linux, en la página
-    «terminal» de la misma pila.
+  - **Fase 2, cuarto paso: el coste y la ficha en la madre (17-nov-2026).**
+    `gui/atsw/src/ficha_gui.c`, con lib/ficha y lib/coste (las de
+    atsw-cli): la línea de coste al pie de «Ver modelo…»; Diagnosticar ▸
+    «Ficha de confianza…», la misma que `atsw-cli ficha`, con «Comprobar»
+    (fi_comprueba con el fue de la madre, apuntado en `costes.csv`) y «Al
+    cuaderno»; en el linaje, las columnas «CPU» (el paso) y «Camino» (desde
+    los datos), y el botón «Ficha de confianza…» (y doble clic); y en «Qué
+    ha hecho el asistente…», la parte del asistente en el proyecto. Prueba:
+    la fase `ficha` de test_gui. **Con esto la fase 2 está completa.**
+  - Lo siguiente: la fase T1, la terminal empotrada con VTE en Linux, en la
+    página «terminal» de la misma pila; y que el paquete lleve `uv` y
+    `mcp/atsw_mcp` para que «Instalar el asistente…» funcione instalado.
 
 ---
 

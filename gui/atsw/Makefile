@@ -15,7 +15,7 @@ PREFIX  ?= /usr/local
 LIB = ../../lib
 
 SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
-      src/editor.c src/serie_gui.c src/genera.c src/anfitrion.c src/linaje_gui.c src/vigila.c src/asistente.c src/asistente_ventana.c \
+      src/editor.c src/serie_gui.c src/genera.c src/anfitrion.c src/linaje_gui.c src/vigila.c src/asistente.c src/asistente_ventana.c src/ficha_gui.c \
       src/casos_gui.c src/cuaderno_gui.c src/presentacion.c src/trabajos.c \
       $(LIB)/trabajo/trabajo.c \
       $(LIB)/proyecto/proyecto.c \
@@ -51,6 +51,7 @@ SRC = src/main.c src/ventana.c src/gestos.c src/datos_gui.c src/vistazo.c \
       $(LIB)/netfile/netfile.c \
       $(LIB)/engine/engine.c \
       $(LIB)/coste/coste.c \
+      $(LIB)/ficha/ficha.c \
       $(LIB)/tabla/tabla.c \
       $(LIB)/cuaderno/cuaderno.c \
       $(LIB)/rutas/rutas.c \
@@ -82,7 +83,7 @@ HDR = include/atsw.h include/anfitrion.h include/previewhost.h
 LIBHDR = $(wildcard $(LIB)/*/*.h)
 
 
-INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/equation -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/vuelta -I$(LIB)/netfile -I$(LIB)/engine -I$(LIB)/coste -I$(LIB)/inpcheck -I$(LIB)/tabla -I$(LIB)/cuaderno \
+INC = -Iinclude -I$(LIB)/proyecto -I$(LIB)/outdiag -I$(LIB)/outfile -I$(LIB)/analisis -I$(LIB)/equation -I$(LIB)/dictamen -I$(LIB)/anomalos -I$(LIB)/intervencion -I$(LIB)/inpdet -I$(LIB)/vuelta -I$(LIB)/netfile -I$(LIB)/engine -I$(LIB)/coste -I$(LIB)/ficha -I$(LIB)/inpcheck -I$(LIB)/tabla -I$(LIB)/cuaderno \
       -I$(LIB)/rutas -I$(LIB)/trabajo -I$(LIB)/sitio -I$(LIB)/dates -I$(LIB)/datos -I$(LIB)/xlsx \
       -I../../engines/fug/src -I$(LIB)/preview -I$(LIB)/fugdraw -I$(LIB)/fugplot -I$(LIB)/utils -I$(LIB)/artcand \
       -I$(LIB)/raices -I$(LIB)/partida -I$(LIB)/formales -I$(LIB)/barra -I$(LIB)/gesto -I../../engines/art/include

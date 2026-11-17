@@ -394,6 +394,13 @@ jobs:
               wait $pid 2>/dev/null || true
           done
           ls /usr/share/doc/atsw "/usr/share/doc/atsw/Datos del manual"
+          # EL ASISTENTE (packaging/asistente.sh): uv al lado de la madre y
+          # la fuente de atsw-gui-mcp, para «Instalar el asistente…».
+          if /usr/lib/atsw/bin/uv --version && [ -f /usr/lib/atsw/asistente/atsw_mcp/uv.lock ]; then
+              echo "el asistente va en el paquete"
+          else
+              echo "::error::falta uv o la fuente del asistente"; mal+=(asistente)
+          fi
           [ ${#mal[@]} -eq 0 ] || { echo "fallan: ${mal[*]}"; exit 1; }
 
   # Las fuentes, compiladas e instaladas en un sistema limpio siguiendo

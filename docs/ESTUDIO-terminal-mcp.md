@@ -514,6 +514,15 @@ GtkWidget *atsw_terminal_new( const char *dir, char **argv, GError **err );
    la externa, que funciona siempre (§5). */
 ```
 
+> **Revisado el 17-nov-2026 (decisión del analista): las tres distribuciones
+> equivalentes.** La primera versión del asistente depende de la terminal
+> externa en Linux, Windows y macOS por igual: el mismo manual y el mismo
+> vídeo para todos, y el paquete de Linux sin VTE. T1 y T2 quedan para más
+> adelante, si se quieren; la ventana Asistente ya tiene sitio para la página
+> «terminal» (§7.6), así que añadirla no rompe nada. Lo único que se pierde
+> de §7.6 es que la madre pregunte al cerrar con una sesión viva: la
+> terminal externa no es suya.
+
 - **Ahora:** la terminal externa (decisión 1). Es la única que funciona en
   todas partes y desde el primer día.
 - **Fase T1, Linux:** `atsw_terminal_new` con **VTE**, dentro de la ventana
@@ -1100,7 +1109,9 @@ de sima tiene ya equivalente en C.
 
 **Hito drvec_gui → el VEC en `atsw-sis`.** Igual para el VECM.
 
-**Fase T1: la terminal empotrada en Linux** (§5.1). `atsw_terminal_new` con
+**Fase T1: la terminal empotrada en Linux** (§5.1). *Aplazada el
+17-nov-2026: la primera versión usa la terminal externa en los tres
+sistemas (§5.1).* `atsw_terminal_new` con
 VTE, en la página «terminal» de la ventana Asistente; donde no haya VTE, la
 página «estado» y la externa. Puede ir en cuanto esté la fase 2, sin esperar
 a los hitos.
@@ -1217,7 +1228,8 @@ fase 0 (ensayo de empaquetado y clientes), en paralelo desde ya ──┘
     Linux; un ensayo de una semana de libvterm + ConPTY en Windows con los
     criterios de paso de §5.1; y, si pasa, la fase T2 en Windows y macOS.
     Todo detrás de `atsw_terminal_new`, con la externa siempre de respaldo
-    (20-oct-2026).
+    (20-oct-2026). **Revisada el 17-nov-2026:** la primera versión, con la
+    terminal externa en los tres sistemas; T1 y T2, más adelante.
 18. **Una ventana propia «Asistente», acoplable**, no un panel abajo con F4
     (§7.6): un conmutador Acoplar/Desacoplar que mueve el contenido entre una
     ventana suelta y el lado derecho de la madre, con el estado recordado por

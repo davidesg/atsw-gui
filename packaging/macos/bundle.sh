@@ -156,6 +156,16 @@ cat > "$C/Info.plist" <<PLIST
 </plist>
 PLIST
 
+# EL ASISTENTE (packaging/asistente.sh): uv y la fuente de atsw-gui-mcp.
+# Despues de las comprobaciones de bin/ --uv viene compilado por astral, con
+# sus bibliotecas del sistema y su version minima-- y antes de firmar.
+. "$R/packaging/asistente.sh"
+case "$ARQ" in
+    arm64) asistente_uv aarch64-apple-darwin "$RES/bin" ;;
+    *)     asistente_uv x86_64-apple-darwin  "$RES/bin" ;;
+esac
+asistente_fuente "$R" "$RES/asistente/atsw_mcp"
+
 # La firma: de dentro afuera, cada binario y despues la .app entera.
 find "$RES" -type f \( -name '*.dylib' -o -name '*.so' \) -exec codesign --force --sign - {} \;
 codesign --force --sign - "$RES"/bin/*

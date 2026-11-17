@@ -441,6 +441,9 @@ static void on_nuevo( GtkButton *b, Atsw *a )
                 { g_free( base ); g_free( p ); gtk_widget_destroy( d ); return; }
             }
 
+        /* El estado de la ventana Asistente del proyecto que se deja, como
+           en atsw_abre: el nuevo empieza sin el suyo.                   */
+        if ( a->hay ) atsw_asistente_guarda_estado( a );
         if ( !a->p ) a->p = g_new0( Proyecto, 1 );
         dot = strrchr( base, '.' ); if ( dot ) *dot = '\0';
         pr_nuevo( a->p, base, "", "." );
@@ -456,6 +459,11 @@ static void on_nuevo( GtkButton *b, Atsw *a )
 
         g_free( base ); g_free( p );
         atsw_refresca( a );
+        /* Y SE VIGILA, como al abrir (BUG-0005): sin esto, lo que el
+           asistente escribia en un proyecto recien creado no aparecia
+           hasta volver a abrirlo.                                      */
+        atsw_vigila( a );
+        atsw_asistente_restaura( a );
         }
     gtk_widget_destroy( d );
 }

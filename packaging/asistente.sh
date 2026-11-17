@@ -40,7 +40,8 @@ asistente_uv() {
         rm -rf "$d"; return 1
     fi
     case "$f" in
-        *.zip) ( cd "$d" && unzip -q "$f" ) ;;
+        *.zip) command -v unzip >/dev/null || { echo "hace falta unzip (en MSYS2: pacman -S unzip)" >&2; rm -rf "$d"; return 1; }
+               ( cd "$d" && unzip -q "$f" ) ;;
         *)     ( cd "$d" && tar xzf "$f" ) ;;
     esac
     uv=$(find "$d" -type f \( -name uv -o -name uv.exe \) | head -1)

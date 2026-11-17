@@ -829,8 +829,10 @@ static void on_instalar( GtkMenuItem *mi, Atsw *a )
     argv = atsw_asistente_orden_instalar( &env, &dir, why, sizeof why );
     if ( argv == NULL ) { barra_pub( a, why ); return; }
 
-    /* SIN SHELL Y CON LA ENTRADA CERRADA, como lib/engine. */
-    if ( !g_spawn_async( dir, argv, env, G_SPAWN_DO_NOT_REAP_CHILD | G_SPAWN_STDIN_FROM_DEV_NULL,
+    /* SIN SHELL Y CON LA ENTRADA CERRADA, como lib/engine: sin
+       G_SPAWN_CHILD_INHERITS_STDIN, GLib la pone en /dev/null (el flag
+       explicito es de GLib 2.74, y el .deb se compila con la 2.72). */
+    if ( !g_spawn_async( dir, argv, env, G_SPAWN_DO_NOT_REAP_CHILD,
                          NULL, NULL, &pid, &err ) )
         {
         gchar *t = g_strdup_printf( "No pude lanzar uv: %s", err->message );

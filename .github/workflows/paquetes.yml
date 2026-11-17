@@ -70,7 +70,7 @@ jobs:
           msystem: UCRT64
           update: true
           install: >-
-            make git diffutils bc gawk sed grep coreutils
+            make git diffutils bc gawk sed grep coreutils unzip
           pacboy: >-
             gcc:p pkgconf:p gtk3:p gsl:p zlib:p librsvg:p adwaita-icon-theme:p
             gsettings-desktop-schemas:p hicolor-icon-theme:p

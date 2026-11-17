@@ -192,3 +192,70 @@ no hay nada que perder.
 un manifiesto, le añade una clave desconocida y guarda encima un cambio con la
 copia que tenía en memoria. Sale con 1 si `pr_escribir` devuelve 0 y la clave
 ha desaparecido. Lo prueba también la sección 10 de `lib/proyecto/test_proyecto.c`.
+
+## BUG-0004 — una muestra no se recorta por el principio
+
+**Encontrado:** 2026-11-16, por el analista con el IPC de Portugal: una muestra
+«desde 1/2010 hasta 12/2019» seguía empezando en 2002.
+**Arreglado:** 2026-11-16 (#182). `repro.py` sale con 0.
+
+### Síntoma
+
+El final de la muestra se respetaba; el principio, no. Todo lo que colgaba de
+la muestra —art, fue, los casos— se estimaba desde el principio de los datos.
+
+### Por qué
+
+`atsw_genera_inp` (`src/genera.c`) solo recibía el «hasta»: el «desde» de la
+muestra no se usaba en ningún sitio, ni al poblarla (`atsw_puebla_muestra`)
+ni al derivar un modelo en ella (`gestos.c`).
+
+### Arreglo
+
+`atsw_genera_inp` recibe también el «desde», y `atsw_desde_i` —la otra punta
+de `atsw_hasta_n`— da la primera observación de la ventana. Las muestras
+creadas antes del arreglo conservan su nodo de datos viejo: hay que crearlas
+de nuevo.
+
+### Reproducción
+
+`bugs/BUG-0004-repro/repro.py` compila `recorta.c` con `genera.c` sobre los
+datos del manual, declara la muestra 1/2010 – 12/2019, la puebla como la
+madre y lee el .inp. Sale con 1 si no empieza en 1/2010 con 120
+observaciones. Lo prueban también los dos extremos en `tests/test_genera.c`.
+
+## BUG-0005 — un proyecto creado con «Nuevo…» no ve lo que hace el asistente
+
+**Encontrado:** 2026-11-17, al grabar el vídeo del asistente: en un proyecto
+recién creado en la madre, el asistente creó y estimó un modelo, y la madre
+no lo enseñó.
+**Arreglado:** 2026-11-17. `repro.py` sale con 0.
+
+### Síntoma
+
+Con un proyecto abierto con «Abrir…», un ejemplo o `--proyecto`, lo que
+escribe el asistente aparece solo (#181). Con uno creado con «Nuevo…», no:
+hacía falta volver a abrirlo.
+
+### Por qué
+
+La vista en vivo (`src/vigila.c`) se pone en `atsw_abre`. «Nuevo…»
+(`on_nuevo`, `src/main.c`) no pasa por ahí: crea el manifiesto y lo guarda
+sin vigilarlo. Tampoco guardaba el estado de la ventana Asistente del
+proyecto que se dejaba, ni ponía el del nuevo.
+
+### Arreglo
+
+`on_nuevo` hace lo mismo que `atsw_abre`: guarda el estado de la ventana del
+proyecto que se deja y, con el nuevo creado, llama a `atsw_vigila` y a
+`atsw_asistente_restaura`.
+
+### Reproducción
+
+`bugs/BUG-0005-repro/repro.py` lanza la madre en un broadwayd con el módulo
+de escenas del manual: crea un proyecto con «Nuevo…», carga los datos del
+manual y, con la madre abierta, da un paso como el asistente (`atsw-cli
+proyecto nuevo … --por asistente`). Sale con 1 si en 20 s la barra de estado
+no dice «, del asistente.». Para eso el módulo de escenas tiene dos órdenes
+nuevas: `lanza` (otro programa, sin esperar) y `aguarda` (un texto a la
+vista).

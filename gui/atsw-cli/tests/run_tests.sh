@@ -251,6 +251,17 @@ mira "especifica --pascua: easter entra, y fue lo acepta" \
      '[ "$(printf "%s\n" "$J" | campo "\"easter\" in d[\"cambios\"]")" = True ] && grep -qx "easter" "$F2"'
 mira "especifica --pascua otra vez: ya la trae (estado 1)" \
      '"$CLI" especifica "$YE" RIPC "$N2" --pascua 2>&1 | grep -q "ya trae Semana Santa"'
+# las intervenciones se AÑADEN; una igual a otra, no (BUG-0001): los datos
+# de RIPC traen «step 2 2002», y el hijo la hereda.
+H2=$(cksum < "$F2")
+mira "especifica --intervencion que ya trae: no se repite (estado 1, BUG-0001)" \
+     '"$CLI" especifica "$YE" RIPC "$N2" --intervencion "step 2 2002" 2>&1 | grep -q "ya trae «step 2 2002»" && [ "$H2" = "$(cksum < "$F2")" ]'
+mira "  y con otros espacios es la misma" \
+     '! "$CLI" especifica "$YE" RIPC "$N2" --intervencion "step  2   2002" 2>/dev/null && [ "$H2" = "$(cksum < "$F2")" ]'
+mira "  y dos veces en la orden, tampoco" \
+     '"$CLI" especifica "$YE" RIPC "$N2" --intervencion "impulse 5 2003" --intervencion "impulse 5 2003" 2>&1 | grep -q "va dos veces" && [ "$H2" = "$(cksum < "$F2")" ]'
+mira "especifica: otra forma en la misma fecha entra, con el aviso de art (BUG-0162 de art)" \
+     '"$CLI" especifica "$YE" RIPC "$N2" --intervencion "impulse 2 2002" | grep -q "Ya había una intervención en esa fecha" && grep -qx "impulse 2 2002" "$F2"'
 if [ -x "$FUE" ]; then
     J=$("$CLI" --json estima "$YE" RIPC "$N" --por asistente)
     mira "estima: fue termina y trae la log-verosimilitud y el dictamen" \

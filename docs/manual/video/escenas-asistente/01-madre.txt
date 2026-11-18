@@ -4,7 +4,10 @@
 # no puede pisar la frase (cerrar la ventana de la que se habla, quitar una
 # portada). Sin «espera» para leer: la voz marca el ritmo, y lo que tarda una
 # accion se cubre con la frase que la explica, para que no haya silencios.
-portada ATSW | El asistente: un cliente de LLM que trabaja en tu proyecto | 1000
+portada ATSW | El asistente, 1: instalarlo y verlo trabajar | 1000
+rotulo Este vídeo es para quien ya trabaja con ATSW y quiere que un asistente de inteligencia artificial le ayude en sus proyectos.
+rotulo El objetivo: instalar el asistente, preparar un proyecto para él, y ver cómo la madre enseña lo que hace, y quién dio cada paso.
+rotulo Conviene haber visto antes el vídeo del univariante: el asistente trabaja en ese mismo análisis. La conversación con él está en la segunda parte.
 rotulo El asistente es un cliente de LLM —Claude Code, Gemini CLI, Codex o CodeWhale— que corre en una terminal, en la carpeta del proyecto.
 rotulo ATSW le da tres servidores MCP: atsw-us para los modelos univariantes, atsw-mt para la transferencia y atsw-sis para los sistemas.
 rotulo Usan los mismos motores y el mismo proyecto que la madre. Lo que el asistente hace, la madre lo ve, y queda escrito quién dio cada paso.
@@ -71,7 +74,7 @@ boton Preparar
 ventana preparado para el asistente
 tamano 900 600
 rotulo Para Claude y Gemini deja escritos sus ficheros. A Claude, además, solo le permite las herramientas de ATSW: ni la shell ni editar ficheros.
-rotulo «Abrir la terminal del sistema» la abre en la carpeta del proyecto. Ahí se lanza el cliente, y se le habla. Esa conversación la vemos en el otro vídeo.
+rotulo «Abrir la terminal del sistema» la abre en la carpeta del proyecto. Ahí se lanza el cliente, y se le habla. Esa conversación la vemos en la segunda parte.
 boton Cerrar
 ventana el taller
 rotulo Aquí vemos lo que ve la madre mientras tanto. Le pedimos al asistente un modelo para el IPC subyacente, en la muestra 2002-2019.
@@ -85,7 +88,7 @@ rotulo La madre vigila el proyecto y lo enseña según aparece. La barra de esta
 rotulo Su razón va en la columna «Por qué», con la marca [asistente] delante. Lo que escribe el analista no la lleva.
 rotulo La diagnosis no cuadra: residuos blancos, pero con curtosis 4.1. Unos pocos atípicos.
 lanza @ASISTENTE@/.venv/bin/python @MANUAL@/video/asistente.py @PROYECTO@ corrige
-rotulo El asistente deriva un hijo con el IVA de septiembre de 2012 y el escalón de octubre de 2007, y un AR(3): lo mismo que el análisis univariante del otro vídeo.
+rotulo El asistente deriva un hijo con el IVA de septiembre de 2012 y el escalón de octubre de 2007, y un AR(3): lo mismo que el análisis del vídeo del univariante.
 rotulo Es un hijo de m01: el proyecto guarda de qué modelo viene cada uno.
 aguarda m02 de subyacente | 120
 rotulo La curtosis baja a 0.8. Solo queda la normalidad, que falla por poco.

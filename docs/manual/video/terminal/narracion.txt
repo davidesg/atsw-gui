@@ -10,11 +10,18 @@
 #                 acabado, la imagen se congela ahi hasta que acabe: se pone
 #                 donde la pantalla esta quieta (antes de teclear, con la
 #                 respuesta ya escrita).
+#   portada TITULO | SUBTITULO   un cartel antes de la toma, como los de
+#                 las escenas; sus rotulos (antes del primer ancla) son la
+#                 introduccion: para que es el video y que se aprende.
 #   rotulo TEXTO  una frase, como en las escenas (voz.py la sintetiza; tras
 #                 « || » va lo que se dice, si es otra cosa).
 #
 # Sin silencios: entre un ancla y la siguiente, las frases tienen que llenar
 # lo que tarda la toma (narra.py avisa de los huecos de mas de 1.5 s).
+portada ATSW | El asistente, 2: la conversación en la terminal
+rotulo Este vídeo es la segunda parte del asistente. La primera enseña cómo se instala, y lo que ve la madre mientras el asistente trabaja.
+rotulo Aquí, el otro lado: el analista habla con el asistente en una terminal. Le pregunta por su proyecto, y le pide que pruebe un modelo.
+rotulo El objetivo: ver qué puede hacer el asistente, y qué sigue siendo del analista. Las respuestas no están preparadas: es una conversación real.
 a 0
 rotulo En una terminal, en la carpeta del proyecto, el analista lanza su cliente de LLM: aquí, Claude Code.
 rotulo Es el proyecto del otro vídeo. A la izquierda, la madre: m01 y m02 son del asistente, y m02 está elegido.

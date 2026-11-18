@@ -48,18 +48,29 @@ def hms(t):
 
 
 def lee(narracion):
-    """[(ancla, [rotulo...])...]"""
-    trozos = []
+    """(portada, [rotulo de la portada...], [(ancla, [rotulo...])...])"""
+    portada, intro, trozos = None, [], []
     with open(narracion, encoding="utf-8") as f:
         for l in f:
             l = l.strip()
-            if l.startswith("a "):
+            if l.startswith("portada "):
+                portada = [x.strip() for x in l[len("portada "):].split(" | ")]
+            elif l.startswith("a "):
                 trozos.append((float(l[2:]), []))
             elif l.startswith("rotulo "):
-                if not trozos:
-                    sys.exit("narra: un rotulo antes del primer ancla")
-                trozos[-1][1].append(l[len("rotulo "):].strip())
-    return trozos
+                if trozos:
+                    trozos[-1][1].append(l[len("rotulo "):].strip())
+                elif portada:
+                    intro.append(l[len("rotulo "):].strip())
+                else:
+                    sys.exit("narra: un rotulo antes del primer ancla, sin portada")
+    return portada, intro, trozos
+
+
+def negrita():
+    """El fichero de la Sans negrita (la de las portadas de escenas.c)."""
+    return subprocess.run(["fc-match", "Sans:bold", "-f", "%{file}"], capture_output=True,
+                          text=True, check=True).stdout.strip()
 
 
 def duracion(voz_dir, arg):
@@ -86,7 +97,18 @@ def main():
     # al final de cada uno; frases con su segundo en el video de salida.
     tramos, frases = [], []
     src = out = libre = 0.0
-    for ancla, rotulos in lee(narracion):
+    portada, intro, trozos = lee(narracion)
+    # LA PORTADA, antes de la toma, como las de escenas.c: sus frases, una
+    # detras de otra, y la toma empieza cuando acaban.
+    if portada:
+        t = 0.3
+        for r in intro:
+            ms, wav = duracion(voz_dir, r)
+            frases.append((t, ms, wav, r.split(" || ", 1)[0]))
+            t = libre = t + ms + HUECO
+        out = libre = max(t, 2.0)
+    cartel = out
+    for ancla, rotulos in trozos:
         if ancla < src:
             sys.exit("narra: el ancla %g va antes que la anterior" % ancla)
         llega = out + (ancla - src)
@@ -118,16 +140,30 @@ def main():
             hasta = frases[i + 1][0] if i + 1 < len(frases) else min(total, t + ms + 1.0)
             f.write("Dialogue: 0,%s,%s,Abajo,,0,0,0,,%s\n" % (hms(t), hms(hasta), txt))
 
-    # LA IMAGEN: los tramos, cada uno con su congelado, uno detras de otro.
-    v = "[0:v]" + ("drawbox=x=0:y=%d:w=iw:h=ih-%d:color=%s:t=fill," % (tapa, tapa, FONDO) if tapa else "")
+    # LA IMAGEN: la portada, y los tramos, cada uno con su congelado, uno
+    # detras de otro.
+    pre = ""
+    if portada:
+        d = os.path.dirname(os.path.abspath(ass))
+        for i, txt in enumerate(portada[:2]):
+            with open(os.path.join(d, "portada%d.txt" % i), "w", encoding="utf-8") as f:
+                f.write(txt)
+        pre = ("color=c=%s:s=1920x1080:r=25:d=%.3f,"
+               "drawtext=textfile=portada0.txt:fontfile=%s:fontsize=76:fontcolor=white:"
+               "x=(w-text_w)/2:y=520-ascent" % (FONDO, cartel, negrita()))
+        if len(portada) > 1:
+            pre += (",drawtext=textfile=portada1.txt:font=Sans:fontsize=42:fontcolor=0xd9e6ff:"
+                    "x=(w-text_w)/2:y=600-ascent")
+        pre += ",format=yuv420p,setsar=1[cartel];"
+    v = pre + "[0:v]" + ("drawbox=x=0:y=%d:w=iw:h=ih-%d:color=%s:t=fill," % (tapa, tapa, FONDO) if tapa else "")
     v += "split=%d" % len(tramos) + "".join("[s%d]" % i for i in range(len(tramos))) + ";"
     for i, (d, h, p) in enumerate(tramos):
         v += "[s%d]trim=%.3f:%.3f,setpts=PTS-STARTPTS" % (i, d, h)
         if p > 0:
             v += ",tpad=stop_mode=clone:stop_duration=%.3f" % p
-        v += "[t%d];" % i
-    v += "".join("[t%d]" % i for i in range(len(tramos)))
-    v += "concat=n=%d:v=1:a=0,ass=%s[v]" % (len(tramos), os.path.basename(ass))
+        v += ",format=yuv420p,setsar=1[t%d];" % i
+    v += ("[cartel]" if portada else "") + "".join("[t%d]" % i for i in range(len(tramos)))
+    v += "concat=n=%d:v=1:a=0,ass=%s[v]" % (len(tramos) + (1 if portada else 0), os.path.basename(ass))
 
     # EL SONIDO: cada frase en su segundo.
     ent, aud = [], ""

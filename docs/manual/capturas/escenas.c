@@ -49,6 +49,8 @@
  *                           otro programa mientras se graba (el asistente)
  *   aguarda TEXTO [| S]     espera a que la ventana actual ENSENE un texto
  *                           que contiene TEXTO, hasta S segundos (120)
+ *   existe RUTA [| S]       espera a que exista el fichero RUTA, hasta S
+ *                           segundos (120): que otro programa ha acabado
  *   salir
  *
  * Si una orden no encuentra lo que busca en TIEMPO segundos (10 por
@@ -955,6 +957,17 @@ static gboolean orden( const char *cmd, const char *arg )
         g_strfreev( q );
         return visto;
         }
+    if ( strcmp( cmd, "existe" ) == 0 )
+        {
+        gchar  **q = g_strsplit( arg, " | ", 2 );
+        int      s = q[1] ? atoi( q[1] ) : 120;
+        gboolean ya = g_file_test( q[0], G_FILE_TEST_EXISTS );
+
+        if ( !ya && g_get_monotonic_time() - desde > s * 1000000LL )
+            fallo( "no existe", arg );
+        g_strfreev( q );
+        return ya;
+        }
     /* Lo que manda el reloj de la voz: ni el rotulo siguiente, ni cerrar
        la ventana de la que se esta hablando, ni el final, hasta que acabe
        la frase que esta sonando. Tampoco la portada siguiente. */
@@ -1289,6 +1302,7 @@ static gboolean tic( gpointer d )
             }
         /* espera, y lo que espera a la voz, no son «no encuentro». */
         if ( strcmp( l, "espera" ) != 0 && strcmp( l, "aguarda" ) != 0
+             && strcmp( l, "existe" ) != 0
              && !( (strcmp( l, "rotulo" ) == 0 || strcmp( l, "salir" ) == 0 ||
                     strcmp( l, "cierra" ) == 0 || strcmp( l, "portada" ) == 0) && video )
              && g_get_monotonic_time() - desde > tiempo * 1000000LL )

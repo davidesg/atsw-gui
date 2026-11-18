@@ -1,0 +1,129 @@
+#! atsw_gui
+# CON VOZ: cada rotulo espera a que acabe la frase anterior, y «rotulo -»
+# espera a que acabe la que suena sin decir nada: va antes de una accion que
+# no puede pisar la frase (cerrar la ventana de la que se habla, quitar una
+# portada). Sin «espera» para leer: la voz marca el ritmo, y lo que tarda una
+# accion se cubre con la frase que la explica, para que no haya silencios.
+portada ATSW | El asistente, 1: instalarlo y verlo trabajar | 1000
+rotulo Este vídeo es para quien ya trabaja con ATSW y quiere que un asistente de inteligencia artificial le ayude en sus proyectos.
+rotulo El objetivo: instalar el asistente, preparar un proyecto para él, y ver cómo la madre enseña lo que hace, y quién dio cada paso.
+rotulo Conviene haber visto antes el vídeo del univariante: el asistente trabaja en ese mismo análisis. La conversación con él está en la segunda parte.
+rotulo El asistente es un cliente de LLM —Claude Code, Gemini CLI, Codex o CodeWhale— que corre en una terminal, en la carpeta del proyecto.
+rotulo ATSW le da tres servidores MCP: atsw-us para los modelos univariantes, atsw-mt para la transferencia y atsw-sis para los sistemas.
+rotulo Usan los mismos motores y el mismo proyecto que la madre. Lo que el asistente hace, la madre lo ve, y queda escrito quién dio cada paso.
+rotulo -
+ventana el taller
+tamano 1400 780
+rotulo Partimos de un proyecto como cualquier otro: «Nuevo…» lo crea, y «Datos…» carga la serie, el IPC subyacente del INE.
+boton Nuevo…
+ventana Proyecto nuevo
+fichero @PROYECTO@/proyecto.yaml
+espera 600
+boton Crear
+ventana el taller
+boton Datos…
+rotulo Es una serie mensual, desde 2002, sin desestacionalizar.
+ventana Cargar datos
+fichero @DATOS@/es_core.csv
+espera 600
+boton Abrir
+ventana Qué series cargar
+boton Cargar las marcadas
+rotulo El analista declara la muestra, de 2002 a 2019. Ese paso es suyo: lo que hace el analista no lleva marca.
+espera 600
+boton Cerrar
+ventana el taller
+boton +
+ventana Nueva muestra
+rotulo También escribe por qué: antes de la pandemia y de la crisis energética.
+campo Nombre | 2002-2019
+campo Hasta | 12 | 2019
+campo Por qué | Antes de la pandemia y de la crisis energética.
+espera 600
+boton Declararla
+rotulo La muestra queda en el proyecto, con su razón. La madre y el asistente leen el mismo proyecto.
+ventana el taller
+fila subyacente
+rotulo -
+portada Instalar el asistente | Una vez, en la carpeta del usuario | 1000
+rotulo El asistente se instala una sola vez, y sirve para todos los proyectos del usuario.
+rotulo -
+rotulo El paquete de ATSW trae uv y la fuente de los servidores. «Asistente ▸ Instalar el asistente…» los instala en tu carpeta de usuario.
+barra Asistente
+espera 900
+menu Instalar el asistente…
+rotulo uv descarga un Python y las dependencias fijadas en el uv.lock. No toca el PATH ni el sistema, y no hace falta ser administrador.
+rotulo Como las dependencias están fijadas, el asistente que se instala es el mismo en Windows, en macOS y en Linux.
+rotulo Mientras se instala, la madre sigue libre: se puede seguir trabajando en el proyecto.
+aguarda El asistente está instalado | 300
+rotulo Hecho: la barra de estado dice dónde ha quedado.
+rotulo -
+portada La ventana del asistente | Asistente ▸ Ventana del asistente (Ctrl+Mayús+A) | 1000
+rotulo La ventana del asistente se abre desde el mismo menú, o con Ctrl+Mayús+A. || La ventana del asistente se abre desde el mismo menú, o con Control, Mayúsculas y A.
+rotulo -
+rotulo Se acopla a la derecha de la madre, o se suelta en su propia ventana, por ejemplo en otro monitor junto a la terminal.
+barra Asistente
+espera 900
+menu Ventana del asistente
+rotulo Dice qué hay instalado, si el proyecto está preparado y lo último que ha hecho el asistente en él.
+rotulo «Preparar…» escribe en el proyecto AGENTS.md —cómo se trabaja en un proyecto de ATSW— y la configuración de cada cliente, sin claves.
+boton Preparar…
+ventana Preparar el proyecto
+rotulo Se marcan los clientes que se usan. Lo que ya existe no se toca: si un fichero ya está, enseña el bloque para añadirlo a mano.
+boton Preparar
+ventana preparado para el asistente
+tamano 900 600
+rotulo Para Claude y Gemini deja escritos sus ficheros. A Claude, además, solo le permite las herramientas de ATSW: ni la shell ni editar ficheros.
+rotulo «Abrir la terminal del sistema» la abre en la carpeta del proyecto. Ahí se lanza el cliente, y se le habla. Esa conversación la vemos en la segunda parte.
+boton Cerrar
+ventana el taller
+rotulo Aquí vemos lo que ve la madre mientras tanto. Le pedimos al asistente un modelo para el IPC subyacente, en la muestra 2002-2019.
+rotulo -
+portada El asistente trabaja | La madre lo ve en vivo | 1000
+lanza @ASISTENTE@/.venv/bin/python @MANUAL@/video/asistente.py @PROYECTO@ propone
+rotulo El asistente empieza por el modelo de las líneas aéreas: crea un modelo, escribe su especificación y lo estima con fue.
+rotulo -
+aguarda m01 de subyacente | 120
+rotulo La madre vigila el proyecto y lo enseña según aparece. La barra de estado dice qué ha llegado, y de quién.
+rotulo Su razón va en la columna «Por qué», con la marca [asistente] delante. Lo que escribe el analista no la lleva.
+rotulo La diagnosis no cuadra: residuos blancos, pero con curtosis 4.1. Unos pocos atípicos.
+lanza @ASISTENTE@/.venv/bin/python @MANUAL@/video/asistente.py @PROYECTO@ corrige
+rotulo El asistente deriva un hijo con el IVA de septiembre de 2012 y el escalón de octubre de 2007, y un AR(3): lo mismo que el análisis del vídeo del univariante.
+rotulo Es un hijo de m01: el proyecto guarda de qué modelo viene cada uno.
+aguarda m02 de subyacente | 120
+rotulo La curtosis baja a 0.8. Solo queda la normalidad, que falla por poco.
+rotulo La ventana del asistente lleva lo último que ha hecho en este proyecto.
+lanza @ASISTENTE@/.venv/bin/python @MANUAL@/video/asistente.py @PROYECTO@ elige
+rotulo Ahora elige m02, y deja escrita su razón, también la de lo que no cuadra: el analista lo revisará.
+aguarda elegido por el asistente | 60
+rotulo -
+portada Qué ha hecho el asistente | Todo está en el manifiesto del proyecto | 1000
+rotulo Todo lo que hace el asistente queda en el manifiesto del proyecto, y «Asistente ▸ Qué ha hecho el asistente…» lo resume.
+rotulo -
+rotulo Está en el menú Asistente.
+barra Asistente
+espera 900
+menu Qué ha hecho el asistente…
+rotulo Cada modelo que derivó y cada elección que hizo, con su razón. Y abajo, qué parte de los pasos del proyecto dio el asistente.
+ventana Qué ha hecho el asistente
+rotulo -
+cierra
+ventana el taller
+rotulo La ficha de confianza de un modelo resume lo que hace falta para fiarse de él: botón derecho ▸ Diagnosticar ▸ Ficha de confianza…
+derecho m02 | 2
+espera 900
+submenu Diagnosticar
+espera 900
+menu Ficha de confianza…
+ventana Ficha
+tamano 900 700
+rotulo El recorrido, con quién dio cada paso; la adecuación del modelo; si se reproduce, y lo que costó en CPU.
+rotulo «Comprobar» corre fue otra vez sobre el .pre: si los números no se mueven, el modelo se reproduce.
+boton Comprobar
+rotulo Es la misma comprobación para un modelo del asistente que para uno del analista.
+rotulo -
+cierra
+ventana el taller
+portada El analista decide | El asistente propone, y queda escrito quién hizo qué | 1500
+rotulo El asistente propone y prueba; elegir sigue siendo del analista. Y queda escrito quién hizo cada cosa.
+salir

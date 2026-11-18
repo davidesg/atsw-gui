@@ -1,0 +1,24 @@
+#! atsw_gui --proyecto @PROYECTO@/proyecto.yaml --sin-presentacion
+# limite 2400
+# LA MADRE MIENTRAS SE GRABA LA TERMINAL (graba.sh). Abre el proyecto, lanza
+# el grabador de la terminal (graba.py) y espera: al modelo que el asistente
+# deriva (m03) y a que la terminal acabe. Sin rotulos: los de esta parte los
+# lleva la terminal. El unico, SINCRONIA, no se ve: graba.sh lo busca en el
+# .ass para alinear los dos videos con la hora de reloj de la madre.
+ventana el taller
+tamano 1000 700
+fila subyacente
+pestana 2002-2019
+espera 1500
+rotulo SINCRONIA
+lanza date +%s.%N > @PROYECTO@/../terminal/madre.t0; python3 @MANUAL@/video/terminal/graba.py @MANUAL@/video/terminal/terminal.guion @PROYECTO@ @PROYECTO@/../terminal/terminal.mp4 -- "$TERMINAL_CLIENTE" > @PROYECTO@/../terminal/graba.err 2>&1
+espera 500
+rotulo -
+aguarda m03 de subyacente | 1800
+espera 8000
+barra Asistente
+espera 900
+menu Qué ha hecho el asistente…
+ventana Qué ha hecho el asistente
+existe @PROYECTO@/../terminal/terminal.mp4.fin | 1800
+salir

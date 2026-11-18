@@ -298,6 +298,10 @@ void atsw_ficha( Atsw *a, const char *serie, const char *muestra, const char *id
     gtk_container_add( GTK_CONTAINER(w->win), caja );
     w->texto = gtk_label_new( NULL );
     gtk_label_set_selectable( GTK_LABEL(w->texto), TRUE );
+    /* SIN FOCO DE TECLADO: con el, GTK la abria entera seleccionada (visto
+       en el video del asistente). Se selecciona igual con el raton, y se
+       copia con su menu; «Al cuaderno» la lleva entera.               */
+    gtk_widget_set_can_focus( w->texto, FALSE );
     gtk_label_set_line_wrap( GTK_LABEL(w->texto), TRUE );
     gtk_label_set_xalign( GTK_LABEL(w->texto), 0.0 );
     gtk_label_set_yalign( GTK_LABEL(w->texto), 0.0 );
@@ -323,4 +327,5 @@ void atsw_ficha( Atsw *a, const char *serie, const char *muestra, const char *id
 
     llena( w );
     gtk_widget_show_all( w->win );
+    gtk_widget_grab_focus( b );         /* «Cerrar» */
 }

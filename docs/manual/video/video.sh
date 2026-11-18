@@ -3,6 +3,9 @@
 #
 #   bash docs/manual/video/video.sh            el caso del manual (IPC y WTI)
 #   bash docs/manual/video/video.sh es-core    el univariante con intervenciones
+#   bash docs/manual/video/video.sh sim        el sistema de Jenkins y Alavi, con la madre
+#   bash docs/manual/video/video.sh asistente  el asistente, desde la madre
+#                                              (instala el asistente: necesita la red)
 #
 # Sin argumento, los guiones de video/escenas/ y ATSW-ipc-wti.mp4. Con un
 # nombre, los de video/escenas-NOMBRE/, su proyecto en /tmp/curso-NOMBRE/NOMBRE
@@ -20,9 +23,10 @@
 #
 # Cada rotulo se sintetiza antes de grabar; al grabar, el rotulo siguiente
 # espera a que acabe su frase (escenas.c), y aqui se mezclan las frases en
-# cada trozo en el segundo en que empezo su rotulo. Sin VOZ_MODELO, el video
-# sale mudo, como antes. Las frases se guardan en video/voz/ (fuera de git):
-# cambiar un rotulo rehace solo la suya.
+# cada trozo en el segundo en que empezo su rotulo. Lo que pasa entre frase y
+# frase, si tarda mas de un segundo, se acelera (acelera.py): sin pausas. Sin
+# VOZ_MODELO, el video sale mudo, como antes. Las frases se guardan en
+# video/voz/ (fuera de git): cambiar un rotulo rehace solo la suya.
 set -euo pipefail
 
 # Ningun fichero de mas de 2 GB: un ffmpeg que no para no llena el disco.
@@ -87,6 +91,10 @@ for t in "$D"/trozos/*.mp4; do
           -map "[v]" -map "[a]" -t "$dur" \
           -c:v libx264 -preset slow -crf 22 -pix_fmt yuv420p -r 25 \
           -c:a aac -b:a 96k -ar 48000 -ac 1 "$s" )
+    # Sin pausas: lo que pasa entre frase y frase, si tarda, va mas deprisa.
+    if [ -s "$t.voz" ]; then
+        python3 "$V/acelera.py" "$s" "$t.voz" "$s.ac.mp4" && mv "$s.ac.mp4" "$s"
+    fi
     echo "file '$s'" >> "$D/lista.txt"
 done
 ffmpeg -loglevel error -y -f concat -safe 0 -i "$D/lista.txt" -c copy "$SALIDA"

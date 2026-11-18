@@ -51,7 +51,17 @@ cc -shared -fPIC -O2 -Wall -o "$T/libescenas.so" "$M/capturas/escenas.c" \
 mkdir -p "$T/ATSW/bin"
 for p in $PROGRAMAS; do cp "$R/$p" "$T/ATSW/bin/"; done
 rm -rf "$T/ATSW/Ejemplos"; cp -R "$R/docs/ejemplos" "$T/ATSW/Ejemplos"   # como en Windows y macOS
-export PATH="$T/ATSW/bin:$PATH"
+# EL ASISTENTE, como en el paquete (packaging/asistente.sh): uv en bin/ y la
+# fuente en asistente/, solo si algun guion lo usa. Su instalacion --la que
+# hace la escena-- va a XDG_DATA_HOME, dentro de $T, y no a la del usuario.
+if grep -qs '^barra Asistente' "${ESCENAS:-$M/capturas/escenas}"/*.txt "$@"; then
+    . "$R/packaging/asistente.sh"
+    asistente_fuente "$R" "$T/ATSW/asistente/atsw_mcp" >/dev/null
+    [ -x "$T/ATSW/bin/uv" ] || asistente_uv "$(uname -m)-unknown-linux-gnu" "$T/ATSW/bin" >/dev/null
+fi
+# Y NADA MAS DEL PATH de quien las corre: la madre ensena lo que encuentra
+# en el (los clientes del asistente, con su ruta), y su carpeta no se graba.
+export PATH="$T/ATSW/bin:/usr/local/bin:/usr/bin:/bin"
 export GDK_BACKEND=broadway BROADWAY_DISPLAY=":$PANTALLA" GTK_THEME=Adwaita
 # Los ejemplos de Ayuda -> Ejemplos se copian AQUI, no en los documentos de
 # quien corre las capturas; los guiones los nombran con @EJEMPLOS@.
@@ -81,6 +91,7 @@ for e in "${escenas[@]}"; do
     cmd=${cmd//@DATOS@/$M/datos}
     cmd=${cmd//@EJEMPLOS@/$ATSW_EJEMPLOS}
     sed -e "s|@PROYECTO@|$P|g" -e "s|@DATOS@|$M/datos|g" -e "s|@EJEMPLOS@|$ATSW_EJEMPLOS|g" \
+        -e "s|@MANUAL@|$M|g" -e "s|@ASISTENTE@|$XDG_DATA_HOME/ATSW/asistente|g" \
         "$e" > "$T/guion.txt"
     echo "== $(basename "$e")"
     # Un broadwayd para cada escena: si un cliente sale con ventanas

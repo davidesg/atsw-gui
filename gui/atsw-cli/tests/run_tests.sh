@@ -269,6 +269,12 @@ fi
 # (lib/anomalos/anomalos.h): el cotejo es contra el motor. RIPC.2 tiene un
 # episodio, 1/2003, y sin el la ACF y la PACF del retardo 13 cambian de lado.
 O="$G/RIPC.2/RIPC.2.out"
+# LA MISMA Q, LA MISMA p (BUG-0006 de la madre): RIPC.2 es un AR(2), y la Q
+# de 39 retardos tiene 37 g.l. en anomalos como en el dictamen.
+mira "anomalos: la Q descuenta los ARMA, como el dictamen (BUG-0006)" \
+     '"$CLI" anomalos "$Y" RIPC m01 | grep -q "Q(39), 37 g.l.  con 43.4 (p = 0.217)" && "$CLI" dictamen "$Y" RIPC m01 | grep -q "Q(39)=43.4 (37 g.l.) p=0.217"'
+mira "dictamen: Q(retardo), no Q(g.l.) (BUG-0006)" \
+     '"$CLI" dictamen "$Y" RIPC m01 | grep -q "Q(12)=8.6 (10 g.l.)"'
 J=$("$CLI" --json anomalos "$Y" RIPC m01 --episodios 1)
 mira "anomalos: un episodio, en 1/2003" \
      '[ "$(printf "%s\n" "$J" | campo "len(d[\"episodios\"]), d[\"episodios\"][0][\"desde\"]")" = "1 1/2003" ]'

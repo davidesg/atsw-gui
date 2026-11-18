@@ -1,0 +1,51 @@
+# LA VOZ DE LA TERMINAL (narra.py), sobre la toma ya grabada (graba.sh).
+#
+# La toma no se puede volver a grabar igual: lo que contesta el LLM es suyo.
+# Por eso esta parte se narra DESPUES, sobre lo que contesto de verdad, y los
+# rotulos dicen lo que se ve. Si se graba otra toma, esta narracion se
+# reescribe.
+#
+#   a SEGUNDO     un ancla: las frases que siguen empiezan, como pronto, en
+#                 ese segundo de la toma. Si la voz de antes aun no ha
+#                 acabado, la imagen se congela ahi hasta que acabe: se pone
+#                 donde la pantalla esta quieta (antes de teclear, con la
+#                 respuesta ya escrita).
+#   rotulo TEXTO  una frase, como en las escenas (voz.py la sintetiza; tras
+#                 « || » va lo que se dice, si es otra cosa).
+#
+# Sin silencios: entre un ancla y la siguiente, las frases tienen que llenar
+# lo que tarda la toma (narra.py avisa de los huecos de mas de 1.5 s).
+a 0
+rotulo En una terminal, en la carpeta del proyecto, el analista lanza su cliente de LLM: aquí, Claude Code.
+rotulo Es el proyecto del otro vídeo. A la izquierda, la madre: m01 y m02 son del asistente, y m02 está elegido.
+a 14.6
+rotulo Primero le pregunta por el proyecto: qué modelos hay de la serie subyacente, quién los hizo y cuál está elegido.
+rotulo Para contestar, el cliente llama a las herramientas de atsw-us, que leen el manifiesto del proyecto.
+a 31
+rotulo m00 son los datos; m01, el modelo de las líneas aéreas; y m02, su hijo, con las dos intervenciones y un AR(3).
+rotulo Los dos los hizo el asistente, y también la elección de m02. Su razón quedó escrita: la curtosis baja de 4.1 a 0.8.
+rotulo Y lo dice claro: ni los modelos ni la elección los ha validado todavía el analista.
+a 48.6
+rotulo La segunda pregunta: por qué m02 y no m01, y si hay algo en m02 que el analista deba revisar.
+rotulo El cliente llama cinco veces a atsw-us: lee los dos modelos y su diagnosis. Después, piensa la respuesta.
+rotulo Estas preguntas solo leen: no cambian nada en el proyecto. Por eso la madre, a la izquierda, sigue igual.
+rotulo Los números no los calcula el LLM. Los da fue, el mismo motor que usa la madre, y el asistente los lee del proyecto.
+rotulo Lo que pone el LLM es la lectura: qué cuadra, qué falta y qué conviene probar.
+a 86
+rotulo La respuesta trae cuatro cosas que revisar.
+rotulo Una: m02 hace dos cambios a la vez, las intervenciones y el AR(3). Falta el hermano con el MA(1) de m01, para saber qué mejora qué.
+rotulo Dos: φ₂ parece sobrar. Su t es 1.23, y es el único parámetro que marca la diagnosis.
+rotulo Tres: el escalón de octubre de 2007 no tiene causa escrita. El de septiembre de 2012 sí: la subida del IVA.
+rotulo Y cuatro: faltan los contrastes formales, y saber para qué es el modelo. Si entra en un sistema, D = 1 no vale.
+rotulo Antes de hacer nada, pregunta si se trabaja en guiado o en autónomo.
+a 110
+rotulo La tercera ya no es una pregunta: le pide que pruebe un hijo de m02 sin el escalón de octubre de 2007, y que diga si hace falta.
+rotulo A la izquierda, en la madre, el modelo nuevo aparece solo: m03, del asistente.
+rotulo Sale de m01 y no de m02: las herramientas no quitan una intervención heredada. Así que lleva el AR(3) y solo el escalón del IVA.
+rotulo El asistente lo estima con fue, y compara m02 y m03 con una razón de verosimilitudes.
+rotulo En «Qué ha hecho el asistente», m03 ya está, con su razón: a petición del analista, y por qué sale de m01.
+a 149
+rotulo El resultado: quitar el escalón empeora el ajuste. La razón de verosimilitudes vale 11.2, con un grado de libertad: p ≈ 0.001.
+rotulo Pero matiza: el escalón se puso después de ver ese residuo, así que el p es optimista. Su causa la tiene que decidir el analista.
+rotulo Su conclusión es mantener el escalón y escribir su causa. Y no elige m03: deja la elección donde estaba.
+rotulo El asistente propone y prueba; elegir sigue siendo del analista. Y queda escrito quién hizo cada cosa.

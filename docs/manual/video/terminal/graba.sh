@@ -3,6 +3,9 @@
 #
 #   bash docs/manual/video/terminal/graba.sh        -> docs/manual/video/ATSW-asistente-terminal.mp4
 #
+# Sale el borrador, con los rotulos de terminal.guion y mudo. La voz va
+# despues, con voz.sh, sobre la toma que se quede (narracion.txt).
+#
 # 1. proyecto.sh rehace el proyecto de partida en /tmp/curso-terminal
 #    (instala el asistente: necesita la red).
 # 2. capturas.sh graba la madre con madre.txt; la escena lanza graba.py,
@@ -53,11 +56,17 @@ dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$G/terminal.mp
 
 # EL LIENZO: 1920x1080 como las escenas. La madre (en su lienzo, a 1257x880
 # desde x=331) recortada y a 1000 de ancho; la terminal, 880x880 a la derecha.
-cp "$G/terminal.mp4.ass" "$D/t.ass"
+# La toma, sin rotulos, queda en $TOMA: la voz se le pone despues (voz.sh),
+# sobre lo que el LLM contesto de verdad. El borrador lleva los rotulos de
+# terminal.guion quemados.
+TOMA=${TOMA:-$V/ATSW-asistente-terminal-toma.mp4}
 ( cd "$D" && ffmpeg -loglevel error -y -ss "$desde" -i "$M" -i "$G/terminal.mp4" \
-    -f lavfi -i "color=c=0x1e3a66:s=1920x1080:r=10:d=$dur" -f lavfi -t "$dur" -i anullsrc=r=48000:cl=mono \
+    -f lavfi -i "color=c=0x1e3a66:s=1920x1080:r=10:d=$dur" \
     -filter_complex "[0:v]crop=1290:905:316:12,scale=1000:-2,tpad=stop_mode=clone:stop_duration=$dur[m];\
-[2:v][m]overlay=10:(930-h)/2:shortest=1[a];[a][1:v]overlay=1025:25:shortest=1,ass=t.ass[v]" \
-    -map "[v]" -map 3:a -t "$dur" -c:v libx264 -preset slow -crf 22 -pix_fmt yuv420p -r 25 \
-    -c:a aac -b:a 96k -ar 48000 -ac 1 "$SALIDA" )
-echo "hecho: $SALIDA ($(du -h "$SALIDA" | cut -f1))"
+[2:v][m]overlay=10:(930-h)/2:shortest=1[a];[a][1:v]overlay=1025:25:shortest=1[v]" \
+    -map "[v]" -t "$dur" -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -r 25 "$TOMA" )
+cp "$G/terminal.mp4.ass" "$D/t.ass"
+( cd "$D" && ffmpeg -loglevel error -y -i "$TOMA" -f lavfi -t "$dur" -i anullsrc=r=48000:cl=mono \
+    -vf ass=t.ass -map 0:v -map 1:a -t "$dur" -c:v libx264 -preset slow -crf 22 -pix_fmt yuv420p \
+    -r 25 -c:a aac -b:a 96k -ar 48000 -ac 1 "$SALIDA" )
+echo "hecho: $SALIDA ($(du -h "$SALIDA" | cut -f1)); la toma, sin rotulos: $TOMA"

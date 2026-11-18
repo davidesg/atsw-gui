@@ -698,6 +698,10 @@ mira "--por: proyecto ver --json lo dice, paso a paso" \
      '[ "$(echo "$V" | campo "[m[\"por\"] for m in d[\"modelos\"] if not m[\"datos\"]]")" = "['"'"'analista'"'"', '"'"'asistente'"'"', '"'"'analista'"'"', '"'"'asistente'"'"']" ]'
 mira "--por: y en texto, con su marca" \
      '[ $("$CLI" proyecto ver "$YL" | grep -c "✦ asistente") = 2 ]'
+mira "proyecto ver: la razón de la elección, en texto (guion_map la lee)" \
+     '"$CLI" proyecto ver "$YL" | grep -qx "      elegido: el mejor"'
+mira "proyecto ver --json: razon_elegido solo en el elegido" \
+     '[ "$(echo "$V" | campo "[m[\"razon_elegido\"] for m in d[\"modelos\"] if not m[\"datos\"]]")" = "['"'"''"'"', '"'"''"'"', '"'"''"'"', '"'"'el mejor'"'"']" ]'
 mira "--por: otro valor no se apunta (estado 1)" \
      '! "$CLI" proyecto nuevo "$YL" RIPC --por nadie 2>/dev/null && ! grep -q "nadie" "$YL"'
 

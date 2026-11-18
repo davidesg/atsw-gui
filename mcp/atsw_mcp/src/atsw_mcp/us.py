@@ -273,7 +273,10 @@ def crea():
         """La especificación de un modelo SIN ESTIMAR. transform «λ,d,D»
         (0,1,0: log y una diferencia); arma «p,q,P,Q» (sustituye el ARMA);
         add_arma «p,q,P,Q» (multiplica un factor más); interventions como el
-        motor las lee («step 10 2008», «impulse 3 2020»); mean «free» o un
+        motor las lee («step 10 2008», «impulse 3 2020»): se AÑADEN a las que
+        el .inp ya trae —el hijo de new_version hereda las del padre— y una
+        igual a otra no se admite; para un modelo SIN una intervención, parte
+        (parent) del modelo de antes de ella; mean «free» o un
         número (fija). La estacionalidad determinista, con D = 0: n_harmonics N
         (los pares cos/sin k = 1..N) o seasonal (el paquete entero: los pares y,
         con s par, alter, la de Nyquist); easter, Semana Santa (mensuales). Los

@@ -32,8 +32,11 @@ import pandas as pd
 from statsmodels.tsa.vector_ar.vecm import VECM, coint_johansen
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DRVEC = "/home/david/Dropbox/SRC/drvec/bin/drvec"
-DS = "/home/david/Dropbox/SRC/drvec/datasets"
+import os
+# engines/drvec of this repository, or DRVEC_HOME
+_DRVEC_HOME = os.environ.get("DRVEC_HOME") or os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
+DRVEC = os.path.join(_DRVEC_HOME, "bin", "drvec")
+DS = os.path.join(_DRVEC_HOME, "datasets")
 
 
 # --------------------------------------------------------------- data prep --

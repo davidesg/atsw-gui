@@ -1,8 +1,10 @@
 #!/bin/sh
 # Minimal repros of the suspected drvec defects found by the JJ-block validation.
 # Self-contained: builds its inputs from the repo's datasets/ into ./repro/.
-D=/home/david/Dropbox/SRC/drvec/bin/drvec
-DS=/home/david/Dropbox/SRC/drvec/datasets
+# engines/drvec of this repository, or DRVEC_HOME
+DRVEC_HOME="${DRVEC_HOME:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+D="$DRVEC_HOME/bin/drvec"
+DS="$DRVEC_HOME/datasets"
 cd "$(dirname "$0")"; mkdir -p repro; cd repro
 ll() { grep -m1 -E '^(eval )?logelf' "$1.out" | awk '{print $NF}'; }
 crit() { grep -m1 'Convergence criterion' "$1.out" | sed 's/.*criterion: //'; }

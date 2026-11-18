@@ -1,6 +1,7 @@
 suppressMessages(library(urca))
 rd <- function(f){ x <- readLines(f); i <- grep("^<",x); read.table(text=x[(i+1):length(x)], header=TRUE)}
-D <- "/home/david/Dropbox/SRC/drvec/datasets/lutkepohl/"
+# engines/drvec of this repository, or DRVEC_HOME
+D <- file.path(Sys.getenv("DRVEC_HOME", "../../.."), "datasets", "lutkepohl", "")
 e1 <- log(rd(paste0(D,"e1.dat"))); cat("e1 nobs", nrow(e1), "\n")
 e3 <- rd(paste0(D,"e3.dat")); cat("e3 nobs", nrow(e3), "\n"); e3$M1 <- log(e3$M1); e3$gnp <- log(e3$gnp)
 for (nm in c("e1","e3")) { d <- get(nm)

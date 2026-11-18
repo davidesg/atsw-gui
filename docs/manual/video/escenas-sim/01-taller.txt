@@ -8,6 +8,9 @@
 # voz marca el ritmo, y lo que tarda una accion se cubre con la frase que la
 # explica, para que no haya silencios.
 portada ATSW · SIM | Un sistema: ratas almizcleras y visones | 1500
+rotulo Este vídeo es para quien ya sabe hacer en ATSW un modelo univariante y una función de transferencia, y tiene series que se afectan entre sí.
+rotulo El objetivo: estimar un sistema VARMA con sim_gui, comprobar si merece la pena frente a los modelos univariantes, y leer lo que cuenta de las series.
+rotulo Conviene haber visto antes los vídeos del univariante y de la transferencia. El ejemplo viene con ATSW, y sigue el capítulo 14 del manual.
 rotulo La transferencia supone que la salida no afecta a las entradas.
 rotulo Cuando dos series se afectan en los dos sentidos, no hay transferencia: hay un sistema. ATSW lo estima como un VARMA, con drvarma.
 rotulo -

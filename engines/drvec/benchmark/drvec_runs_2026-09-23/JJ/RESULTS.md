@@ -1,6 +1,6 @@
 # drvec external validation — JJ block (Denmark, Finland, UKconinc, UKconsumption, Canada, UKpppuip)
 
-drvec 0.10 (`/home/david/Dropbox/SRC/drvec/bin/drvec`), R 4.3.3 / urca 1.3.4 `ca.jo`, statsmodels 0.14.6.
+drvec 0.10 (`drvec/bin/drvec`), R 4.3.3 / urca 1.3.4 `ca.jo`, statsmodels 0.14.6.
 Re-run: `./run_all.sh` (tables) and `./repro_defects.sh` (defect repros). Repository untouched.
 
 ## Conventions (worked out from docs/USAGE.md, MODEL.md, COMPARISON_JOHANSEN.md, src/drvec.c)

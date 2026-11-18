@@ -1,7 +1,7 @@
 # STUDY M1 — Does `drvec` implement the model and the transformation of Mauricio (2006)?
 
 *Scope: the paper's model (Sections 2–3, Remarks 1–6) and its transformation to a stationary
-VARMA; the code that realises it in `/home/david/Dropbox/SRC/drvec/src/drvec.c` (repo HEAD
+VARMA; the code that realises it in `drvec/src/drvec.c` (repo HEAD
 `5aebd28`, drvec 0.10). The engine (`elf`, `est`) is treated as a black box whose interface
 was read from its headers and from Mauricio (2002, JTSA 23, "An algorithm for the exact
 likelihood of a stationary VARMA model"). Everything here was done read-only; the scripts and

@@ -1,9 +1,12 @@
 """Run legacy drv (original or instrumented) and drvec; parse results.  Study B."""
 import os, re, subprocess, shutil, math
 S = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DRV_ORIG = '/home/david/Dropbox/SRC/drv_project/bin/drv'
+DRV_ORIG = os.environ.get("DRV_ORIG", "drv")   # the original drv, for the comparison
 DRV_X = os.path.join(S, 'legacy_x/bin/drv')
-DRVEC = '/home/david/Dropbox/SRC/drvec/bin/drvec'
+import os
+# engines/drvec of this repository, or DRVEC_HOME
+_DRVEC_HOME = os.environ.get("DRVEC_HOME") or os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../.."))
+DRVEC = os.path.join(_DRVEC_HOME, "bin", "drvec")
 WORK = os.path.join(S, 'work')
 
 def _dir(tag):

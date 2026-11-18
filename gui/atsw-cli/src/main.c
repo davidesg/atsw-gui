@@ -292,6 +292,8 @@ static int proyecto_ver( const char *path )
             js_par( t, "por_elegido", !m->elegido ? "" :
                     m->por_elegido[0] ? m->por_elegido : "analista" );
             g_string_append( t, ", " );
+            js_par( t, "razon_elegido", m->elegido ? m->razon_elegido : "" );
+            g_string_append( t, ", " );
             g_string_append_printf( t, "\"datos\": %s, \"elegido\": %s}",
                                     m->rol == PR_DATOS ? "true" : "false",
                                     m->elegido ? "true" : "false" );
@@ -336,6 +338,10 @@ static int proyecto_ver( const char *path )
             if ( m->padre[0] || m->razon[0] )
                 g_string_append_printf( t, "      de %s: %s\n", m->padre[0] ? m->padre : "—",
                                         m->razon[0] ? m->razon : "(sin razón)" );
+            /* Y por qué se eligió: lo que el asistente dejó escrito al elegir
+             * (guion_adopt) no es la razón de derivarlo. */
+            if ( m->elegido && m->razon_elegido[0] )
+                g_string_append_printf( t, "      elegido: %s\n", m->razon_elegido );
             }
         for ( i = 0; i < p->nca; i++ )
             {

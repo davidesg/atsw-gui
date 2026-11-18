@@ -49,18 +49,40 @@ SIGLAS = {
     "fue_gui": "fue gui",
     "AR": "a erre", "MA": "eme a",
     "MANUAL.md": "el manual",
+    # El video del asistente.
+    "LLM": "ele ele eme", "MCP": "eme ce pe", "CPU": "ce pe u",
+    "atsw-us": "a te ese uve doble u ese",
+    "atsw-mt": "a te ese uve doble eme te",
+    "atsw-sis": "a te ese uve doble sis",
+    "uv.lock": "u uve punto lock", "uv": "u uve",
+    "AGENTS.md": "agents punto eme de",
+    "PATH": "pat", "CLI": "ce ele i",
+    # El video de SIM.
+    "sim_gui": "sim gui", "drvarma": "de erre varma", "VARMA": "varma",
+    "MUSKRAT": "mascrat", "MINK": "mink", "MT": "eme te", "C1": "ce uno",
 }
 
 # Los modelos y los operadores. En orden: lo largo antes.
 REGLAS = [
     (r"«|»", ""),
+    (r"\s*▸\s*", ", "),
+    (r"\b(\d{4})[-–](\d{4})\b", r"\1 a \2"),
+    (r"\bARIMA\((\d),(\d),(\d)\)", r"arima \1 \2 \3"),
+    (r"\|t\| < ", "te, en valor absoluto, menor que "),
+    (r"−(?=\d)", "menos "),
+    (r"Σ", "sigma"),
     (r"\bAR\((\d)\)", r"a erre \1"),
     (r"\bMA\((\d)\)", r"eme a \1"),
     (r"\bm0(\d)\b", r"eme cero \1"),
     (r"\.pre\b", " punto pre"),
+    (r"\.out\b", " punto out"),
+    (r"\bp y q\b", "pe y cu"),
     (r"\bb r s\b", "be erre ese"),
     (r"λ", "lambda"),
     (r"ω₀", "omega cero"),
+    (r"ω₂", "omega dos"),
+    (r"φ₂", "fi dos"),
+    (r"\s*≈\s*", " aproximadamente "),
     (r"ω", "omega"),
     (r"Θ", "theta"),
     (r"δ", "delta"),
@@ -96,6 +118,10 @@ PRONUNCIA = {
     "Jenkins":  ("ˈʝeŋkins", "Yénkins"),
     "Treadway": ("ˈtɾe.ðwei", "Trédguei"),
     "Ljung":    ("ˈʝuŋ", "Yung"),
+    "Claude":   ("ˈklod", "Clod"),
+    "Hosking":  ("ˈxos.kin", "Jóskin"),
+    "Diebold":  ("ˈdi.bold", "Díbold"),
+    "CodeWhale": ("ˈkoud.weil", "Coud uéil"),
 }
 
 

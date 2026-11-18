@@ -3,95 +3,92 @@
 # previsión (lo deja la 01). Como la escena 08 de las capturas, sin el
 # bootstrap de las bandas.
 # limite 900
-portada sim_gui | Siete pestañas, de la puerta a la previsión | 3000
+#
+# CON VOZ (ver la 01). Lo que calcula un motor no se espera con «espera»:
+# «aguarda» el texto que deja al acabar en la barra de estado, y mientras
+# tanto la voz cuenta lo que esta haciendo.
+portada sim_gui | Siete pestañas, de la puerta a la previsión | 1500
+rotulo sim_gui recibe el sistema de la madre: las series, sus modelos y la ventana común.
+rotulo -
 ventana sim_gui
 tamano 1100 760
-espera 2000
-rotulo sim_gui recibe el sistema de la madre: las series, sus modelos y la ventana común.
-espera 4000
 rotulo Cada serie conserva su modelo univariante. Lo que se añade es la dinámica entre ellas.
-espera 3500
+rotulo La ventana común son los años que tienen las dos series, ya diferenciadas. MUSKRAT pierde su primer año: el sistema empieza en 1851.
 pestana 2 · Puerta
 rotulo Antes de añadir nada, la puerta: ¿se parte de donde se cree?
 boton Pasar la puerta
-espera 15000
-rotulo El sistema diagonal tiene que dar la suma de las verosimilitudes de cada serie sola. Aquí, exacta.
-espera 4500
+rotulo sim_gui estima el sistema diagonal, sin dinámica cruzada y con Σ diagonal, en los óptimos de cada .pre.
+aguarda La puerta pasa | 120
+rotulo Su verosimilitud tiene que ser la suma de las de cada serie sola. Aquí, exacta: la diferencia es de 10⁻¹³. || Su verosimilitud tiene que ser la suma de las de cada serie sola. Aquí, exacta: la diferencia es de diez a la menos trece.
 rotulo Si la puerta no pasa, no se sigue: nada de lo que venga se podría comparar con los univariantes.
-espera 3500
 pestana 3 · Identificación
 rotulo La identificación: la CCF de los residuos univariantes, que ya están preblanqueados.
-espera 4000
+rotulo Son las innovaciones de cada serie: una barra fuera de la banda es dinámica entre las series, no de cada una.
 rotulo k = 1 en los dos sentidos: más visones, menos ratas al año siguiente; más ratas, más visones.
-espera 4500
 rotulo Es retroalimentación. Y k = 0 fuera de la banda pide una Σ completa, no un enlace.
-espera 4000
 boton Al modelo
-espera 1000
 rotulo El modelo: p y q de la dinámica cruzada, los enlaces y la Σ. Aquí, la AR(2) cruzada de Jenkins y Alavi.
 numero 2 | 2
-espera 4000
+rotulo Dos enlaces por dos retardos, más la covarianza: cinco parámetros cruzados.
 pestana 5 · Estimación
 rotulo «Estimar» lleva el sistema a drvarma: el diagonal de cada serie se reestima junto con lo nuevo.
 boton Estimar
-espera 30000
-espera 2500
+rotulo drvarma maximiza la verosimilitud exacta del VARMA. Su informe completo es el .out, que queda abajo.
+rotulo Si el optimizador se para en la pared MA, una raíz MA en el círculo unidad, lo dice en ámbar: lo que sale no es un óptimo.
+aguarda Convergió en | 300
 pestana 6 · Diagnosis
-rotulo ¿Merece la pena? Contra el diagonal, es decir, contra los univariantes: la LR dice que sí.
-espera 4500
+rotulo ¿Merece la pena? Contra el diagonal, es decir, contra los univariantes: la LR vale 41 con 5 grados de libertad. Sí.
+rotulo Después, que el optimizador convergió, y que el sistema es estacionario e invertible.
 pestana Residuos
-rotulo Hosking es el Ljung-Box de un sistema: aquí no rechaza.
-espera 3500
+rotulo Hosking es el Ljung-Box de un sistema: aquí no rechaza. Pero los residuos no son normales: hay un año malo.
 pestana Parámetros
-rotulo AR1[MUSKRAT<-MINK] es la depredación; AR1[MINK<-MUSKRAT], la comida.
-espera 4500
+rotulo AR1[MUSKRAT<-MINK] es la depredación; AR1[MINK<-MUSKRAT], la comida. || El efecto del visón en la rata almizclera es la depredación; el de la rata en el visón, la comida.
 rotulo «Ver modelo» da una página por serie: sus residuos y su ecuación, con lo que le llega de la otra.
 boton Ver modelo
 ventana .pdf
 tamano 1000 760
-espera 4500
 rotulo 1908: −4.2 desviaciones típicas en la rata almizclera. Jenkins y Alavi lo vieron y no supieron qué fue.
-espera 4500
+rotulo -
 cierra
 ventana sim_gui
 pestana Estructura
 rotulo Estructura: simplificar pone a cero los cruzados con |t| < 1 y lo contrasta por LR.
 boton Simplificar (|t| < 1)
-espera 45000
+rotulo Aquí cae uno: AR2[MINK<-MUSKRAT], con t = −0.69. El modelo simple se estima como hijo del actual. || Aquí cae uno: el segundo retardo de la rata en el visón, con te igual a menos cero coma sesenta y nueve. El modelo simple se estima como hijo del actual.
+aguarda Convergió en | 300
 pestana Estructura
-espera 2000
+rotulo La LR no rechaza la restricción: vale lo mismo, con un parámetro menos.
 rotulo «¿Es una red?» prueba cada orden triangular. Si alguno valiera, bastaría una red de transferencias.
 boton ¿Es una red?
-espera 120000
-espera 2000
-rotulo Aquí todas se rechazan: es un sistema simultáneo.
-espera 3500
+rotulo Pone a cero cada par de enlaces y estima cada modelo restringido.
+rotulo Si un orden triangular se sostuviera, «Pasar a MT» llevaría la red a drtran, el motor de las transferencias.
+rotulo Una red es más sencilla: cada serie se explica por las de antes, sin retroalimentación.
+rotulo Aquí la CCF ya lo anunciaba: el visón afecta a la rata, y la rata al visón.
+aguarda contrastes hechos | 600
+rotulo Todas se rechazan: es un sistema simultáneo.
 pestana 7 · Previsión
 rotulo La previsión a 3 años, y la evaluación estimando con los 48 primeros, hasta 1897.
 numero 1 | 3
 casilla Evaluar fuera de muestra | 1
 numero 2 | 48
 boton Calcular
-espera 60000
-espera 2000
+rotulo Se estima con 48 años, y se prevé desde cada origen siguiente, comparando con lo que pasó. Lo mismo con los univariantes.
+rotulo Jenkins y Alavi no pudieron hacer esta prueba.
+aguarda Previsión lista | 300
 rotulo Las bandas de la previsión son teóricas: suponen que el modelo es el verdadero.
-espera 4000
 pestana Evaluación
 rotulo Lo empírico es la evaluación: el sistema prevé peor que los univariantes, aunque no significativamente.
-espera 5000
+rotulo El contraste de Diebold-Mariano, con la corrección para muestras cortas, no es significativo en ninguna casilla.
 rotulo Los univariantes son la vara de medir, también al prever. El sistema describe cómo se afectan.
-espera 4500
 pestana Respuesta al impulso
 rotulo La respuesta al impulso reparte lo que pasa a la vez en el orden del sistema: por eso el orden importa.
-espera 4500
 boton Ver el gráfico
 ventana irf_
 tamano 700 900
-espera 2000
 rotulo Un choque en las ratas sube los visones al año siguiente; los visones bajan las ratas después.
-espera 4500
+rotulo La presa alimenta al depredador, y el depredador se come a la presa.
 rotulo Las bandas son del método delta; «Bandas por bootstrap» las da sin linealizar, en segundo plano.
-espera 4500
+rotulo -
 cierra
 ventana sim_gui
 rotulo -

@@ -868,19 +868,27 @@ int atsw_asistente_pasos( const Proyecto *p, GtkListStore *st )
         gboolean        hizo = !strcmp( m->por, "asistente" );
         gboolean        eligio = m->elegido && !strcmp( m->por_elegido, "asistente" );
         GtkTreeIter     it;
+        gchar          *razon;
 
         if ( !hizo && !eligio ) continue;
         n++;
         if ( st == NULL ) continue;
+        /* Lo derivó y lo eligió: las dos razones, que no son la misma. */
+        if ( hizo && eligio && m->razon_elegido[0] )
+            razon = g_strdup_printf( "%s\nLo eligió: %s",
+                                     m->razon[0] ? m->razon : "(sin razón)", m->razon_elegido );
+        else
+            razon = g_strdup( eligio && m->razon_elegido[0] && !hizo ? m->razon_elegido
+                              : ( m->razon[0] ? m->razon : "(sin razón)" ) );
         gtk_list_store_append( st, &it );
         gtk_list_store_set( st, &it,
             QH_SERIE,   m->serie,
             QH_MUESTRA, m->muestra[0] ? m->muestra : "completa",
             QH_MODELO,  m->id,
             QH_QUE,     hizo && eligio ? "lo derivó y lo eligió" : hizo ? "lo derivó" : "lo eligió",
-            QH_RAZON,   eligio && m->razon_elegido[0] && !hizo ? m->razon_elegido
-                        : ( m->razon[0] ? m->razon : "(sin razón)" ),
+            QH_RAZON,   razon,
             -1 );
+        g_free( razon );
         }
     return n;
 }

@@ -3504,6 +3504,31 @@ static void asistente_menu( void )
              ( A.p->m[i].elegido && !strcmp( A.p->m[i].por_elegido, "asistente" ) );
     check( n > 0 && atsw_asistente_pasos( A.p, NULL ) == n,
            "«Qué ha hecho el asistente» cuenta sus pasos", NULL );
+
+    /* Y un modelo que derivo Y eligio lleva las dos razones, que no son la
+       misma: la de derivarlo y la de elegirlo (guion_adopt).            */
+    {
+    Proyecto     *q = g_new0( Proyecto, 1 );
+    GtkListStore *st = gtk_list_store_new( QH_COLS, G_TYPE_STRING, G_TYPE_STRING,
+                                           G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING );
+    GtkTreeIter   it;
+    gchar        *r = NULL;
+
+    q->nm = 1;
+    g_strlcpy( q->m[0].serie, "ipc", sizeof q->m[0].serie );
+    g_strlcpy( q->m[0].id, "m02", sizeof q->m[0].id );
+    g_strlcpy( q->m[0].razon, "las dos intervenciones", sizeof q->m[0].razon );
+    g_strlcpy( q->m[0].por, "asistente", sizeof q->m[0].por );
+    q->m[0].elegido = 1;
+    g_strlcpy( q->m[0].por_elegido, "asistente", sizeof q->m[0].por_elegido );
+    g_strlcpy( q->m[0].razon_elegido, "residuos blancos", sizeof q->m[0].razon_elegido );
+    atsw_asistente_pasos( q, st );
+    if ( gtk_tree_model_get_iter_first( GTK_TREE_MODEL(st), &it ) )
+        gtk_tree_model_get( GTK_TREE_MODEL(st), &it, QH_RAZON, &r, -1 );
+    check( r && strstr( r, "las dos intervenciones" ) && strstr( r, "Lo eligió: residuos blancos" ),
+           "«Qué ha hecho el asistente»: lo derivó y lo eligió, con las dos razones", r );
+    g_free( r ); g_object_unref( st ); g_free( q );
+    }
 }
 
 /* --- FASE 2: LO QUE HACE EL ASISTENTE, EN VIVO (ESTUDIO-terminal-mcp §7.3) */

@@ -3,7 +3,9 @@
 # Usage: ./run_drvec.sh [case ...]   (default: all)
 set -u
 D=$(cd "$(dirname "$0")" && pwd); cd "$D"
-BIN=/home/david/Dropbox/SRC/drvec/bin/drvec
+# engines/drvec of this repository, or DRVEC_HOME
+DRVEC_HOME="${DRVEC_HOME:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+BIN="$DRVEC_HOME/bin/drvec"
 TO=${TO:-1800}
 python3 build_inputs.py >/dev/null
 declare -A RANK=( [e1]=1 [e3]=1 [rao1]=2 [rao2]=3 [rao3]=3 [rao4]=2 [rao5]=2 [rao6]=5 [rao7]=2 )

@@ -70,7 +70,9 @@ import os
 import sys
 
 # ── Los datos del legacy ────────────────────────────────────────────────────
-LEGACY = "/home/david/Dropbox/SRC/drv-source/m6-1/m1.inp"
+# drv-source, junto a este repositorio (o bajo ATSW_SRC)
+LEGACY = os.path.join(os.environ.get("ATSW_SRC") or os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))), "drv-source", "m6-1", "m1.inp")
 
 # Series LISTAS para grabar (las seis).
 READY = {"P", "EA", "EP", "EI", "EU", "EC"}

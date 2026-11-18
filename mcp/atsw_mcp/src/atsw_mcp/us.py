@@ -9,6 +9,11 @@ lambda de Box-Cox, la escalera de intervenciones) llegara con el extra.
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
+import tempfile
+
 from atsw_mcp import cli, comun
 
 SERVIDOR = "atsw-us"
@@ -104,7 +109,9 @@ En este orden, UNO CADA VEZ, en los dos carriles:
                    no compra nada. Si cambia, intervention_ladder: qué FORMA
                    admite el suceso (escalón o impulso; el AIC no arbitra la
                    subida de peldaño). Una intervención cada vez, en un hijo
-                   (write_inp interventions=["impulse 3 2020"]).
+                   (write_inp interventions=["impulse 3 2020"], que AÑADE a
+                   las heredadas; o suggest_intervention_form, que con
+                   rehacer=True reformula la de ese suceso).
  8. órdenes        identification_analysis(series, residuals_of=<base>): el
                    ARMA que les falta a los residuos del base. Un hijo del
                    base con ese ARMA (write_inp arma="p,q,P,Q").
@@ -194,10 +201,11 @@ desviación típica y las variaciones del periodo y anual con las suyas. Prever
 no es un nodo: no hay nada que decidir ni que derivar.
 
 ══ LO QUE AQUÍ NO HAY (todavía) ══
-- boxcox_analysis e intervention_ladder son del EXTRA PYTHON: si no está
-  instalado lo dicen, y se sigue con lo de C (plot mean-sd y el dominio;
-  residual_outlier_scan y un hijo por forma). Lo que estiman lo estiman con
-  el fue de Python.
+- boxcox_analysis, intervention_ladder y suggest_intervention_form son del
+  EXTRA PYTHON: si no está instalado lo dicen, y se sigue con lo de C (plot
+  mean-sd y el dominio; residual_outlier_scan y un hijo por forma con
+  write_inp). Lo que estiman lo estiman con el fue de Python; el hijo que
+  deja suggest_intervention_form lo estima después fue en C.
 - La sobreparametrización (los pares de parámetros con |r| ≥ 0,7) está en
   C: la da diagnose.
 - Verificar un óptimo y comparar versiones son de art-python y aún no están
@@ -378,6 +386,55 @@ def crea():
                     "ventana": int(ventana), "threshold": float(threshold),
                     "umbral_vecino": float(umbral_vecino)}
             return cli.extra("escalera", args, f"{s}/{m}", "escalera")
+        return _hazlo(f)
+
+    @app.tool()
+    def suggest_intervention_form(series: str, model: str, reason: str, date: str = "",
+                                  form: str = "auto", n_omega: int = 0, n_delta: int = 0,
+                                  rehacer: bool = False, modo: str = "guiado",
+                                  sample: str = "") -> str:
+        """[extra Python] La intervención de art en un HIJO de model (estimado):
+        art la construye y el hijo nace con ella, estimado con fue en C. date
+        «MM/YYYY», «QN/YYYY» o «YYYY» (vacía: el residuo más extremo); form
+        «step», «impulse», «ramp» o «auto» (lo decide la escalera); n_omega,
+        cuántos ω —cuántos ESCALONES— (0: automático); n_delta, los δ del
+        denominador (impulse con n_delta=1 es ω0/(1−δB)). rehacer=True
+        REFORMULA: retira la intervención de ese suceso que el modelo ya trae y
+        pone ésta en su lugar; sin él, si ya había una ahí se añade encima y se
+        avisa. Es el camino para cambiar o quitar una intervención (write_inp
+        solo añade). modo «guiado» o «autonomo» (en autónomo, nada de rampa).
+        La razón es obligatoria. Lo de art viene arriba, con SUS números (fue en
+        Python); los del proyecto son los de abajo, de fue en C."""
+        def f():
+            s, m = ID("la serie", series), ID("el modelo", model)
+            if not reason.strip():
+                raise cli.NoSePuede("la razón no puede ir vacía: es lo que guarda el linaje")
+            pre = cli.ruta(s, m, ".pre", sample)              # que esté estimado
+            # art escribe su .inp, su .pre, su .out y su guion junto a
+            # output_path: en un temporal. Del proyecto solo entra la
+            # especificación; la estimación es la de fue en C (la regla de la
+            # madre), y el .pre lo escribe quien estimó.
+            with tempfile.TemporaryDirectory() as tmp:
+                out = os.path.join(tmp, f"{s}_forma.inp")
+                args = {"inp_path": pre, "output_path": out, "date": date, "form": form,
+                        "n_omega": int(n_omega), "n_delta": int(n_delta),
+                        "rehacer": bool(rehacer), "modo": modo}
+                txt = cli.extra("forma", args, f"{s}/{m}", "forma")
+                if not os.path.isfile(out):
+                    raise cli.NoSePuede("art no ha escrito la especificación: " + txt[:1500])
+                hecho = cli.atsw_cli("proyecto", "itera", s, m, "--razon", reason,
+                                     "--por", "asistente", muestra=sample)
+                hijo = re.search(r"\bm\d+(?=\.inp)", hecho)
+                if hijo is None:
+                    raise cli.NoSePuede(f"no sé qué modelo nació: {hecho}")
+                hijo = hijo.group(0)
+                shutil.copyfile(out, cli.ruta(s, hijo, ".inp", sample))
+                # art nombra el modelo por su fichero: el nombre es el del hijo
+                txt = (txt.replace(os.path.splitext(out)[0], f"{s}/{hijo}").replace(tmp, "")
+                       .replace(f"{s}_forma", f"{s}/{hijo}"))
+            est = cli.atsw_cli("estima", s, hijo, "--por", "asistente", muestra=sample)
+            return (f"{txt}\n\n── En el proyecto ──\n{s}/{hijo}, hijo de {m}, con la "
+                    f"intervención de art. Estimado con fue en C:\n{est}")
         return _hazlo(f)
 
     @app.tool()

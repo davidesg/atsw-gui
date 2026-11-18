@@ -63,7 +63,8 @@ async def corre(raiz: Path, w: Path) -> None:
             quiero = {"guion_map", "identification_analysis", "new_version", "write_inp",
                       "estimate_and_diagnose", "diagnose", "formal_tests", "residual_outlier_scan",
                       "ar_factorization", "factorized_model", "model_equation_display", "full_report", "guion_annotate", "guion_adopt", "plot",
-                      "generate_forecast", "boxcox_analysis", "intervention_ladder"}
+                      "generate_forecast", "boxcox_analysis", "intervention_ladder",
+                      "suggest_intervention_form"}
             check(quiero <= ts, "las herramientas del camino en C", str(sorted(ts)))
 
             async def t(nombre, **a):
@@ -87,11 +88,26 @@ async def corre(raiz: Path, w: Path) -> None:
                 costes = (proy / "costes.csv").read_text(encoding="utf-8")
                 check(",python," in costes and "MINK/m01,escalera" in costes,
                       "el extra deja su línea en costes.csv, via python", costes[-400:])
+                # LA FORMA DE ART EN UN HIJO: art la construye, fue en C la
+                # estima. Sin intervención previa, rehacer lo dice y añade.
+                # (sobre MUSKRAT: el resto de la prueba cuenta los hijos de MINK)
+                res = await t("suggest_intervention_form", series="MUSKRAT", model="m01",
+                              reason="el suceso más extremo, como escalón", form="step",
+                              rehacer=True)
+                check("En el proyecto" in res and "fue en C" in res and "rehacer" in res
+                      and "_forma" not in res,
+                      "suggest_intervention_form: el hijo de art, estimado en C", res[-600:])
+                res = await t("guion_map")
+                check("MUSKRAT/m02" in res and "de m01: el suceso más extremo" in res,
+                      "suggest_intervention_form: el hijo está en el linaje", res)
             else:
                 check(res.startswith("No se pudo") and "extra Python" in res,
                       "boxcox_analysis sin el extra: lo dice", res)
             res = await t("intervention_ladder", series="MINK", model="m00")
             check(res.startswith("No se pudo"), "intervention_ladder de los datos: no", res)
+            res = await t("suggest_intervention_form", series="MINK", model="m01", reason="")
+            check(res.startswith("No se pudo") and "razón" in res,
+                  "suggest_intervention_form sin razón: no", res)
 
             res = await t("new_version", series="MINK", reason="")
             check(res.startswith("No se pudo") and "razón" in res, "new_version sin razón: no", res)

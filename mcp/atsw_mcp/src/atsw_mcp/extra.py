@@ -37,6 +37,8 @@ from contextlib import redirect_stdout
 ORDENES = {
     "boxcox": ("boxcox_analysis", {"inp_path"}),
     "escalera": ("intervention_ladder", {"inp_path", "at", "ventana", "threshold", "umbral_vecino"}),
+    "forma": ("suggest_intervention_form", {"inp_path", "output_path", "date", "form", "n_omega",
+                                            "n_delta", "rehacer", "modo"}),
 }
 
 _FIGURA = re.compile(r"^\s*\*Figura:.*$", re.M)

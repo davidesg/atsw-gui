@@ -92,6 +92,12 @@ gboolean convergence_is_good(const Convergence *c) {
  * Que esto viva en el lector y no en el motor es deliberado: el motor YA da
  * el estadistico y sus grados de libertad. Esto no rehace su cuenta, la
  * traduce -- un Q de 117.7 con 39 g.l. no se lee, un p de 0.000 si.      */
+int fueout_gl_q( const FueOut *o, int m )
+{
+    int gl = m - ( o->p + o->q + o->P + o->Q );
+    return gl < 1 ? 1 : gl;
+}
+
 double chisq_cola( double x, int df )
 {
     double a = df / 2.0, xx = x / 2.0;
@@ -481,8 +487,13 @@ gboolean fueout_read( const char *path, FueOut *o )
                 /* TODA la escalera, no solo el ultimo peldaño. */
                 if ( o->nlb < FO_MAX_LB )
                     {
+                    int lag = 0;
+
+                    /* el retardo es el primer numero de la linea */
+                    if ( sscanf( l, "%d", &lag ) != 1 || lag < df ) lag = df;
                     o->lb_q_[o->nlb]  = qq;
                     o->lb_df_[o->nlb] = df;
+                    o->lb_lag_[o->nlb] = lag;
                     o->lb_p_[o->nlb]  = chisq_cola( qq, df );
                     o->nlb++;
                     }

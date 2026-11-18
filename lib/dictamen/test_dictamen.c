@@ -40,8 +40,9 @@ static void base( FueOut *o )
     o->tiene_res = 1;
     o->media = 0.0001; o->media_et = 0.001;     /* t = 0.1 */
     o->nlb = 2;
-    o->lb_df_[0] = 12; o->lb_q_[0] = 10.0; o->lb_p_[0] = 0.60;
-    o->lb_df_[1] = 24; o->lb_q_[1] = 20.0; o->lb_p_[1] = 0.70;
+    /* un AR(2): el retardo 12 tiene 10 g.l., y el 24, 22 (BUG-0006) */
+    o->lb_lag_[0] = 12; o->lb_df_[0] = 10; o->lb_q_[0] = 10.0; o->lb_p_[0] = 0.60;
+    o->lb_lag_[1] = 24; o->lb_df_[1] = 22; o->lb_q_[1] = 20.0; o->lb_p_[1] = 0.70;
     o->tiene_jb = 1; o->jb = 1.0; o->jb_p = 0.60;
     o->npar_leidos = 2;
     o->par[0] = 0.5; o->par_et[0] = 0.1; o->par_estimado[0] = 1;  /* t = 5 */
@@ -87,6 +88,11 @@ int main( void )
         "y se dice EN QUE retardo: cerca o lejos son dos problemas" );
     ok( strstr( linea( &d, "Autocorrelación" )->dato, "Q(24)" ) != NULL,
         "y la escalera entera sigue a la vista" );
+    ok( strstr( linea( &d, "Autocorrelación" )->dice, "retardo 12" ) != NULL &&
+        strstr( linea( &d, "Autocorrelación" )->dice, "retardo 10" ) == NULL,
+        "el retardo es el retardo, no los grados de libertad (BUG-0006)" );
+    ok( strstr( linea( &d, "Autocorrelación" )->dato, "Q(12)=10.0 (10 g.l.)" ) != NULL,
+        "Q(retardo), con sus g.l. aparte (BUG-0006)" );
 
     printf( "\nLO QUE NO CONSTA NO ES UN APROBADO\n" );
     base( &o );

@@ -441,6 +441,9 @@ static void on_nuevo( GtkButton *b, Atsw *a )
                 { g_free( base ); g_free( p ); gtk_widget_destroy( d ); return; }
             }
 
+        /* El estado de la ventana Asistente del proyecto que se deja, como
+           en atsw_abre: el nuevo empieza sin el suyo.                   */
+        if ( a->hay ) atsw_asistente_guarda_estado( a );
         if ( !a->p ) a->p = g_new0( Proyecto, 1 );
         dot = strrchr( base, '.' ); if ( dot ) *dot = '\0';
         pr_nuevo( a->p, base, "", "." );
@@ -456,6 +459,11 @@ static void on_nuevo( GtkButton *b, Atsw *a )
 
         g_free( base ); g_free( p );
         atsw_refresca( a );
+        /* Y SE VIGILA, como al abrir (BUG-0005): sin esto, lo que el
+           asistente escribia en un proyecto recien creado no aparecia
+           hasta volver a abrirlo.                                      */
+        atsw_vigila( a );
+        atsw_asistente_restaura( a );
         }
     gtk_widget_destroy( d );
 }
@@ -866,6 +874,17 @@ static void on_grafico( GtkMenuItem *m, Atsw *a )
         barra_pub( a, t );
         g_free( t );
         }
+    else      /* LO QUE COSTO, al pie (ESTUDIO-terminal-mcp §7.7) */
+        atsw_coste_pie( a, f, a->serie, atsw_muestra_actual( a ), id );
+    g_free( id );
+}
+
+static void on_ficha( GtkMenuItem *m, Atsw *a )
+{
+    gchar *id = atsw_marcada( a->l_modelos, M_ID );
+
+    (void) m;
+    if ( a->hay && a->serie[0] && id ) atsw_ficha( a, a->serie, atsw_muestra_actual( a ), id );
     g_free( id );
 }
 
@@ -1553,6 +1572,15 @@ static void sec_diagnosticar( Atsw *a, GtkWidget *menu, const char *id )
         : porque, G_CALLBACK(on_factores), a );
     gtk_widget_set_sensitive( mi, listo );
 
+    /* LA FICHA DE CONFIANZA, al final del submenu: resume lo de arriba. */
+    mi = atsw_entrada( a, sub, "Ficha de confianza…", listo
+        ? "Lo que hace falta para fiarse de este modelo, o no: el recorrido con "
+          "quién dio cada paso (analista o asistente), la adecuación, si se "
+          "reproduce y lo que costó. Sale del linaje, del .out y de costes.csv; "
+          "lo que no se hizo dice «no consta»."
+        : porque, G_CALLBACK(on_ficha), a );
+    gtk_widget_set_sensitive( mi, listo );
+
     {
     char     f[PR_RUTA];
     gboolean hay = listo &&
@@ -1893,7 +1921,7 @@ static void on_cuaderno( GtkButton *b, Atsw *a ) { (void) b; atsw_cuaderno( a );
 /* ------------------------------------------------------------------------ */
 /* LA BARRA DE MENUS (ESTUDIO-madre-organizacion §3)                         */
 /*                                                                           */
-/* Proyecto · Datos · US · MT · Ayuda. Por CLASE de modelo y no por objeto:  */
+/* Proyecto · Datos · US · MT · SIM · Asistente · Ayuda. Por CLASE de modelo y no por objeto:  */
 /* las series y sus modelos son US y los casos y los suyos son MT, y decirlo */
 /* asi enseña que hay una escalera y en que peldaño se esta. VARMA y VECM    */
 /* entran con sus GUI (§3.5): una entrada que nunca se enciende enseña que   */
@@ -2309,6 +2337,11 @@ static const struct { const char *rotulo, *globo, *acel; Llena llena; } TITULOS[
       "sistema marcado: varias series que se explican entre sí, cada una con "
       "su modelo univariante. Se estima en sim_gui, con la puerta primero.",
       "<Alt>s", atsw_menu_sim },
+    { "_Asistente",
+      "Asistente — un cliente de LLM con los MCP de ATSW, en una terminal\n\n"
+      "Preparar el proyecto para el asistente, abrir la terminal en su carpeta, "
+      "ver lo que ha hecho, e instalarlo o comprobarlo.",
+      "<Alt>a", atsw_menu_asistente },
     { "A_yuda",
       "Ayuda — el manual, las teclas, los ejemplos y «Acerca de»\n\nF1 abre el manual.",
       "<Alt>y", llena_ayuda } };
@@ -2461,6 +2494,23 @@ static GtkWidget *barra_de_menus( Atsw *a )
         gtk_menu_shell_append( GTK_MENU_SHELL(mb), t );
         }
     return mb;
+}
+
+static gboolean on_atajo_asistente( GtkAccelGroup *g, GObject *o, guint k,
+                                    GdkModifierType m, Atsw *a )
+{
+    (void) g; (void) o; (void) k; (void) m;
+    atsw_asistente_muestra( a, !atsw_asistente_visible( a ) );
+    return TRUE;
+}
+
+/* AL CERRAR, el estado de la ventana Asistente de este proyecto. Va detras
+   de on_cierra_madre: si el analista cancela, no se llega aqui.        */
+static gboolean on_cierra_guarda( GtkWidget *w, GdkEvent *ev, Atsw *a )
+{
+    (void) w; (void) ev;
+    atsw_asistente_guarda_estado( a );
+    return FALSE;
 }
 
 static gboolean on_atajo_relee( GtkAccelGroup *g, GObject *o, guint k,
@@ -2660,7 +2710,9 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_box_pack_start( GTK_BOX(caja), a->menubar, FALSE, FALSE, 0 );
     raiz = gtk_box_new( GTK_ORIENTATION_VERTICAL, 6 );
     gtk_container_set_border_width( GTK_CONTAINER(raiz), 8 );
-    gtk_box_pack_start( GTK_BOX(caja), raiz, TRUE, TRUE, 0 );
+    /* EL GTKPANED DE FUERA (ESTUDIO-terminal-mcp §7.6): lo de siempre a la
+       izquierda y, acoplada, la ventana Asistente a la derecha.        */
+    gtk_box_pack_start( GTK_BOX(caja), atsw_asistente_fuera( a, raiz ), TRUE, TRUE, 0 );
     }
 
     /* --- la barra --- */
@@ -2699,6 +2751,9 @@ static void activate( GtkApplication *app, gpointer d )
                              g_cclosure_new( G_CALLBACK(on_atajo_sale), a, NULL ) );
     gtk_accel_group_connect( atajos, GDK_KEY_e, prim, 0,
                              g_cclosure_new( G_CALLBACK(on_atajo_estima), a, NULL ) );
+    /* Ctrl+Mayús+A, la ventana Asistente (§7.1). */
+    gtk_accel_group_connect( atajos, GDK_KEY_a, prim | GDK_SHIFT_MASK, 0,
+                             g_cclosure_new( G_CALLBACK(on_atajo_asistente), a, NULL ) );
     /* F1, el manual: en TASTE decia «NO HAY AYUDA DISPONIBLE». */
     gtk_accel_group_connect( atajos, GDK_KEY_F1, 0, 0,
                              g_cclosure_new( G_CALLBACK(on_atajo_manual), a, NULL ) );
@@ -2913,6 +2968,8 @@ static void activate( GtkApplication *app, gpointer d )
     gtk_box_pack_start( GTK_BOX(raiz), pie, FALSE, FALSE, 0 );
     }
 
+    g_signal_connect( w, "delete-event", G_CALLBACK(on_cierra_guarda), a );
+    atsw_asistente_restaura( a );
     atsw_refresca( a );
     /* Los menus nacen llenos: se rehacen al abrirse, pero un menu vacio
        no deberia asomar nunca, ni la primera vez.                     */
@@ -2991,6 +3048,7 @@ int main( int argc, char **argv )
 
         if ( !proy ) { fprintf( stderr, "%s: --ver necesita --proyecto\n", argv[0] ); return 2; }
         A.solo_ver = TRUE;
+        atsw_vigila_para();      /* una ventana suelta no relee el proyecto */
         snprintf( A.ver_mu, sizeof A.ver_mu, "%s", ver_muestra );
         if ( ( rc = ver_valida( &A, ver_que, ver_obj ) ) != 0 ) return rc;
         sin_pres = TRUE;

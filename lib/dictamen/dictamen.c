@@ -173,8 +173,10 @@ static void bloque_autocorrelacion( const FueOut *o, Dictamen *d )
    n = DX_DATO;
    for ( i = 0; i < o->nlb; i++ )
        {
-       int esc = snprintf( p, n, "%sQ(%d)=%.1f p=%.3f", i ? "  " : "",
-                           o->lb_df_[i], o->lb_q_[i], o->lb_p_[i] );
+       /* Q(retardo), con sus grados de libertad aparte: rotular Q con los
+          g.l. hacia leer «Q(10)» donde el motor mira 12 retardos (BUG-0006). */
+       int esc = snprintf( p, n, "%sQ(%d)=%.1f (%d g.l.) p=%.3f", i ? "  " : "",
+                           o->lb_lag_[i], o->lb_q_[i], o->lb_df_[i], o->lb_p_[i] );
 
        if ( esc < 0 || (size_t) esc >= n ) break;
        p += esc; n -= (size_t) esc;
@@ -188,7 +190,7 @@ static void bloque_autocorrelacion( const FueOut *o, Dictamen *d )
    else
        snprintf( l->dice, DX_DICE, "Los residuos NO son blancos, y donde peor "
                  "es en el retardo %d (p = %.3f).",
-                 o->lb_df_[peor_i], o->lb_p_[peor_i] );
+                 o->lb_lag_[peor_i], o->lb_p_[peor_i] );
 }
 
 

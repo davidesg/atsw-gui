@@ -201,7 +201,7 @@ descubrimos que el programa no era correcto.**
 
 **Los seis modelos univariantes (UTI/MEG).** No transcribirlos a mano de un OCR a dos
 columnas —eso es exactamente la reconstrucción a ciegas que hay que evitar—, sino
-**construirlos con ART**, que está en disco (`/home/david/Dropbox/SRC/ART/art-python`) y es
+**construirlos con ART**, que está en disco (`art-python`, junto a este repositorio) y es
 importable, y que es la herramienta de identificación de la casa.
 
 **La Tabla 4 del documento sirve de CONTROL, no de fuente.** Lo que ART identifique debe

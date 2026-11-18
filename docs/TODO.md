@@ -873,7 +873,70 @@ afectados.
     hoy vive en los ficheros GTK de sim_gui (la clasificación del ajuste, las
     LR de la estructura, el emparejamiento de los errores de la evaluación)
     se mueve a lib/ antes de usarla desde atsw-cli.
-  - Y después, la fase 2.
+  - **Fase 2, primer paso: ver lo que hace el asistente (16-nov-2026).** La
+    madre vigila el proyecto con `GFileMonitor` (gui/atsw/src/vigila.c): la
+    carpeta del manifiesto y las de los modelos, con los avisos agrupados en
+    medio segundo, y relee con la misma función que el foco. Lo nuevo del
+    asistente sale en la barra de estado («m04 de IPC, del asistente», «…
+    elegido por el asistente»). En la rejilla, la razón de un modelo con
+    `por: asistente` empieza con «[asistente]», y su globo lo explica. El
+    linaje tiene la columna «Por» y cuenta los pasos del asistente. Prueba:
+    la fase `asistente_vigila` de test_gui.
+  - **Fase 2, segundo paso: el menú Asistente (17-nov-2026).**
+    `gui/atsw/src/asistente.c`, entre SIM y Ayuda (Alt+A):
+    - «Abrir la terminal del sistema», en la carpeta del proyecto (§5):
+      Windows Terminal o `cmd`, Terminal.app, `$TERMINAL` o
+      `x-terminal-emulator`. La barra dice qué escribir.
+    - «Preparar el proyecto para el asistente…» pregunta los clientes y
+      escribe `AGENTS.md`, `CLAUDE.md`, `.mcp.json`, `.claude/settings.json`,
+      `.gemini/settings.json` e `instrucciones_servidor.md`. Lo que ya existe
+      no se toca y se enseña el bloque. Codex y CodeWhale, globales: se enseña
+      el bloque, no se escribe fuera del proyecto. Sin claves.
+    - «Qué ha hecho el asistente…», los pasos con `por: asistente`.
+    - «Instalar el asistente…» (uv sync del `uv.lock` de `mcp/atsw_mcp` en la
+      carpeta de usuario, §6.2) o «Comprobar el asistente…» (servidores y
+      versión, uv, clientes y si el proyecto está preparado).
+    - La comprobación de arranque mira los servidores, además de uv.
+    Prueba: la fase `asistente_menu` de test_gui.
+  - **Falta para que «Instalar» funcione con el paquete**: que el paquete
+    lleve `uv` y la fuente de `mcp/atsw_mcp` (`share/atsw/mcp/atsw_mcp`, que
+    la madre ya busca). Hoy solo funciona desde el árbol, o con `uv` en el
+    PATH.
+  - **Fase 2, tercer paso: la ventana Asistente, acoplable (17-nov-2026).**
+    `gui/atsw/src/asistente_ventana.c` (§7.6): un solo contenido que se
+    mueve entre su ventana suelta y el lado derecho de la madre (un
+    `GtkPaned` por fuera de todo), con «Acoplar/Desacoplar», sin destruir
+    nada. Cerrar la suelta la esconde. Su estado (visible, acoplada, tamaño,
+    posición y separador) es por proyecto y del usuario, en
+    `ventanas.ini` (`g_get_user_config_dir()/atsw/`); un proyecto en el que
+    nunca se abrió no se apunta. La página «estado»: el botón de la terminal
+    del sistema, si el proyecto está preparado, lo último que ha hecho el
+    asistente (al día con vigila.c) y lo instalado. En el menú, «Ventana
+    del asistente» (Ctrl+Mayús+A) y «Acoplar a la madre». Prueba: la fase
+    `asistente_ventana` de test_gui (diez veces suelta y pegada sin perder
+    el contenido; al reabrir, como estaba).
+  - **Fase 2, cuarto paso: el coste y la ficha en la madre (17-nov-2026).**
+    `gui/atsw/src/ficha_gui.c`, con lib/ficha y lib/coste (las de
+    atsw-cli): la línea de coste al pie de «Ver modelo…»; Diagnosticar ▸
+    «Ficha de confianza…», la misma que `atsw-cli ficha`, con «Comprobar»
+    (fi_comprueba con el fue de la madre, apuntado en `costes.csv`) y «Al
+    cuaderno»; en el linaje, las columnas «CPU» (el paso) y «Camino» (desde
+    los datos), y el botón «Ficha de confianza…» (y doble clic); y en «Qué
+    ha hecho el asistente…», la parte del asistente en el proyecto. Prueba:
+    la fase `ficha` de test_gui. **Con esto la fase 2 está completa.**
+  - **El asistente en el paquete (17-nov-2026).** `packaging/asistente.sh`
+    pone en los tres paquetes el `uv` del ensayo (0.12.24, comprobado con
+    su sha256) en `bin/` y la fuente de `atsw-gui-mcp` en
+    `bin/../asistente/atsw_mcp`. «Instalar el asistente…» copia esa fuente
+    a la carpeta del usuario y corre `uv sync --frozen --managed-python
+    --python 3.12`, con el entorno, el Python y la caché dentro de esa
+    carpeta: unos 140 MB, 8 s con red. El .deb se comprueba en
+    `linux-prueba`. Desde las fuentes no se descarga uv: se usa el del PATH.
+  - **La terminal, externa en los tres sistemas (decisión del analista,
+    17-nov-2026):** las tres distribuciones equivalentes. T1 (VTE) y T2
+    (libvterm) quedan para más adelante; ver la nota en §5.1 del estudio.
+  - Lo siguiente: el vídeo del asistente, ya con él instalado desde la
+    madre.
 
 ---
 

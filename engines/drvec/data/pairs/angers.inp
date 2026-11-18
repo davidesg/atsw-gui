@@ -1,6 +1,6 @@
 * par de mercados para drvec, generado por drvec_par.py
-* mercado: /home/david/Dropbox/Cycles/Analysis/Nominales/Francia/Angers/A.1700_1789/F.AN.1.inp
-* Londres: /home/david/Dropbox/Cycles/Analysis/Nominales/Inglaterra/Londres/A.1700_1792/E.L.1.inp
+* mercado: Nominales/Francia/Angers/A.1700_1789/F.AN.1.inp (datos del autor, fuera del repositorio)
+* Londres: Nominales/Inglaterra/Londres/A.1700_1792/E.L.1.inp (datos del autor, fuera del repositorio)
 * muestra: 1700-1789 (solape de los dos ficheros de fue)
 *
 * Col 1 = Y2 = log Londres;  col 2 = Y1 = log mercado.

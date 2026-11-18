@@ -2103,7 +2103,8 @@ echo "   esos casos al cast por RESTA, que si puede alimentar la transferencia c
 echo "   la entrada re-diferenciada por el operador de la SALIDA."
 echo ""
 
-PT8=/home/david/Dropbox/SRC/atws/Taste/oracle/data/passthrough8
+# El oráculo de atws, junto a este repositorio (o bajo ATSW_SRC)
+PT8="${ATSW_SRC:-$(cd "$(dirname "$0")/../../.." && pwd)}/atws/Taste/oracle/data/passthrough8"
 if [ -f "$PT8/PT8_FR.pre" ]; then
     B8="$TMPDIR/bug8.out"
     ERR8="$TMPDIR/bug8.err"

@@ -251,6 +251,17 @@ mira "especifica --pascua: easter entra, y fue lo acepta" \
      '[ "$(printf "%s\n" "$J" | campo "\"easter\" in d[\"cambios\"]")" = True ] && grep -qx "easter" "$F2"'
 mira "especifica --pascua otra vez: ya la trae (estado 1)" \
      '"$CLI" especifica "$YE" RIPC "$N2" --pascua 2>&1 | grep -q "ya trae Semana Santa"'
+# las intervenciones se AÑADEN; una igual a otra, no (BUG-0001): los datos
+# de RIPC traen «step 2 2002», y el hijo la hereda.
+H2=$(cksum < "$F2")
+mira "especifica --intervencion que ya trae: no se repite (estado 1, BUG-0001)" \
+     '"$CLI" especifica "$YE" RIPC "$N2" --intervencion "step 2 2002" 2>&1 | grep -q "ya trae «step 2 2002»" && [ "$H2" = "$(cksum < "$F2")" ]'
+mira "  y con otros espacios es la misma" \
+     '! "$CLI" especifica "$YE" RIPC "$N2" --intervencion "step  2   2002" 2>/dev/null && [ "$H2" = "$(cksum < "$F2")" ]'
+mira "  y dos veces en la orden, tampoco" \
+     '"$CLI" especifica "$YE" RIPC "$N2" --intervencion "impulse 5 2003" --intervencion "impulse 5 2003" 2>&1 | grep -q "va dos veces" && [ "$H2" = "$(cksum < "$F2")" ]'
+mira "especifica: otra forma en la misma fecha entra, con el aviso de art (BUG-0162 de art)" \
+     '"$CLI" especifica "$YE" RIPC "$N2" --intervencion "impulse 2 2002" | grep -q "Ya había una intervención en esa fecha" && grep -qx "impulse 2 2002" "$F2"'
 if [ -x "$FUE" ]; then
     J=$("$CLI" --json estima "$YE" RIPC "$N" --por asistente)
     mira "estima: fue termina y trae la log-verosimilitud y el dictamen" \
@@ -269,6 +280,12 @@ fi
 # (lib/anomalos/anomalos.h): el cotejo es contra el motor. RIPC.2 tiene un
 # episodio, 1/2003, y sin el la ACF y la PACF del retardo 13 cambian de lado.
 O="$G/RIPC.2/RIPC.2.out"
+# LA MISMA Q, LA MISMA p (BUG-0006 de la madre): RIPC.2 es un AR(2), y la Q
+# de 39 retardos tiene 37 g.l. en anomalos como en el dictamen.
+mira "anomalos: la Q descuenta los ARMA, como el dictamen (BUG-0006)" \
+     '"$CLI" anomalos "$Y" RIPC m01 | grep -q "Q(39), 37 g.l.  con 43.4 (p = 0.217)" && "$CLI" dictamen "$Y" RIPC m01 | grep -q "Q(39)=43.4 (37 g.l.) p=0.217"'
+mira "dictamen: Q(retardo), no Q(g.l.) (BUG-0006)" \
+     '"$CLI" dictamen "$Y" RIPC m01 | grep -q "Q(12)=8.6 (10 g.l.)"'
 J=$("$CLI" --json anomalos "$Y" RIPC m01 --episodios 1)
 mira "anomalos: un episodio, en 1/2003" \
      '[ "$(printf "%s\n" "$J" | campo "len(d[\"episodios\"]), d[\"episodios\"][0][\"desde\"]")" = "1 1/2003" ]'
@@ -698,6 +715,10 @@ mira "--por: proyecto ver --json lo dice, paso a paso" \
      '[ "$(echo "$V" | campo "[m[\"por\"] for m in d[\"modelos\"] if not m[\"datos\"]]")" = "['"'"'analista'"'"', '"'"'asistente'"'"', '"'"'analista'"'"', '"'"'asistente'"'"']" ]'
 mira "--por: y en texto, con su marca" \
      '[ $("$CLI" proyecto ver "$YL" | grep -c "✦ asistente") = 2 ]'
+mira "proyecto ver: la razón de la elección, en texto (guion_map la lee)" \
+     '"$CLI" proyecto ver "$YL" | grep -qx "      elegido: el mejor"'
+mira "proyecto ver --json: razon_elegido solo en el elegido" \
+     '[ "$(echo "$V" | campo "[m[\"razon_elegido\"] for m in d[\"modelos\"] if not m[\"datos\"]]")" = "['"'"''"'"', '"'"''"'"', '"'"''"'"', '"'"'el mejor'"'"']" ]'
 mira "--por: otro valor no se apunta (estado 1)" \
      '! "$CLI" proyecto nuevo "$YL" RIPC --por nadie 2>/dev/null && ! grep -q "nadie" "$YL"'
 

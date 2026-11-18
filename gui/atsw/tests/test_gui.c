@@ -40,6 +40,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <glib/gstdio.h>
 #ifdef _WIN32
 #  include <sys/utime.h>
 #else
@@ -1034,7 +1035,7 @@ static void instalacion( void )
     check( fue >= 0 && c[fue].ok && strstr( c[fue].ruta, "engines/fue/bin" ),
            "fue se encuentra donde lo busca la madre, en el árbol", fue >= 0 ? c[fue].ruta : NULL );
     g_string_free( falta, TRUE );
-    if ( en_barra( 5, "Comprobar la instalación" ) )
+    if ( en_barra( 6, "Comprobar la instalación" ) )
         {
         GList    *l, *t;
         gboolean  visto = FALSE;
@@ -1058,7 +1059,7 @@ static void ejemplos( void )
     gchar     *pre  = g_build_filename( base, "jenkins_alavi", "MUSKRAT", "work",
                                         "MUSKRAT_m01.pre", NULL );
     GList     *h = gtk_container_get_children( GTK_CONTAINER(A.menubar) );
-    GtkWidget *t = g_list_nth_data( h, 5 ), *e = NULL, *r = NULL;
+    GtkWidget *t = g_list_nth_data( h, 6 ), *e = NULL, *r = NULL;   /* Ayuda */
     int        vez;
 
     g_list_free( h );
@@ -3155,6 +3156,440 @@ static Proyecto *relee_manifiesto( void )
 
 static gchar *cuaderno_md( void );
 
+/* --- FASE 2: EL COSTE Y LA FICHA EN LA MADRE (ESTUDIO-terminal-mcp §7.7-8) */
+static GtkWidget *etiqueta_seleccionable( GtkWidget *w )
+{
+    GList     *l, *h;
+    GtkWidget *r = NULL;
+
+    if ( GTK_IS_LABEL(w) && gtk_label_get_selectable( GTK_LABEL(w) ) ) return w;
+    if ( !GTK_IS_CONTAINER(w) ) return NULL;
+    h = gtk_container_get_children( GTK_CONTAINER(w) );
+    for ( l = h; l && !r; l = l->next ) r = etiqueta_seleccionable( l->data );
+    g_list_free( h );
+    return r;
+}
+
+static void ficha_madre( void )
+{
+    gchar     *cli = atsw_programa( "atsw-cli" ), *out = NULL, *md = NULL, *pg;
+    gchar     *argv[] = { cli, A.p->path, (gchar *) "ficha", (gchar *) "ipc", (gchar *) "m01", NULL };
+    gchar     *lin;
+    GtkWidget *w, *l;
+    gint       st = 1;
+    char       why[256];
+
+    /* atsw-cli ficha P SERIE MODELO: la orden es «ficha P S M». */
+    argv[1] = (gchar *) "ficha"; argv[2] = A.p->path;
+    check( cli && g_spawn_sync( NULL, argv, NULL, G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL,
+                                &out, NULL, &st, NULL ) && st == 0 && out && *out,
+           "(atsw-cli ficha corre)", out );
+
+    /* EN WINDOWS, atsw-cli escribe en modo texto: \r\n. El Markdown es el
+       mismo; los finales de linea, del sistema.                     */
+    if ( out )
+        {
+        char *r, *w;
+        for ( r = w = out; *r; r++ ) if ( *r != '\r' ) *w++ = *r;
+        *w = '\0';
+        }
+    atsw_ficha( &A, "ipc", "", "m01" );
+    pump( 100 );
+    w = GTK_WIDGET(ventana_titulada( "Ficha de confianza — ipc / m01" ));
+    l = w ? etiqueta_seleccionable( w ) : NULL;
+    pg = out ? atsw_md_pango( g_strchomp( out ) ) : NULL;
+    {
+    gchar *mio = l ? g_strdup( gtk_label_get_label( GTK_LABEL(l) ) ) : NULL;
+    check( w && mio && pg && !strcmp( g_strchomp( mio ), pg ),
+           "Diagnosticar ▸ Ficha de confianza: la misma ficha que atsw-cli", mio );
+    g_free( mio );
+    }
+
+    /* AL CUADERNO, UNA VEZ por pulsación. */
+    md = out ? g_strdup( out ) : g_strdup( "" );
+    {
+    gchar *antes = cuaderno_md(), *despues;
+    int    k = 0;
+    const char *p;
+
+    check( atsw_ficha_al_cuaderno( &A, "ipc", "", "m01", md, why, sizeof why ) == 0,
+           "«Al cuaderno» escribe", why );
+    despues = cuaderno_md();
+    for ( p = despues ? despues + ( antes ? strlen( antes ) : 0 ) : NULL;
+          p && ( p = strstr( p, "Ficha de confianza — ipc / m01" ) ); p++ ) k++;
+    check( k == 1, "y añade la ficha una sola vez", despues );
+    g_free( antes ); g_free( despues );
+    }
+    if ( w ) gtk_widget_destroy( w );
+
+    lin = atsw_coste_linea( &A, "ipc", "", "m01" );
+    check( lin && g_str_has_prefix( lin, "Coste: " ), "«Ver modelo…» lleva la línea de coste", lin );
+    g_free( lin );
+
+    /* EL LINAJE, CON EL COSTE de cada paso y el del camino. */
+    atsw_linaje( &A );
+    pump( 100 );
+    w = GTK_WIDGET(ventana_titulada( "Linaje" ));
+    {
+    gboolean cpu = FALSE, camino = FALSE;
+    GList   *h = NULL, *x;
+
+    if ( w )
+        {
+        GtkWidget *tv = NULL;
+        GList     *t = gtk_container_get_children( GTK_CONTAINER(gtk_bin_get_child( GTK_BIN(w) )) );
+
+        for ( x = t; x && !tv; x = x->next )
+            if ( GTK_IS_SCROLLED_WINDOW(x->data) ) tv = gtk_bin_get_child( GTK_BIN(x->data) );
+        g_list_free( t );
+        if ( tv && GTK_IS_TREE_VIEW(tv) ) h = gtk_tree_view_get_columns( GTK_TREE_VIEW(tv) );
+        }
+    for ( x = h; x; x = x->next )
+        {
+        const char *ti = gtk_tree_view_column_get_title( x->data );
+        cpu    |= !g_strcmp0( ti, "CPU" );
+        camino |= !g_strcmp0( ti, "Camino" );
+        }
+    g_list_free( h );
+    check( cpu && camino, "el linaje enseña el coste de cada paso y el del camino", NULL );
+    }
+    if ( w ) gtk_widget_destroy( w );
+    g_free( cli ); g_free( out ); g_free( md ); g_free( pg );
+}
+
+/* --- FASE 2: LA VENTANA ASISTENTE, ACOPLABLE (ESTUDIO-terminal-mcp §7.6) -- */
+static void asistente_ventana( void )
+{
+    GtkWidget *linea = A.asis_linea, *pasos = A.asis_pasos;
+    gchar     *ini = NULL, *txt = NULL;
+    gboolean   bien = TRUE;
+    int        i, filas;
+
+    atsw_asistente_muestra( &A, TRUE );
+    pump( 100 );
+    check( A.asis && gtk_widget_get_parent( A.asis ) == A.fuera && gtk_widget_get_visible( A.asis ),
+           "Ventana del asistente: aparece acoplada, a la derecha de la madre", NULL );
+    filas = gtk_tree_model_iter_n_children( gtk_tree_view_get_model( GTK_TREE_VIEW(A.asis_pasos) ), NULL );
+    check( filas > 0 && filas == MIN( atsw_asistente_pasos( A.p, NULL ), 8 ),
+           "y enseña lo último que ha hecho el asistente", NULL );
+    txt = g_strdup( gtk_label_get_text( GTK_LABEL(linea) ) );
+
+    /* DIEZ VECES SUELTA Y PEGADA: el contenido es el mismo y no se pierde. */
+    for ( i = 0; i < 10 && bien; i++ )
+        {
+        atsw_asistente_acopla( &A, FALSE );
+        pump( 30 );
+        bien = gtk_widget_get_parent( A.asis ) == A.asis_win && gtk_widget_get_visible( A.asis_win );
+        atsw_asistente_acopla( &A, TRUE );
+        pump( 30 );
+        bien = bien && gtk_widget_get_parent( A.asis ) == A.fuera && !gtk_widget_get_visible( A.asis_win );
+        }
+    check( bien, "acoplar y desacoplar diez veces la mueve entre la madre y su ventana", NULL );
+    check( A.asis_linea == linea && GTK_IS_LABEL(linea) && A.asis_pasos == pasos &&
+           gtk_widget_is_ancestor( linea, A.asis ) &&
+           !g_strcmp0( gtk_label_get_text( GTK_LABEL(linea) ), txt ),
+           "sin perder el contenido: los mismos widgets, con lo mismo dentro", NULL );
+    g_free( txt );
+
+    /* CERRAR LA SUELTA LA ESCONDE, no la destruye. */
+    atsw_asistente_acopla( &A, FALSE );
+    pump( 30 );
+    {
+    GdkEvent *ev = gdk_event_new( GDK_DELETE );
+    gboolean  r = FALSE;
+
+    ev->any.window = g_object_ref( gtk_widget_get_window( A.asis_win ) );
+    g_signal_emit_by_name( A.asis_win, "delete-event", ev, &r );
+    gdk_event_free( ev );
+    pump( 30 );
+    check( r && GTK_IS_WINDOW(A.asis_win) && !gtk_widget_get_visible( A.asis_win ) &&
+           !atsw_asistente_visible( &A ) && gtk_widget_get_parent( A.asis ) == A.asis_win,
+           "cerrar la ventana suelta la esconde, con su contenido dentro", NULL );
+    }
+
+    /* AL VOLVER AL PROYECTO, COMO ESTABA: suelta y visible. */
+    atsw_asistente_muestra( &A, TRUE );
+    pump( 30 );
+    A.asis_acoplado = TRUE; A.asis_visible = FALSE;       /* lo que fuera */
+    atsw_asistente_restaura( &A );
+    pump( 30 );
+    check( !atsw_asistente_acoplado( &A ) && atsw_asistente_visible( &A ) &&
+           gtk_widget_get_parent( A.asis ) == A.asis_win,
+           "al reabrir el proyecto, la ventana Asistente vuelve como estaba", NULL );
+    g_file_get_contents( g_getenv( "ATSW_VENTANAS_INI" ), &ini, NULL, NULL );
+    check( ini && strstr( ini, "asistente_acoplado=false" ) && !strstr( ini, "proyecto.yaml" ),
+           "el estado va en ventanas.ini, del usuario, y no en el proyecto", ini );
+    g_free( ini );
+
+    /* Y SE DEJA COMO SE ENCONTRO: acoplada y escondida. */
+    atsw_asistente_acopla( &A, TRUE );
+    atsw_asistente_muestra( &A, FALSE );
+    pump( 30 );
+    check( !gtk_widget_get_visible( A.asis ), "escondida, la madre recupera su ancho", NULL );
+}
+
+/* --- FASE 2: EL MENU ASISTENTE (ESTUDIO-terminal-mcp §5 y §7.1) ---------- */
+static gboolean menu_tiene( GtkWidget *m, const char *txt )
+{
+    GList   *h = gtk_container_get_children( GTK_CONTAINER(m) ), *l;
+    gboolean si = FALSE;
+
+    for ( l = h; l && !si; l = l->next )
+        if ( GTK_IS_MENU_ITEM(l->data) )
+            {
+            const char *t = gtk_menu_item_get_label( GTK_MENU_ITEM(l->data) );
+            si = t && strstr( t, txt ) != NULL;
+            }
+    g_list_free( h );
+    return si;
+}
+
+static gchar *lee_de( const char *raiz, const char *rel )
+{
+    gchar *f = g_build_filename( raiz, rel, NULL ), *c = NULL;
+
+    g_file_get_contents( f, &c, NULL, NULL );
+    g_free( f );
+    return c;
+}
+
+static void asistente_menu( void )
+{
+    GtkWidget *m = gtk_menu_new();
+    char       raiz[PR_RUTA];
+    GString   *inf = g_string_new( NULL );
+    gchar     *ag, *mcp, *cl, *gem, *set;
+    int        i, n;
+    static const char *const esc[] = { "AGENTS.md", "CLAUDE.md", ".mcp.json",
+                                       ".claude/settings.json", ".gemini/settings.json" };
+
+    g_object_ref_sink( m );
+    atsw_menu_asistente( &A, m );
+    check( menu_tiene( m, "Abrir la terminal del sistema" ) &&
+           menu_tiene( m, "Preparar el proyecto para el asistente" ) &&
+           menu_tiene( m, "Qué ha hecho el asistente" ) &&
+           menu_tiene( m, "Comprobar el asistente" ),
+           "el menú Asistente tiene sus entradas", NULL );
+    g_object_unref( m );
+
+    check( pr_raiz( A.p, raiz, sizeof raiz ) == 0, "(la raíz del proyecto)", NULL );
+
+    /* EL AGENTS.md DEL USUARIO NO SE PISA. */
+    {
+    gchar *f = g_build_filename( raiz, "AGENTS.md", NULL );
+    g_file_set_contents( f, "# Solo el carril guiado\n", -1, NULL );
+    g_free( f );
+    }
+    atsw_asistente_prepara( &A, AS_CLAUDE | AS_GEMINI | AS_CODEX, inf );
+    ag = lee_de( raiz, "AGENTS.md" );
+    check( ag && !strcmp( ag, "# Solo el carril guiado\n" ), "un AGENTS.md que ya había no se pisa", ag );
+    check( strstr( inf->str, "no se han tocado: AGENTS.md" ) != NULL, "y el informe lo dice", inf->str );
+    g_free( ag );
+
+    /* EL ANDAMIAJE, sin AGENTS.md previo: se escribe entero. */
+    {
+    gchar *f = g_build_filename( raiz, "AGENTS.md", NULL );
+    g_unlink( f );
+    g_free( f );
+    }
+    g_string_truncate( inf, 0 );
+    atsw_asistente_prepara( &A, AS_CLAUDE | AS_GEMINI | AS_CODEX, inf );
+    ag  = lee_de( raiz, "AGENTS.md" );
+    cl  = lee_de( raiz, "CLAUDE.md" );
+    mcp = lee_de( raiz, ".mcp.json" );
+    set = lee_de( raiz, ".claude/settings.json" );
+    gem = lee_de( raiz, ".gemini/settings.json" );
+    check( ag && strlen( ag ) < 50 * 1024 && strstr( ag, "proyecto.yaml" ),
+           "AGENTS.md, por debajo de 50 KB", NULL );
+    check( cl && !strcmp( cl, "@AGENTS.md\n" ), "CLAUDE.md apunta a AGENTS.md", cl );
+    check( mcp && strstr( mcp, "\"mcpServers\"" ) && strstr( mcp, "\"atsw-us\"" ) &&
+           strstr( mcp, "\"atsw-sis\"" ) && strstr( mcp, "ATSW_BIN" ) && strstr( mcp, "ATSW_GUI" ),
+           ".mcp.json con los tres servidores y las rutas del paquete", mcp );
+    check( set && strstr( set, "mcp__atsw-us" ) && strstr( set, "\"Bash\"" ),
+           ".claude/settings.json permite los servidores y niega ejecutar", set );
+    check( gem && strstr( gem, "\"timeout\": 600000" ) && strstr( gem, "AGENTS.md" ),
+           ".gemini/settings.json con su timeout y AGENTS.md", gem );
+    check( strstr( inf->str, "[mcp_servers.atsw-us]" ) && strstr( inf->str, "config.toml" ),
+           "Codex, global: el informe enseña su bloque y no se escribe nada fuera", NULL );
+    for ( i = 0; i < (int) G_N_ELEMENTS(esc); i++ )
+        {
+        gchar *c = lee_de( raiz, esc[i] );
+        gboolean limpio = c && !strstr( c, "API_KEY" ) && !strstr( c, "apiKey" ) &&
+                          !strstr( c, "sk-" ) && !strstr( c, "TOKEN" );
+        char q[96];
+
+        g_snprintf( q, sizeof q, "%s no lleva claves", esc[i] );
+        check( limpio, q, NULL );
+        g_free( c );
+        }
+    g_free( ag ); g_free( cl ); g_free( mcp ); g_free( set ); g_free( gem );
+
+    /* OTRA VEZ: lo que ya está no se pisa, y se enseña el bloque. */
+    g_string_truncate( inf, 0 );
+    atsw_asistente_prepara( &A, AS_CLAUDE, inf );
+    check( strstr( inf->str, ".mcp.json" ) && strstr( inf->str, "— Claude Code, en .mcp.json" ),
+           "una segunda vez no pisa .mcp.json y enseña el bloque", inf->str );
+    g_string_free( inf, TRUE );
+
+    /* LA TERMINAL: la orden, no la ventana (en la CI no se abre nada). */
+    {
+    gchar **v;
+#if defined(G_OS_WIN32)
+    v = atsw_terminal_orden( raiz );
+    check( v && v[0] && g_strv_contains( (const gchar *const *) v, raiz ),
+           "la terminal se abre en la carpeta del proyecto", v ? v[0] : "(nada)" );
+#elif defined(__APPLE__)
+    v = atsw_terminal_orden( raiz );
+    check( v && !strcmp( v[0], "open" ) && !strcmp( v[2], "Terminal" ) && !strcmp( v[3], raiz ),
+           "la terminal: open -a Terminal en el proyecto", v ? v[0] : "(nada)" );
+#else
+    gchar *antes = g_strdup( g_getenv( "TERMINAL" ) );
+    g_setenv( "TERMINAL", "sh", TRUE );
+    v = atsw_terminal_orden( raiz );
+    check( v && g_str_has_suffix( v[0], "/sh" ) && v[1] == NULL,
+           "la terminal: la de $TERMINAL, abierta en la carpeta del proyecto", v ? v[0] : "(nada)" );
+    if ( antes ) g_setenv( "TERMINAL", antes, TRUE ); else g_unsetenv( "TERMINAL" );
+    g_free( antes );
+#endif
+    g_strfreev( v );
+    }
+
+    /* «INSTALAR EL ASISTENTE…»: la orden, sin descargar nada. Con un uv de
+       mentira en el PATH, si no hay ninguno: lo que se mira es la orden y
+       la copia de la fuente, no uv.                                   */
+    {
+    gchar  *uvp = atsw_asistente_uv(), *falso = NULL, *antes = g_strdup( g_getenv( "PATH" ) );
+    gchar **ord, **env = NULL, *dir = NULL;
+    char    why[512] = "";
+
+    if ( uvp == NULL )
+        {
+        gchar *d = g_build_filename( T, "uv-falso", NULL ), *p;
+        g_mkdir_with_parents( d, 0755 );
+        falso = g_build_filename( d, "uv", NULL );
+        g_file_set_contents( falso, "#!/bin/sh\nexit 0\n", -1, NULL );
+        g_chmod( falso, 0755 );
+        p = g_strdup_printf( "%s%c%s", d, G_SEARCHPATH_SEPARATOR, antes ? antes : "" );
+        g_setenv( "PATH", p, TRUE );
+        g_free( p ); g_free( d );
+        }
+    ord = atsw_asistente_orden_instalar( &env, &dir, why, sizeof why );
+#ifndef G_OS_WIN32
+    check( ord && g_strv_contains( (const gchar *const *) ord, "--frozen" ) &&
+           g_strv_contains( (const gchar *const *) ord, "--managed-python" ) &&
+           g_strv_contains( (const gchar *const *) ord, "3.12" ),
+           "«Instalar el asistente…»: uv sync del uv.lock, con el Python fijado", why );
+#endif
+    if ( ord )
+        {
+        gchar *lock = g_build_filename( dir, "fuente", "uv.lock", NULL );
+        const gchar *venv = g_environ_getenv( env, "UV_PROJECT_ENVIRONMENT" );
+        const gchar *py   = g_environ_getenv( env, "UV_PYTHON_INSTALL_DIR" );
+
+        check( g_file_test( lock, G_FILE_TEST_EXISTS ),
+               "con la fuente copiada a la carpeta del asistente (la del paquete puede ser de "
+               "solo lectura)", lock );
+        check( venv && py && g_str_has_prefix( venv, dir ) && g_str_has_prefix( py, dir ),
+               "y todo --el entorno y el Python-- dentro de la carpeta del asistente", venv );
+        g_free( lock );
+        }
+    if ( falso ) { g_setenv( "PATH", antes ? antes : "", TRUE ); g_unlink( falso ); }
+    g_strfreev( ord ); g_strfreev( env );
+    g_free( dir ); g_free( uvp ); g_free( falso ); g_free( antes );
+    }
+
+    /* QUE HA HECHO EL ASISTENTE: lo que lleva por: asistente. */
+    for ( i = 0, n = 0; i < A.p->nm; i++ )
+        n += !strcmp( A.p->m[i].por, "asistente" ) ||
+             ( A.p->m[i].elegido && !strcmp( A.p->m[i].por_elegido, "asistente" ) );
+    check( n > 0 && atsw_asistente_pasos( A.p, NULL ) == n,
+           "«Qué ha hecho el asistente» cuenta sus pasos", NULL );
+
+    /* Y un modelo que derivo Y eligio lleva las dos razones, que no son la
+       misma: la de derivarlo y la de elegirlo (guion_adopt).            */
+    {
+    Proyecto     *q = g_new0( Proyecto, 1 );
+    GtkListStore *st = gtk_list_store_new( QH_COLS, G_TYPE_STRING, G_TYPE_STRING,
+                                           G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING );
+    GtkTreeIter   it;
+    gchar        *r = NULL;
+
+    q->nm = 1;
+    g_strlcpy( q->m[0].serie, "ipc", sizeof q->m[0].serie );
+    g_strlcpy( q->m[0].id, "m02", sizeof q->m[0].id );
+    g_strlcpy( q->m[0].razon, "las dos intervenciones", sizeof q->m[0].razon );
+    g_strlcpy( q->m[0].por, "asistente", sizeof q->m[0].por );
+    q->m[0].elegido = 1;
+    g_strlcpy( q->m[0].por_elegido, "asistente", sizeof q->m[0].por_elegido );
+    g_strlcpy( q->m[0].razon_elegido, "residuos blancos", sizeof q->m[0].razon_elegido );
+    atsw_asistente_pasos( q, st );
+    if ( gtk_tree_model_get_iter_first( GTK_TREE_MODEL(st), &it ) )
+        gtk_tree_model_get( GTK_TREE_MODEL(st), &it, QH_RAZON, &r, -1 );
+    check( r && strstr( r, "las dos intervenciones" ) && strstr( r, "Lo eligió: residuos blancos" ),
+           "«Qué ha hecho el asistente»: lo derivó y lo eligió, con las dos razones", r );
+    g_free( r ); g_object_unref( st ); g_free( q );
+    }
+}
+
+/* --- FASE 2: LO QUE HACE EL ASISTENTE, EN VIVO (ESTUDIO-terminal-mcp §7.3) */
+/* Un modelo que el asistente escribe POR FUERA --otro Proyecto, al disco,
+   como atsw-cli-- aparece en la rejilla sin tocar la ventana (sin foco ni
+   «Releer»), con su marca, y la barra lo dice. Lo mismo para una eleccion. */
+static gboolean espera_dicho( const char *que, int ms )
+{
+    gint64 hasta = g_get_monotonic_time() + (gint64) ms * 1000;
+
+    while ( !dijo( que ) && g_get_monotonic_time() < hasta ) pump( 50 );
+    return dijo( que ) != NULL;
+}
+
+static void asistente_vigila( void )
+{
+    Proyecto *q = relee_manifiesto();
+    PrError   e;
+    char      id[PR_ID] = "", ruta[PR_RUTA], esperado[PR_ID + 32];
+    gchar    *raz;
+
+    snprintf( A.serie, sizeof A.serie, "ipc" );
+    A.viendo_caso = FALSE;
+    atsw_refresca( &A );
+    pump( 100 );
+    check( q != NULL, "(el manifiesto se relee por fuera)", NULL );
+    if ( q == NULL ) return;
+
+    olvida();
+    check( pr_deriva( q, "ipc", "", "m01", id, sizeof id, ruta, sizeof ruta, &e ) == 0 &&
+           pr_pon_por( q, "ipc", "", id, "asistente", &e ) == 0 &&
+           pr_razon( q, "ipc", "", id, "el MA(12) sobra", &e ) == 0 &&
+           pr_escribir( q, q->path, &e ) == 0,
+           "(un modelo nuevo, escrito por fuera con por: asistente)", e.texto );
+    snprintf( esperado, sizeof esperado, "%s de ipc, del asistente", id );
+    check( espera_dicho( esperado, 5000 ), "la madre lo ve sola y la barra dice de quién es",
+           barra() );
+    raz = celda( A.l_modelos, M_ID, id, M_RAZON );
+    check( raz && g_str_has_prefix( raz, "[asistente] el MA(12) sobra" ),
+           "y en la rejilla lleva la marca [asistente]", raz ? raz : "(no está)" );
+    g_free( raz );
+
+    olvida();
+    check( pr_elige( q, "ipc", "", id, "mejor Q", &e ) == 0 &&
+           pr_pon_por_elegido( q, "ipc", "", id, "asistente", &e ) == 0 &&
+           pr_escribir( q, q->path, &e ) == 0, "(y el asistente lo elige)", e.texto );
+    snprintf( esperado, sizeof esperado, "%s de ipc elegido por el asistente", id );
+    check( espera_dicho( esperado, 5000 ), "la elección también se ve sola", barra() );
+    check( !strcmp( pr_elegido( A.p, "ipc", "" ), id ), "la madre tiene el elegido nuevo",
+           pr_elegido( A.p, "ipc", "" ) );
+
+    /* LO QUE ESCRIBE LA MADRE NO SE ANUNCIA como si fuera de fuera. */
+    olvida();
+    pr_elige( A.p, "ipc", "", "m01", "el de la prueba", &e );
+    atsw_guarda( &A, &e );
+    pump( 1500 );
+    check( !dijo( "fuera de aquí" ) && !dijo( "del asistente" ),
+           "lo que escribe la propia madre no sale como un cambio de fuera", barra() );
+    g_free( q );
+}
+
 /* --- S6b: LA RUTA U (DISENO-sim.md §5.5) --------------------------------- */
 /* «Nuevo sistema…» con una serie que no tiene modelo: entra con uno de
    partida, que la madre hace al aceptar (lib/partida), y queda en sus
@@ -4067,19 +4502,20 @@ static int fila_de( GtkWidget *tv, int col, const char *v )
 
 static void menus_barra( void )
 {
-    static const char *rot[] = { "_Proyecto", "_Datos", "_US", "_MT", "_SIM", "A_yuda" };
+    static const char *rot[] = { "_Proyecto", "_Datos", "_US", "_MT", "_SIM", "_Asistente", "A_yuda" };
     static const char *glo[] = { "Proyecto —", "Datos —",
                                  "US — Modelo univariante (Box-Jenkins), con fue y fuf",
                                  "MT — Transferencia multivariante, con drtran",
                                  "SIM — Sistemas simultáneos, con drvarma (VARMA) y drvec (VEC)",
+                                 "Asistente — un cliente de LLM con los MCP de ATSW",
                                  "Ayuda —" };
     GtkMenu   *m;
     GtkWidget *mi;
     int        i;
 
-    /* --- los seis títulos, con su nombre completo en el globo --------- */
+    /* --- los siete títulos, con su nombre completo en el globo -------- */
     check( A.menubar && GTK_IS_MENU_BAR(A.menubar), "la madre tiene barra de menús", NULL );
-    for ( i = 0; i < 6; i++ )
+    for ( i = 0; i < 7; i++ )
         {
         GtkWidget  *t = titulo_de( i );
         const char *r = t ? gtk_menu_item_get_label( GTK_MENU_ITEM(t) ) : NULL;
@@ -4091,7 +4527,7 @@ static void menus_barra( void )
                g ? g : r );
         g_free( q ); g_free( g );
         }
-    check( titulo_de( 6 ) == NULL, "y sólo seis: VARMA y VEC van los dos en SIM (DISENO-sim.md)", NULL );
+    check( titulo_de( 7 ) == NULL, "y sólo siete: VARMA y VEC van los dos en SIM (DISENO-sim.md)", NULL );
 
     /* --- US y los dos contextuales ------------------------------------ */
     gtk_notebook_set_current_page( GTK_NOTEBOOK(A.libro), 0 );
@@ -4999,6 +5435,16 @@ int main( int argc, char **argv )
         return 0;
     }
 
+    /* LA VENTANA ASISTENTE GUARDA SU ESTADO en la configuracion del usuario:
+       la prueba, en la suya, que se borra con lo demas.                */
+    {
+    gchar *ini = g_build_filename( T, "ventanas.ini", NULL );
+    gchar *as  = g_build_filename( T, "asistente-usuario", NULL );
+    g_setenv( "ATSW_VENTANAS_INI", ini, TRUE );
+    /* Y la carpeta del asistente (Instalar), tambien en la de la prueba. */
+    g_setenv( "ATSW_ASISTENTE_DIR", as, TRUE );
+    g_free( ini ); g_free( as );
+    }
     g_thread_new( "vigilante", vigilante, GINT_TO_POINTER(170) );
     historial = g_ptr_array_new_with_free_func( g_free );
     contestados = g_hash_table_new( NULL, NULL );
@@ -5043,6 +5489,10 @@ int main( int argc, char **argv )
             fase( "legados" ); legados();
             fase( "trabajos" ); trabajos();
             fase( "ruta_u" ); ruta_u();
+            fase( "asistente_vigila" ); asistente_vigila();
+            fase( "asistente_menu" ); asistente_menu();
+            fase( "asistente_ventana" ); asistente_ventana();
+            fase( "ficha" ); ficha_madre();
             }
         }
     fase( "ejemplos" ); ejemplos();

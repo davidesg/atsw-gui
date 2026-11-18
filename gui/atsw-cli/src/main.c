@@ -292,6 +292,8 @@ static int proyecto_ver( const char *path )
             js_par( t, "por_elegido", !m->elegido ? "" :
                     m->por_elegido[0] ? m->por_elegido : "analista" );
             g_string_append( t, ", " );
+            js_par( t, "razon_elegido", m->elegido ? m->razon_elegido : "" );
+            g_string_append( t, ", " );
             g_string_append_printf( t, "\"datos\": %s, \"elegido\": %s}",
                                     m->rol == PR_DATOS ? "true" : "false",
                                     m->elegido ? "true" : "false" );
@@ -336,6 +338,10 @@ static int proyecto_ver( const char *path )
             if ( m->padre[0] || m->razon[0] )
                 g_string_append_printf( t, "      de %s: %s\n", m->padre[0] ? m->padre : "—",
                                         m->razon[0] ? m->razon : "(sin razón)" );
+            /* Y por qué se eligió: lo que el asistente dejó escrito al elegir
+             * (guion_adopt) no es la razón de derivarlo. */
+            if ( m->elegido && m->razon_elegido[0] )
+                g_string_append_printf( t, "      elegido: %s\n", m->razon_elegido );
             }
         for ( i = 0; i < p->nca; i++ )
             {
@@ -1170,11 +1176,11 @@ static int anomalos( const char *path, const char *serie, const char *id )
         g_string_append( t, "], " );
         js_num( t, "banda_con", c.banda_con ); g_string_append( t, ", " );
         js_num( t, "banda_sin", c.banda_sin ); g_string_append( t, ", \"q\": {" );
-        g_string_append_printf( t, "\"m\": %d, ", c.nlags );
+        g_string_append_printf( t, "\"m\": %d, \"gl\": %d, ", c.nlags, fueout_gl_q( o, c.nlags ) );
         js_num( t, "con", qc ); g_string_append( t, ", " );
-        js_num( t, "p_con", chisq_cola( qc, c.nlags ) ); g_string_append( t, ", " );
+        js_num( t, "p_con", chisq_cola( qc, fueout_gl_q( o, c.nlags ) ) ); g_string_append( t, ", " );
         js_num( t, "sin", qs ); g_string_append( t, ", " );
-        js_num( t, "p_sin", chisq_cola( qs, c.nlags ) ); g_string_append( t, "}, \"jb\": {" );
+        js_num( t, "p_sin", chisq_cola( qs, fueout_gl_q( o, c.nlags ) ) ); g_string_append( t, "}, \"jb\": {" );
         js_num( t, "con", con.jb ); g_string_append( t, ", " );
         js_num( t, "p_con", chisq_cola( con.jb, 2 ) ); g_string_append( t, ", " );
         js_num( t, "sin", sinellos.jb ); g_string_append( t, ", " );
@@ -1228,8 +1234,9 @@ static int anomalos( const char *path, const char *serie, const char *id )
                                     : "  Ningún retardo cambia de lado de la banda: intervenir esto "
                                       "no compra nada para la identificación.\n" );
             }
-        g_string_append_printf( t, "\n  Q(%d)  con %.1f (p = %.3f)   sin %.1f (p = %.3f)   banda ±%.3f / ±%.3f\n",
-                                c.nlags, qc, chisq_cola( qc, c.nlags ), qs, chisq_cola( qs, c.nlags ),
+        g_string_append_printf( t, "\n  Q(%d), %d g.l.  con %.1f (p = %.3f)   sin %.1f (p = %.3f)   banda ±%.3f / ±%.3f\n",
+                                c.nlags, fueout_gl_q( o, c.nlags ), qc, chisq_cola( qc, fueout_gl_q( o, c.nlags ) ),
+                                qs, chisq_cola( qs, fueout_gl_q( o, c.nlags ) ),
                                 c.banda_con, c.banda_sin );
         g_string_append_printf( t, "  JB    con %.1f (p = %.3f)   sin %.1f (p = %.3f)   curtosis %+.2f -> %+.2f\n",
                                 con.jb, chisq_cola( con.jb, 2 ), sinellos.jb,
@@ -1728,6 +1735,28 @@ static int armonicos_nuevos( const char *inp, const char *val, int pascua,
     return 0;
 }
 
+/* Una intervencion como la escribe el .inp: las palabras separadas por un
+   solo espacio («step  9 2012» es «step 9 2012»), que es como las nombra
+   id_nombres.                                                           */
+static void una_linea( const char *x, char *s, size_t n )
+{
+    gchar **w = g_strsplit_set( x, " \t", -1 ), **i;
+    size_t  k = 0;
+
+    s[0] = '\0';
+    for ( i = w; *i && k + 1 < n; i++ )
+        if ( **i ) k += g_snprintf( s + k, n - k, "%s%s", k ? " " : "", *i );
+    g_strfreev( w );
+}
+
+/* La fecha de una intervencion: lo que sigue a su forma («9 2012» en
+   «step 9 2012»). "" si no hay.                                         */
+static const char *fecha_de( const char *linea )
+{
+    const char *e = strchr( linea, ' ' );
+    return e ? e + 1 : "";
+}
+
 /* especifica P SERIE MODELO [--transformacion L,d,D] [--arma p,q,P,Q]
    [--anade-arma p,q,P,Q] [--intervencion "step 10 2008"]... [--media libre|V]:
    EL MISMO EDITOR DEL .inp QUE LAS VENTANAS DE LA MADRE (lib/inpdet), que
@@ -1740,7 +1769,7 @@ static int especifica( const char *path, const char *serie, const char *id )
     Proyecto *p = NULL;
     gchar    *a, *b, *cur;
     int       pa, qa, Pa, Qa, cambios = 0;
-    GString  *hecho = g_string_new( "" ), *t;
+    GString  *hecho = g_string_new( "" ), *aviso = g_string_new( "" ), *t;
 
     p = abre( path, why, sizeof why );
     if ( !p ) { g_string_free( hecho, TRUE ); return falla( "%s", why ); }
@@ -1792,10 +1821,39 @@ static int especifica( const char *path, const char *serie, const char *id )
         g_strlcat( msg, ")", sizeof msg );
         PASO( id_anade( cur, ( cambios % 2 ) ? b : a, pn, NULL, nn, why, sizeof why ), msg );
         }
+    /* LAS INTERVENCIONES SE AÑADEN a las que el .inp ya trae: el hijo de
+       «proyecto itera» hereda las del padre (BUG-0001 de atsw-cli). Como en
+       art-python (su BUG-0162): una sobre el mismo suceso que otra se añade
+       encima, con un aviso. Una IGUAL a otra no: son dos columnas iguales,
+       un modelo singular que fue estima igual, y quien la pasa creia casi
+       siempre que la lista se sustituia.                                  */
     if ( e_ninterv > 0 )
         {
+        char        ni[16][ID_LINEA], hay[ID_MAX_DET][ID_LINEA];
+        const char *pn[16];
+        int         k, j, nh;
+
+        if ( ( nh = id_nombres( cur, hay, ID_MAX_DET, why, sizeof why ) ) < 0 ) goto mal;
+        for ( k = 0; k < e_ninterv; k++ )
+            {
+            una_linea( e_interv[k], ni[k], sizeof ni[k] );
+            pn[k] = ni[k];
+            for ( j = 0; j < nh && strcmp( hay[j], ni[k] ); j++ ) ;
+            if ( j < nh )
+                { g_snprintf( why, sizeof why, "El .inp ya trae «%s»: no se repite. Las intervenciones "
+                              "se AÑADEN a las que hay (el hijo hereda las del padre); para un modelo sin "
+                              "una de ellas, se parte del .pre de antes de esa intervención.", ni[k] ); goto mal; }
+            for ( j = 0; j < k && strcmp( ni[j], ni[k] ); j++ ) ;
+            if ( j < k ) { g_snprintf( why, sizeof why, "«%s» va dos veces.", ni[k] ); goto mal; }
+            for ( j = 0; j < nh; j++ )
+                if ( *fecha_de( ni[k] ) && !strcmp( fecha_de( hay[j] ), fecha_de( ni[k] ) ) )
+                    g_string_append_printf( aviso, "%sYa había una intervención en esa fecha («%s») y "
+                        "«%s» se ha AÑADIDO encima: se reparten el efecto, y el síntoma es un ω que deja "
+                        "de ser significativo. Para reformularla, se parte del .pre de antes de aquella.",
+                        aviso->len ? " " : "", hay[j], ni[k] );
+            }
         g_snprintf( msg, sizeof msg, "%d intervención%s", e_ninterv, e_ninterv == 1 ? "" : "es" );
-        PASO( id_anade( cur, ( cambios % 2 ) ? b : a, e_interv, NULL, e_ninterv, why, sizeof why ), msg );
+        PASO( id_anade( cur, ( cambios % 2 ) ? b : a, pn, NULL, e_ninterv, why, sizeof why ), msg );
         }
     if ( e_media )
         {
@@ -1834,20 +1892,26 @@ static int especifica( const char *path, const char *serie, const char *id )
         js_par( t, "serie", serie ); g_string_append( t, ", " );
         js_par( t, "modelo", id ); g_string_append( t, ", " );
         js_par( t, "inp", inp ); g_string_append( t, ", " );
-        js_par( t, "cambios", hecho->str );
+        js_par( t, "cambios", hecho->str ); g_string_append( t, ", " );
+        js_par( t, "aviso", aviso->str );
         g_string_append_printf( t, ", \"arma\": [%d, %d, %d, %d]}\n", p2, q2, P2, Q2 );
         }
     else
+        {
         g_string_append_printf( t, "%s/%s: %s. El .inp queda con ARMA (%d,%d)(%d,%d); fue lo acepta.\n"
                                 "  %s\n", serie, id, hecho->str, p2, q2, P2, Q2, inp );
+        if ( aviso->len ) g_string_append_printf( t, "  ⚠ %s\n", aviso->str );
+        }
     fputs( t->str, stdout );
     g_string_free( t, TRUE );
     }
     g_free( cur ); g_free( a ); g_free( b ); g_free( p ); g_string_free( hecho, TRUE );
+    g_string_free( aviso, TRUE );
     return 0;
 mal:
     g_unlink( a ); g_unlink( b );
     g_free( cur ); g_free( a ); g_free( b ); g_free( p ); g_string_free( hecho, TRUE );
+    g_string_free( aviso, TRUE );
     {
     size_t l = strlen( why );
     return falla( "%s%s El .inp queda como estaba.", why, l && why[l - 1] == '.' ? "" : "." );
@@ -3865,7 +3929,8 @@ static void uso( FILE *f )
            "                en nuevo, itera, elige y raices factorizado queda escrito\n"
            "  --comprobar   ficha: corre fue sobre el .pre y lo apunta en costes.csv\n"
            "  especifica: --transformacion L,d,D  --arma p,q,P,Q  --anade-arma p,q,P,Q\n"
-           "    --intervencion \"step 10 2008\" (se repite)  --media libre|V (fija en V)\n"
+           "    --intervencion \"step 10 2008\" (se repite; se AÑADE a las que hay, y una igual, no)\n"
+           "    --media libre|V (fija en V)\n"
            "    --armonicos N|todos (N pares cos/sin; todos: y alter, con D = 0)  --pascua (mensuales)\n"
            "  --familia F   formales: integracion o estacionalidad (sin ella, las dos)\n"
            "  --sub         formales: también d - 1 (se pide, no se ofrece)\n"

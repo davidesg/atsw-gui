@@ -11,7 +11,10 @@ for r=1.  Output: <case>.inp in this directory.
 """
 import csv, math, os
 HERE = os.path.dirname(os.path.abspath(__file__))
-DS = "/home/david/Dropbox/SRC/drvec/datasets"
+import os
+# engines/drvec of this repository, or DRVEC_HOME
+_DRVEC_HOME = os.environ.get("DRVEC_HOME") or os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
+DS = os.path.join(_DRVEC_HOME, "datasets")
 
 def read_dat(path):
     lines = open(path).read().split("\n")

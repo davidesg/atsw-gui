@@ -192,3 +192,109 @@ no hay nada que perder.
 un manifiesto, le añade una clave desconocida y guarda encima un cambio con la
 copia que tenía en memoria. Sale con 1 si `pr_escribir` devuelve 0 y la clave
 ha desaparecido. Lo prueba también la sección 10 de `lib/proyecto/test_proyecto.c`.
+
+## BUG-0004 — una muestra no se recorta por el principio
+
+**Encontrado:** 2026-11-16, por el analista con el IPC de Portugal: una muestra
+«desde 1/2010 hasta 12/2019» seguía empezando en 2002.
+**Arreglado:** 2026-11-16 (#182). `repro.py` sale con 0.
+
+### Síntoma
+
+El final de la muestra se respetaba; el principio, no. Todo lo que colgaba de
+la muestra —art, fue, los casos— se estimaba desde el principio de los datos.
+
+### Por qué
+
+`atsw_genera_inp` (`src/genera.c`) solo recibía el «hasta»: el «desde» de la
+muestra no se usaba en ningún sitio, ni al poblarla (`atsw_puebla_muestra`)
+ni al derivar un modelo en ella (`gestos.c`).
+
+### Arreglo
+
+`atsw_genera_inp` recibe también el «desde», y `atsw_desde_i` —la otra punta
+de `atsw_hasta_n`— da la primera observación de la ventana. Las muestras
+creadas antes del arreglo conservan su nodo de datos viejo: hay que crearlas
+de nuevo.
+
+### Reproducción
+
+`bugs/BUG-0004-repro/repro.py` compila `recorta.c` con `genera.c` sobre los
+datos del manual, declara la muestra 1/2010 – 12/2019, la puebla como la
+madre y lee el .inp. Sale con 1 si no empieza en 1/2010 con 120
+observaciones. Lo prueban también los dos extremos en `tests/test_genera.c`.
+
+## BUG-0005 — un proyecto creado con «Nuevo…» no ve lo que hace el asistente
+
+**Encontrado:** 2026-11-17, al grabar el vídeo del asistente: en un proyecto
+recién creado en la madre, el asistente creó y estimó un modelo, y la madre
+no lo enseñó.
+**Arreglado:** 2026-11-17. `repro.py` sale con 0.
+
+### Síntoma
+
+Con un proyecto abierto con «Abrir…», un ejemplo o `--proyecto`, lo que
+escribe el asistente aparece solo (#181). Con uno creado con «Nuevo…», no:
+hacía falta volver a abrirlo.
+
+### Por qué
+
+La vista en vivo (`src/vigila.c`) se pone en `atsw_abre`. «Nuevo…»
+(`on_nuevo`, `src/main.c`) no pasa por ahí: crea el manifiesto y lo guarda
+sin vigilarlo. Tampoco guardaba el estado de la ventana Asistente del
+proyecto que se dejaba, ni ponía el del nuevo.
+
+### Arreglo
+
+`on_nuevo` hace lo mismo que `atsw_abre`: guarda el estado de la ventana del
+proyecto que se deja y, con el nuevo creado, llama a `atsw_vigila` y a
+`atsw_asistente_restaura`.
+
+### Reproducción
+
+`bugs/BUG-0005-repro/repro.py` lanza la madre en un broadwayd con el módulo
+de escenas del manual: crea un proyecto con «Nuevo…», carga los datos del
+manual y, con la madre abierta, da un paso como el asistente (`atsw-cli
+proyecto nuevo … --por asistente`). Sale con 1 si en 20 s la barra de estado
+no dice «, del asistente.». Para eso el módulo de escenas tiene dos órdenes
+nuevas: `lanza` (otro programa, sin esperar) y `aguarda` (un texto a la
+vista).
+
+## BUG-0006 — la misma Q de Ljung-Box con dos p, y Q(g.l.) leído como Q(retardo)
+
+**Encontrado:** 2026-11-18, en el estudio de lo que art-python ya aprendió
+(`docs/ESTUDIO-art-python-asistente.md` §3.6): art tuvo los dos (sus
+BUG-0195 y BUG-0213).
+**Arreglado:** 2026-11-18, en `lib/outfile`, `lib/dictamen`,
+`lib/analisis/an_anomalos.c` y `atsw-cli anomalos`.
+
+### Síntoma
+
+Sobre un AR(2) (el golden RIPC.2 de fue), la diagnosis decía
+«Q(37)=43.4 p=0.217» y la ventana de anómalos, con la misma Q, «Q(39) con
+43.4 (p = 0.289)». Y la diagnosis rotulaba cada peldaño con sus grados de
+libertad: «Q(10)» para la Q de 12 retardos, y si fallaba, «donde peor es en
+el retardo 10». Un fallo en el retardo 12 —estacional— se leía como del 10.
+
+### Por qué
+
+- **Anómalos** contrastaba la Q de m retardos con m grados de libertad, sin
+  descontar los parámetros ARMA. El motor y la diagnosis sí los descuentan.
+- **La diagnosis** guardaba de cada línea del `.out` la Q y sus g.l., no el
+  retardo, que es el primer número de la línea, y rotulaba con los g.l.
+
+### Arreglo
+
+- `lib/outfile` lee también el retardo de cada peldaño (`lb_lag_`), y
+  `fueout_gl_q` da los g.l. de una Q de m retardos: m − (p + q + P + Q),
+  como el motor.
+- La diagnosis escribe «Q(12)=8.6 (10 g.l.) p=0.575» y el retardo que es
+  («donde peor es en el retardo 12»). `DX_DATO` pasa a 256 para que la
+  escalera entera quepa.
+- Anómalos, en la ventana y en `atsw-cli anomalos`, «Q(39), 37 g.l.», con su
+  p; el JSON lleva `gl`.
+
+### Reproducción
+
+`bugs/BUG-0006-repro/repro.py`: el golden RIPC.2 con `atsw-cli dictamen` y
+`anomalos`. Sale 1 con el atsw-cli de antes y 0 con el arreglo.

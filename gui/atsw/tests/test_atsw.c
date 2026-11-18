@@ -30,6 +30,11 @@ gboolean   atsw_on_tecla( GtkWidget *tv, GdkEventKey *e, Atsw *a )
                          { (void) tv; (void) e; (void) a; return 0; }
 /* La seccion de los casos es de casos_gui.c, que aqui no se enlaza. */
 void       atsw_pinta_casos( Atsw *a ) { (void) a; }
+/* Y la vigilancia del proyecto es de vigila.c (el asistente), tampoco. */
+void       atsw_vigila( Atsw *a ) { (void) a; }
+/* Ni la ventana Asistente (asistente_ventana.c). */
+void       atsw_asistente_guarda_estado( Atsw *a ) { (void) a; }
+void       atsw_asistente_restaura( Atsw *a ) { (void) a; }
 
 const char *atsw_modelo_por_defecto( const Proyecto *p, const char *serie );
 

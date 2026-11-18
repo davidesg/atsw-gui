@@ -188,6 +188,14 @@ typedef struct {
       (AtHijo, en gestos.c). Se van con ella --vigilan su pid, lib/sitio--
       y al cerrarla se le pregunta al analista si los hay.             */
    GPtrArray *hijos;
+
+   /* LA VENTANA ASISTENTE (asistente_ventana.c, ESTUDIO-terminal-mcp §7.6):
+      un solo contenido (asis) que se mueve entre su ventana suelta (asis_win)
+      y el lado derecho de la madre (fuera, el GtkPaned de fuera). Lo demas,
+      la pagina «estado».                                                  */
+   GtkWidget *fuera, *asis, *asis_win;
+   GtkWidget *asis_estado, *asis_inst, *asis_proy, *asis_pasos, *asis_linea;
+   gboolean   asis_acoplado, asis_visible, asis_inst_hecha;
 } Atsw;
 
 GtkWidget *atsw_ventana_new( GtkApplication *app, Atsw *a );
@@ -381,18 +389,22 @@ gboolean   atsw_pide_texto( Atsw *a, const char *titulo, const char *aviso,
 /* --- el dato y lo que se deriva de el ----------------------------------- */
 
 /* EL .csv ES EL DATO; LOS .inp SE GENERAN DE EL. Un dueño y una derivacion,
-   como .pre -> .inp. <hasta> recorta la ventana ("" = la muestra entera) y
-   recorta el .inp QUE SALE, nunca el .csv: la muestra total es lo que
-   entro y no se toca.                                                   */
+   como .pre -> .inp. <desde> y <hasta> recortan la ventana ("" = sin
+   corte por ese lado) y recortan el .inp QUE SALE, nunca el .csv: la
+   muestra total es lo que entro y no se toca.                           */
 int        atsw_genera_inp( const char *csv, const char *destino,
-                            const char *serie, const char *hasta,
-                            char *why, size_t n );
+                            const char *serie, const char *desde,
+                            const char *hasta, char *why, size_t n );
 
 /* Cuantas observaciones caben hasta esa fecha. Fuera para poder probarlo:
    traducir "hasta 12/2019" a un numero de observaciones es lo unico de
    esto que hay que hacer bien.                                          */
 int        atsw_hasta_n( int freq, int anio, int per, int nobs,
                          const char *hasta );
+/* Y la otra punta: la posicion (desde 0) de la primera observacion de la
+   ventana; nobs si empieza despues del final, -1 si no se entiende.     */
+int        atsw_desde_i( int freq, int anio, int per, int nobs,
+                         const char *desde );
 
 /* Donde vive el .csv de una serie: <raiz>/<serie>/datos.csv, FUERA de
    work/, que es donde se corre y lo que se limpia.                      */
@@ -432,6 +444,61 @@ gboolean   atsw_abre( Atsw *a, const char *path, char *why, size_t n );
    Un manifiesto roto NO se traga: se dice y se deja el que hay en memoria,
    que es el bueno.                                                     */
 gboolean   atsw_relee( Atsw *a, char *why, size_t n );
+/* vigila.c: relee solo cuando el proyecto cambia en disco (el asistente). */
+void       atsw_vigila( Atsw *a );
+void       atsw_vigila_para( void );
+
+/* asistente.c: el menu Asistente (ESTUDIO-terminal-mcp §5, §6.2, §7.1). */
+enum { AS_CLAUDE = 1, AS_GEMINI = 2, AS_CODEX = 4, AS_CODEWHALE = 8 };
+void       atsw_menu_asistente( Atsw *a, GtkWidget *m );
+gchar     *atsw_asistente_dir( void );
+gchar     *atsw_asistente_servidor( const char *nombre );
+gboolean   atsw_asistente_instalado( void );
+/* uv (el del paquete, o el del PATH) y la fuente de atsw-gui-mcp (la del
+   paquete, bin/../asistente/atsw_mcp, o la del arbol). NULL si no estan. */
+gchar     *atsw_asistente_uv( void );
+gchar     *atsw_asistente_fuente( void );
+/* La orden de «Instalar el asistente…»: copia la fuente a la carpeta del
+   asistente y da la orden de uv, su entorno y la carpeta. NULL y why.  */
+gchar    **atsw_asistente_orden_instalar( gchar ***envp, gchar **dir, char *why, size_t n );
+/* Los servidores en el formato de un cliente: 0 Claude Code (.mcp.json),
+   1 Gemini CLI, 2 CodeWhale, 3 Codex (TOML).                          */
+gchar     *atsw_asistente_bloque( int formato );
+/* Escribe el andamiaje para los clientes AS_*; lo hecho, en informe. */
+int        atsw_asistente_prepara( Atsw *a, unsigned clientes, GString *informe );
+gchar    **atsw_terminal_orden( const char *dir );
+gchar     *atsw_asistente_informe( Atsw *a );
+/* Los pasos del asistente (por: asistente) en st, si no es NULL. Cuantos. */
+int        atsw_asistente_pasos( const Proyecto *p, GtkListStore *st );
+enum { QH_SERIE, QH_MUESTRA, QH_MODELO, QH_QUE, QH_RAZON, QH_COLS };
+void       atsw_asistente_terminal( Atsw *a );
+void       atsw_asistente_preparar( Atsw *a );
+void       atsw_asistente_que_ha_hecho( Atsw *a );
+
+/* asistente_ventana.c: la ventana Asistente, acoplable (§7.6). */
+GtkWidget *atsw_asistente_fuera( Atsw *a, GtkWidget *madre );
+void       atsw_asistente_muestra( Atsw *a, gboolean si );
+void       atsw_asistente_acopla( Atsw *a, gboolean si );
+gboolean   atsw_asistente_visible( Atsw *a );
+gboolean   atsw_asistente_acoplado( Atsw *a );
+void       atsw_asistente_refresca( Atsw *a );
+/* El estado por proyecto, en ventanas.ini (g_get_user_config_dir()/atsw/;
+   ATSW_VENTANAS_INI lo cambia, para las pruebas).                     */
+void       atsw_asistente_guarda_estado( Atsw *a );
+void       atsw_asistente_restaura( Atsw *a );
+
+/* ficha_gui.c: el coste y la ficha de confianza (ESTUDIO-terminal-mcp §7.7,
+   §7.8), con lib/ficha y lib/coste, las de atsw-cli.                  */
+gchar     *atsw_coste_linea( Atsw *a, const char *serie, const char *muestra, const char *id );
+void       atsw_coste_pie( Atsw *a, const char *f, const char *serie, const char *muestra,
+                           const char *id );
+gchar     *atsw_coste_objeto( const char *serie, const char *muestra, const char *id );
+GHashTable *atsw_coste_por_objeto( Atsw *a );
+gchar     *atsw_segundos( double s, gboolean consta );
+gchar     *atsw_md_pango( const char *md );
+void       atsw_ficha( Atsw *a, const char *serie, const char *muestra, const char *id );
+int        atsw_ficha_al_cuaderno( Atsw *a, const char *serie, const char *muestra,
+                                   const char *id, const char *md, char *why, size_t n );
 
 /* Escribe el manifiesto Y APUNTA SU HUELLA. Lo segundo no es un detalle: sin
    ello, el proximo foco releeria nuestra propia escritura creyendo que la

@@ -19,6 +19,10 @@ ATSW -- compilar e instalar en Linux
 
    Sin instalar tambien funciona: ./gui/atsw/atsw_gui
 
+   El asistente (menu Asistente) se instala desde la madre con uv, que en
+   la instalacion desde las fuentes no va incluido: instalalo antes
+   (https://docs.astral.sh/uv/). Hace falta la red la primera vez.
+
 4. Desinstalar:
 
        sudo make uninstall

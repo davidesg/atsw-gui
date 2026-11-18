@@ -1,0 +1,46 @@
+# EL GUION DE LA TERMINAL (graba.py): lo que el analista le escribe al
+# cliente, y los rotulos. Lo que contesta el cliente no esta escrito: es suyo.
+#
+# Calentamiento, sin grabar: la primera vez el cliente pregunta si se fia de
+# la carpeta y si activa sus servidores MCP; y su saludo puede ensenar la
+# cuenta. /clear lo borra antes de empezar a grabar.
+espera 8000
+si I trust this folder | Down
+espera 800
+si I trust this folder | Enter
+espera 6000
+si Enable selected | Down
+espera 500
+si Enable selected | Down
+espera 500
+si Enable selected | Down
+espera 500
+si Enable selected | Enter
+quieto 3 | 90
+envia /clear
+quieto 2 | 30
+graba
+rotulo En una terminal, en la carpeta del proyecto, el analista lanza su cliente de LLM: aquí, Claude Code.
+espera 7000
+rotulo Le pregunta por el proyecto. Para contestar, el cliente llama a las herramientas de los servidores de ATSW.
+espera 7500
+rotulo -
+teclea ¿Qué modelos hay de la serie subyacente, quién los hizo y cuál está elegido?
+quieto 6 | 300
+rotulo Lo lee del manifiesto: los dos modelos son del asistente, y la razón por la que eligió m02 quedó escrita.
+espera 9000
+rotulo -
+teclea ¿Por qué m02 y no m01? ¿Hay algo en m02 que deba revisar yo?
+quieto 6 | 400
+rotulo Compara las dos diagnosis y dice lo que queda pendiente. Revisarlo es cosa del analista.
+espera 10000
+rotulo -
+teclea Prueba un hijo de m02 sin el escalón de octubre de 2007 y dime si hace falta.
+rotulo Ahora le pide que haga algo. A la izquierda, la madre: el modelo nuevo aparece solo, «del asistente».
+quieto 8 | 900
+rotulo -
+espera 9000
+rotulo El asistente propone y prueba; elegir sigue siendo del analista. Y queda escrito quién hizo cada cosa.
+espera 7500
+rotulo -
+espera 1000

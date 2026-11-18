@@ -8,7 +8,7 @@ una vez a otra, así que se graba de verdad y se queda la toma que salga bien.
 ## El proyecto de partida
 
 ```sh
-bash docs/manual/video/terminal.sh
+bash docs/manual/video/terminal/proyecto.sh
 ```
 
 Deja en `/tmp/curso-terminal/asistente` el proyecto en que acaba la parte de
@@ -75,6 +75,6 @@ que se lo pidan: elegir es del analista.
 
 ## Qué hacer si una toma sale mal
 
-Rehacer el proyecto (`terminal.sh` borra y empieza de cero) y repetir. Una
+Rehacer el proyecto (`proyecto.sh` borra y empieza de cero) y repetir. Una
 toma en que el asistente se equivoca y se corrige solo también vale: es lo que
 pasa de verdad.

@@ -24,6 +24,14 @@ ESCENAS=$R/docs/manual/video/escenas-asistente CONSERVA=1 FOTOS=$F \
     bash "$R/docs/manual/capturas/capturas.sh" > "$F/capturas.log" 2>&1 ||
     { tail -20 "$F/capturas.log" >&2; exit 1; }
 
+# EL EXTRA PYTHON (art-python), que «Instalar el asistente…» no pone: sin
+# el, boxcox_analysis, intervention_ladder y suggest_intervention_form lo
+# dicen y no hacen nada. La misma orden que la madre, con --extra python.
+A=$CURSO/data/ATSW/asistente
+UV_PROJECT_ENVIRONMENT=$A/.venv UV_PYTHON_INSTALL_DIR=$A/python UV_CACHE_DIR=$A/cache \
+    "$CURSO/ATSW/bin/uv" sync -q --frozen --no-dev --no-editable --managed-python \
+    --python 3.12 --extra python --project "$A/fuente"
+
 # La nota del guion (asistente.py) no es del proyecto: el LLM no debe verla.
 rm -f "$P/.asistente-video"
 

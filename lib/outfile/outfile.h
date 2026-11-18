@@ -196,6 +196,9 @@ typedef struct {
     int      nlb;
     double   lb_q_[FO_MAX_LB], lb_p_[FO_MAX_LB];
     int      lb_df_[FO_MAX_LB];
+    int      lb_lag_[FO_MAX_LB];   /* el RETARDO de cada peldaño (12, 24..):
+                                      no son los grados de libertad, que
+                                      descuentan los ARMA (BUG-0006)     */
 
     /* El ultimo, que es el que resume la ventana entera. Se deja aparte
        porque es lo que la rejilla enseña en una columna.               */
@@ -219,6 +222,11 @@ char *fueout_estructura( const FueOut *o, char *out, size_t n );
 
 /* La cola superior de una chi-cuadrado. Publica porque la prueba la mira. */
 double chisq_cola( double x, int df );
+
+/* Los grados de libertad de una Q de Ljung-Box de m retardos sobre los
+   residuos del modelo: m menos los parametros ARMA (p+q+P+Q), como los
+   cuenta el motor; al menos 1 (BUG-0006).                               */
+int fueout_gl_q( const FueOut *o, int m );
 
 /* LA FECHA DE UN .out ES PERIODO/AÑO, Y NO AL REVES.
  *

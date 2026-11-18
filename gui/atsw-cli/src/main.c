@@ -1176,11 +1176,11 @@ static int anomalos( const char *path, const char *serie, const char *id )
         g_string_append( t, "], " );
         js_num( t, "banda_con", c.banda_con ); g_string_append( t, ", " );
         js_num( t, "banda_sin", c.banda_sin ); g_string_append( t, ", \"q\": {" );
-        g_string_append_printf( t, "\"m\": %d, ", c.nlags );
+        g_string_append_printf( t, "\"m\": %d, \"gl\": %d, ", c.nlags, fueout_gl_q( o, c.nlags ) );
         js_num( t, "con", qc ); g_string_append( t, ", " );
-        js_num( t, "p_con", chisq_cola( qc, c.nlags ) ); g_string_append( t, ", " );
+        js_num( t, "p_con", chisq_cola( qc, fueout_gl_q( o, c.nlags ) ) ); g_string_append( t, ", " );
         js_num( t, "sin", qs ); g_string_append( t, ", " );
-        js_num( t, "p_sin", chisq_cola( qs, c.nlags ) ); g_string_append( t, "}, \"jb\": {" );
+        js_num( t, "p_sin", chisq_cola( qs, fueout_gl_q( o, c.nlags ) ) ); g_string_append( t, "}, \"jb\": {" );
         js_num( t, "con", con.jb ); g_string_append( t, ", " );
         js_num( t, "p_con", chisq_cola( con.jb, 2 ) ); g_string_append( t, ", " );
         js_num( t, "sin", sinellos.jb ); g_string_append( t, ", " );
@@ -1234,8 +1234,9 @@ static int anomalos( const char *path, const char *serie, const char *id )
                                     : "  Ningún retardo cambia de lado de la banda: intervenir esto "
                                       "no compra nada para la identificación.\n" );
             }
-        g_string_append_printf( t, "\n  Q(%d)  con %.1f (p = %.3f)   sin %.1f (p = %.3f)   banda ±%.3f / ±%.3f\n",
-                                c.nlags, qc, chisq_cola( qc, c.nlags ), qs, chisq_cola( qs, c.nlags ),
+        g_string_append_printf( t, "\n  Q(%d), %d g.l.  con %.1f (p = %.3f)   sin %.1f (p = %.3f)   banda ±%.3f / ±%.3f\n",
+                                c.nlags, fueout_gl_q( o, c.nlags ), qc, chisq_cola( qc, fueout_gl_q( o, c.nlags ) ),
+                                qs, chisq_cola( qs, fueout_gl_q( o, c.nlags ) ),
                                 c.banda_con, c.banda_sin );
         g_string_append_printf( t, "  JB    con %.1f (p = %.3f)   sin %.1f (p = %.3f)   curtosis %+.2f -> %+.2f\n",
                                 con.jb, chisq_cola( con.jb, 2 ), sinellos.jb,

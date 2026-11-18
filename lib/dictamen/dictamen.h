@@ -56,7 +56,7 @@ typedef enum {
 } DxEstado;
 
 #define DX_TITULO  32
-#define DX_DATO   128
+#define DX_DATO   256   /* la escalera de la Q con sus g.l. (BUG-0006) */
 #define DX_DICE   192
 #define DX_MAX_LINEA 8
 

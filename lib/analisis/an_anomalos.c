@@ -253,7 +253,7 @@ static void di_jb( An *g )
 static void di_q( An *g )
 {
     double qc = 0.0, qs = 0.0;
-    int    m = g->c.nlags;
+    int    m = g->c.nlags, gl = fueout_gl_q( &g->o, m );
     gchar *t;
 
     an_q( &g->c, m, &qc, &qs );
@@ -262,9 +262,9 @@ static void di_q( An *g )
        compara contra el que imprime el motor: ése sale de su propio
        estimador, y mezclarlos sería restar peras de manzanas.        */
     t = g_markup_printf_escaped(
-        "<tt>Q(%d)</tt>  con los anómalos <b>%.1f</b> (p = %.3f)   ·   "
+        "<tt>Q(%d)</tt>, %d g.l.  con los anómalos <b>%.1f</b> (p = %.3f)   ·   "
         "sin ellos <b>%.1f</b> (p = %.3f)   ·   banda ±%.3f / ±%.3f",
-        m, qc, chisq_cola( qc, m ), qs, chisq_cola( qs, m ),
+        m, gl, qc, chisq_cola( qc, gl ), qs, chisq_cola( qs, gl ),
         g->c.banda_con, g->c.banda_sin );
     gtk_label_set_markup( GTK_LABEL(g->l_q), t );
     g_free( t );

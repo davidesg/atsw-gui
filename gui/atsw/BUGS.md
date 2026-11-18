@@ -259,3 +259,42 @@ proyecto nuevo … --por asistente`). Sale con 1 si en 20 s la barra de estado
 no dice «, del asistente.». Para eso el módulo de escenas tiene dos órdenes
 nuevas: `lanza` (otro programa, sin esperar) y `aguarda` (un texto a la
 vista).
+
+## BUG-0006 — la misma Q de Ljung-Box con dos p, y Q(g.l.) leído como Q(retardo)
+
+**Encontrado:** 2026-11-18, en el estudio de lo que art-python ya aprendió
+(`docs/ESTUDIO-art-python-asistente.md` §3.6): art tuvo los dos (sus
+BUG-0195 y BUG-0213).
+**Arreglado:** 2026-11-18, en `lib/outfile`, `lib/dictamen`,
+`lib/analisis/an_anomalos.c` y `atsw-cli anomalos`.
+
+### Síntoma
+
+Sobre un AR(2) (el golden RIPC.2 de fue), la diagnosis decía
+«Q(37)=43.4 p=0.217» y la ventana de anómalos, con la misma Q, «Q(39) con
+43.4 (p = 0.289)». Y la diagnosis rotulaba cada peldaño con sus grados de
+libertad: «Q(10)» para la Q de 12 retardos, y si fallaba, «donde peor es en
+el retardo 10». Un fallo en el retardo 12 —estacional— se leía como del 10.
+
+### Por qué
+
+- **Anómalos** contrastaba la Q de m retardos con m grados de libertad, sin
+  descontar los parámetros ARMA. El motor y la diagnosis sí los descuentan.
+- **La diagnosis** guardaba de cada línea del `.out` la Q y sus g.l., no el
+  retardo, que es el primer número de la línea, y rotulaba con los g.l.
+
+### Arreglo
+
+- `lib/outfile` lee también el retardo de cada peldaño (`lb_lag_`), y
+  `fueout_gl_q` da los g.l. de una Q de m retardos: m − (p + q + P + Q),
+  como el motor.
+- La diagnosis escribe «Q(12)=8.6 (10 g.l.) p=0.575» y el retardo que es
+  («donde peor es en el retardo 12»). `DX_DATO` pasa a 256 para que la
+  escalera entera quepa.
+- Anómalos, en la ventana y en `atsw-cli anomalos`, «Q(39), 37 g.l.», con su
+  p; el JSON lleva `gl`.
+
+### Reproducción
+
+`bugs/BUG-0006-repro/repro.py`: el golden RIPC.2 con `atsw-cli dictamen` y
+`anomalos`. Sale 1 con el atsw-cli de antes y 0 con el arreglo.

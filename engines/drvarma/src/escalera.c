@@ -529,6 +529,153 @@ static void fit_run(Fit *F, int optimize)
     fit_eval(F);
 }
 
+/* ------------------------------------------------------------------------- */
+/*  -start ols: el arranque de drvarma original (init_varma, la via .inp),   */
+/*  llevado a la escalera. La misma aritmetica que Ladder(start="ols") del   */
+/*  porte (drvarma-python, ladder._ols_start).                               */
+/*                                                                           */
+/*  Minimos cuadrados del VAR(p), sin constante, sobre las series            */
+/*  estacionarias centradas del estado diagonal: Phi_1..Phi_p, los residuos  */
+/*  E en t = p+1..n y S = E'E / (n - p). El arranque de la escalera MAS los  */
+/*  parametros de la RELACION:                                               */
+/*   - los AR cruzados libres toman Phi_k[a][b] (Box y Jenkins:              */
+/*     Phi(B) = I - SUM Phi_k B^k: el cruzado es +Phi_k); -links y -zero se  */
+/*     respetan (free_ar);                                                   */
+/*   - las covarianzas de Q (Q_11 = 1, Mauricio 1995, ec. 2.1) toman la      */
+/*     CORRELACION de los residuos, como el original, en la normalizacion de */
+/*     la escalera: q_ab = r_ab sqrt(Q_aa Q_bb), con las Q_aa del ajuste     */
+/*     diagonal (las varianzas de cada serie, la puerta, no se tocan);       */
+/*   - los MA cruzados, en cero, como el original.                           */
+/*  El AR PROPIO se siembra solo donde el fichero es una especificacion: un  */
+/*  unico factor AR regular, todo libre y todo cero, sin AR estacional (la   */
+/*  ruta V, Tiao y Box): toma Phi_k[a][a], y entonces tambien las varianzas, */
+/*  Q_aa = S_aa / S_11. Con -fixarma, nunca. Si elf no acepta el punto, se   */
+/*  vuelve a cero y se dice (start_used).                                    */
+/*  Desde cero, la MV exacta se para a las 2 iteraciones por debajo del VAR  */
+/*  anidado en el VAR monetario de EE. UU. (drvarma-python BUG-0027).        */
+/* ------------------------------------------------------------------------- */
+static int  opt_start_ols = 0;
+static char start_used[96] = "zero";
+
+static void fit_free(Fit *F);
+
+static void start_ols(void)
+{
+    int  m = act_m, p = cx_p, n = n_stat, np = act_m * cx_p, T = n_stat - cx_p;
+    int  a, b, k, t, i, r, any_seed = 0, *ip;
+    int  seeded[ESC_MAX + 1];
+    real save_lvar[ESC_MAX + 1];
+    real *mean, **Z, **ZtZ, *rhs, **B, **S;
+    Fit  chk;
+
+    if (p < 1 || T <= np + 1) {
+        snprintf(start_used, sizeof start_used,
+                 "zero (no least squares: p = 0 or too few observations)");
+        return;
+    }
+    mean = vector(1, m);
+    for (a = 1; a <= m; a++) {
+        real s = 0.0;
+        for (t = 1; t <= n; t++) s += w[act[a]][t];
+        mean[a] = s / n;
+    }
+    Z = matrix(1, T, 1, np);
+    for (r = 1; r <= T; r++)
+        for (k = 1; k <= p; k++)
+            for (b = 1; b <= m; b++)
+                Z[r][(k - 1) * m + b] = w[act[b]][r + p - k] - mean[b];
+    ZtZ = matrix(1, np, 1, np);
+    for (i = 1; i <= np; i++)
+        for (k = 1; k <= np; k++) {
+            real s = 0.0;
+            for (r = 1; r <= T; r++) s += Z[r][i] * Z[r][k];
+            ZtZ[i][k] = s;
+        }
+    ip = ivector(1, np);
+    ludcp(ZtZ, np, ip);
+    B = matrix(1, np, 1, m);          /* B[(k-1)m+b][a] = Phi_k[a][b] */
+    rhs = vector(1, np);
+    for (a = 1; a <= m; a++) {
+        for (i = 1; i <= np; i++) {
+            real s = 0.0;
+            for (r = 1; r <= T; r++) s += Z[r][i] * (w[act[a]][r + p] - mean[a]);
+            rhs[i] = s;
+        }
+        lusol(ZtZ, rhs, np, ip);
+        for (i = 1; i <= np; i++) B[i][a] = rhs[i];
+    }
+    S = matrix(1, m, 1, m);
+    for (a = 1; a <= m; a++)
+        for (b = 1; b <= m; b++) S[a][b] = 0.0;
+    for (r = 1; r <= T; r++) {
+        real e[ESC_MAX + 1];
+        for (a = 1; a <= m; a++) {
+            real s = w[act[a]][r + p] - mean[a];
+            for (i = 1; i <= np; i++) s -= Z[r][i] * B[i][a];
+            e[a] = s;
+        }
+        for (a = 1; a <= m; a++)
+            for (b = 1; b <= m; b++) S[a][b] += e[a] * e[b];
+    }
+    for (a = 1; a <= m; a++)
+        for (b = 1; b <= m; b++) S[a][b] /= T;
+
+    for (a = 1; a <= m; a++) save_lvar[act[a]] = lvar[act[a]];
+    /* El AR propio, solo en una especificacion (la ruta V). */
+    for (a = 1; a <= m; a++) {
+        struct Tusmodel *M = &Tm[act[a]];
+        int ok = !opt_fixarma && M->NumAr1 == 1 && M->NumAr2 == 0 && M->p1[1] <= p;
+        for (k = 1; ok && k <= M->p1[1]; k++)
+            if (M->Ia1[1][k] != 1 || M->Ar1[1][k] != 0.0) ok = 0;
+        seeded[a] = ok;
+        if (ok) {
+            for (k = 1; k <= M->p1[1]; k++) M->Ar1[1][k] = B[(k - 1) * m + a][a];
+            any_seed = 1;
+        }
+    }
+    /* Los AR cruzados libres. */
+    for (k = 1; k <= p; k++)
+        for (a = 1; a <= m; a++)
+            for (b = 1; b <= m; b++)
+                if (a != b && free_ar(k, act[a], act[b]))
+                    cAR[k][act[a]][act[b]] = B[(k - 1) * m + b][a];
+    if (any_seed)
+        for (a = 2; a <= m; a++) lvar[act[a]] = log(S[a][a] / S[1][1]);
+    if (!cx_diagcov)
+        for (a = 2; a <= m; a++)
+            for (b = 1; b < a; b++) {
+                real qa = exp(lvar[act[a]]), qb = (b == 1) ? 1.0 : exp(lvar[act[b]]);
+                real rr = S[a][b] / sqrt(S[a][a] * S[b][b]);
+                qcov[act[a]][act[b]] = rr * sqrt(qa * qb);
+            }
+
+    /* Admisible?  Si elf no acepta el punto, a cero, como el porte. */
+    fit_run(&chk, 0);
+    if (chk.ifault) {
+        for (k = 0; k <= ESC_MAXLAG; k++)
+            for (a = 0; a <= ESC_MAX; a++)
+                for (b = 0; b <= ESC_MAX; b++) cAR[k][a][b] = 0.0;
+        for (a = 0; a <= ESC_MAX; a++)
+            for (b = 0; b <= ESC_MAX; b++) qcov[a][b] = 0.0;
+        for (a = 1; a <= m; a++) {
+            lvar[act[a]] = save_lvar[act[a]];
+            if (seeded[a])
+                for (k = 1; k <= Tm[act[a]].p1[1]; k++) Tm[act[a]].Ar1[1][k] = 0.0;
+        }
+        snprintf(start_used, sizeof start_used, "zero (the ols start was not admissible)");
+    } else
+        snprintf(start_used, sizeof start_used, "ols");
+    fit_free(&chk);
+
+    free_matrix(S, 1, m, 1, m);
+    free_vector(rhs, 1, np);
+    free_matrix(B, 1, np, 1, m);
+    free_ivector(ip, 1, np);
+    free_matrix(ZtZ, 1, np, 1, np);
+    free_matrix(Z, 1, T, 1, np);
+    free_vector(mean, 1, m);
+}
+
 static void fit_free(Fit *F)
 {
     int ifault = 0, np = F->npar > 0 ? F->npar : 1;
@@ -1470,6 +1617,7 @@ void escalera_usage(const char *prog)
     printf("                                  [-irfboot N]\n");
     printf("                                  [-hessian fd|bfgs] [-lik elf|shea|both]\n");
     printf("                                  [-links \"A<-B,C<-A\"] [-zero \"AR1[A<-B],...\"]\n");
+    printf("                                  [-start zero|ols]\n");
     printf("  THE LADDER: each series comes with its univariate model from fue (.pre):\n");
     printf("       Box-Cox, deterministic terms, differencing, mean and ARMA factors.\n");
     printf("       The VARMA keeps each model on its DIAGONAL; p and q are the orders of\n");
@@ -1483,6 +1631,10 @@ void escalera_usage(const char *prog)
     printf("  -zero    : single cross coefficients held at zero, \"AR1[A<-B],MA2[B<-A]\"\n"
            "             (Tiao and Box's simplification by coefficient); each one has\n"
            "             to be in the model: its lag within p or q, its pair linked\n");
+    printf("  -start   : where the cross terms start: zero (default) or ols, the\n"
+           "             original drvarma's init_varma: least squares of the VAR(p)\n"
+           "             seeds the cross AR and Q's covariances (and the own AR of a\n"
+           "             spec with it at zero); the .pre's own models stay\n");
     printf("  -hessian : standard errors from fdhess at the optimum (fd, default) or\n"
            "             from the BFGS Hessian of the search (bfgs)\n");
     printf("  -o NAME  : results to NAME.out (default: the .pre names joined by '_')\n");
@@ -1576,6 +1728,9 @@ int escalera_main(int argc, char *argv[])
             est_lik = strcmp(argv[argi], "shea") == 0 ? LIK_SHEA
                     : strcmp(argv[argi], "both") == 0 ? LIK_BOTH : LIK_ELF;
             }
+        else if (strcmp(argv[argi], "-start") == 0 && argi + 1 < argc &&
+                 (strcmp(argv[argi + 1], "ols") == 0 || strcmp(argv[argi + 1], "zero") == 0))
+            opt_start_ols = (strcmp(argv[++argi], "ols") == 0);
         else if (strcmp(argv[argi], "-hessian") == 0 && argi + 1 < argc &&
                  (strcmp(argv[argi + 1], "fd") == 0 || strcmp(argv[argi + 1], "bfgs") == 0))
             est_fdhess = (strcmp(argv[++argi], "fd") == 0);
@@ -1932,6 +2087,12 @@ int escalera_main(int argc, char *argv[])
                     for (b2 = 0; b2 <= ESC_MAX; b2++) cAR[k][a][b2] = cMA[k][a][b2] = 0.0;
             for (a = 0; a <= ESC_MAX; a++)
                 for (b2 = 0; b2 <= ESC_MAX; b2++) qcov[a][b2] = 0.0;
+        }
+        if (opt_start_ols) {
+            start_ols();
+            printf("Start of the cross terms: %s\n", start_used);
+            fprintf(outputv, "Start of the cross terms: %s (-start ols: the original "
+                             "drvarma's init_varma, least squares)\n", start_used);
         }
         quiet_mode = 0;
         fit_run(&F, 1);

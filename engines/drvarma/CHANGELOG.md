@@ -19,10 +19,10 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
   - Q's covariances take the residuals' correlation in the ladder's
     normalisation, q_ab = r_ab sqrt(Q_aa Q_bb), with the gate's Q_aa;
   - the cross MA terms stay at zero.
-- The own AR is seeded only in a specification with it free and at zero
-  (route V, Tiao and Box), and then the variances too; never with
-  `-fixarma`. If elf does not accept the point, zero is used and the `.out`
-  says so.
+- The own models are never seeded, on either route: the ladder's principle
+  (the univariate models first, from art and mtram). On route V the diagonal
+  fit has already estimated them. If elf does not accept the point, zero is
+  used and the `.out` says so.
 - The default stays `-start zero`: `tests/banco` (18 cases) and
   `tests/escalera` are unchanged.
 - On the US monetary VAR (FRED; IPI, IPC, WTI, GS1) the zero start stops the

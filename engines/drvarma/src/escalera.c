@@ -546,10 +546,11 @@ static void fit_run(Fit *F, int optimize)
 /*     la escalera: q_ab = r_ab sqrt(Q_aa Q_bb), con las Q_aa del ajuste     */
 /*     diagonal (las varianzas de cada serie, la puerta, no se tocan);       */
 /*   - los MA cruzados, en cero, como el original.                           */
-/*  El AR PROPIO se siembra solo donde el fichero es una especificacion: un  */
-/*  unico factor AR regular, todo libre y todo cero, sin AR estacional (la   */
-/*  ruta V, Tiao y Box): toma Phi_k[a][a], y entonces tambien las varianzas, */
-/*  Q_aa = S_aa / S_11. Con -fixarma, nunca. Si elf no acepta el punto, se   */
+/*  Los modelos PROPIOS no se siembran nunca: el principio de la escalera    */
+/*  (los univariantes primero, de art y mtram) vale en las dos rutas. En la  */
+/*  U son los optimos de los .pre; en la V (especificaciones con el ARMA     */
+/*  propio a cero) los estima antes el ajuste diagonal, por MV exacta. Los   */
+/*  minimos cuadrados solo anaden la relacion. Si elf no acepta el punto, se */
 /*  vuelve a cero y se dice (start_used).                                    */
 /*  Desde cero, la MV exacta se para a las 2 iteraciones por debajo del VAR  */
 /*  anidado en el VAR monetario de EE. UU. (drvarma-python BUG-0027).        */
@@ -562,9 +563,7 @@ static void fit_free(Fit *F);
 static void start_ols(void)
 {
     int  m = act_m, p = cx_p, n = n_stat, np = act_m * cx_p, T = n_stat - cx_p;
-    int  a, b, k, t, i, r, any_seed = 0, *ip;
-    int  seeded[ESC_MAX + 1];
-    real save_lvar[ESC_MAX + 1];
+    int  a, b, k, t, i, r, *ip;
     real *mean, **Z, **ZtZ, *rhs, **B, **S;
     Fit  chk;
 
@@ -620,27 +619,12 @@ static void start_ols(void)
     for (a = 1; a <= m; a++)
         for (b = 1; b <= m; b++) S[a][b] /= T;
 
-    for (a = 1; a <= m; a++) save_lvar[act[a]] = lvar[act[a]];
-    /* El AR propio, solo en una especificacion (la ruta V). */
-    for (a = 1; a <= m; a++) {
-        struct Tusmodel *M = &Tm[act[a]];
-        int ok = !opt_fixarma && M->NumAr1 == 1 && M->NumAr2 == 0 && M->p1[1] <= p;
-        for (k = 1; ok && k <= M->p1[1]; k++)
-            if (M->Ia1[1][k] != 1 || M->Ar1[1][k] != 0.0) ok = 0;
-        seeded[a] = ok;
-        if (ok) {
-            for (k = 1; k <= M->p1[1]; k++) M->Ar1[1][k] = B[(k - 1) * m + a][a];
-            any_seed = 1;
-        }
-    }
     /* Los AR cruzados libres. */
     for (k = 1; k <= p; k++)
         for (a = 1; a <= m; a++)
             for (b = 1; b <= m; b++)
                 if (a != b && free_ar(k, act[a], act[b]))
                     cAR[k][act[a]][act[b]] = B[(k - 1) * m + b][a];
-    if (any_seed)
-        for (a = 2; a <= m; a++) lvar[act[a]] = log(S[a][a] / S[1][1]);
     if (!cx_diagcov)
         for (a = 2; a <= m; a++)
             for (b = 1; b < a; b++) {
@@ -657,11 +641,6 @@ static void start_ols(void)
                 for (b = 0; b <= ESC_MAX; b++) cAR[k][a][b] = 0.0;
         for (a = 0; a <= ESC_MAX; a++)
             for (b = 0; b <= ESC_MAX; b++) qcov[a][b] = 0.0;
-        for (a = 1; a <= m; a++) {
-            lvar[act[a]] = save_lvar[act[a]];
-            if (seeded[a])
-                for (k = 1; k <= Tm[act[a]].p1[1]; k++) Tm[act[a]].Ar1[1][k] = 0.0;
-        }
         snprintf(start_used, sizeof start_used, "zero (the ols start was not admissible)");
     } else
         snprintf(start_used, sizeof start_used, "ols");
@@ -1633,8 +1612,8 @@ void escalera_usage(const char *prog)
            "             to be in the model: its lag within p or q, its pair linked\n");
     printf("  -start   : where the cross terms start: zero (default) or ols, the\n"
            "             original drvarma's init_varma: least squares of the VAR(p)\n"
-           "             seeds the cross AR and Q's covariances (and the own AR of a\n"
-           "             spec with it at zero); the .pre's own models stay\n");
+           "             seeds the cross AR and Q's covariances; the own models\n"
+           "             stay the univariate ones (the ladder's principle)\n");
     printf("  -hessian : standard errors from fdhess at the optimum (fd, default) or\n"
            "             from the BFGS Hessian of the search (bfgs)\n");
     printf("  -o NAME  : results to NAME.out (default: the .pre names joined by '_')\n");

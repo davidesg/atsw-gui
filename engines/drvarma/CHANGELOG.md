@@ -9,6 +9,28 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Added — `-start ols`: the original drvarma's start, in the ladder
+
+- `init_varma` of the `.inp` path brought to the ladder: least squares of the
+  VAR(p), with no constant, on the centred stationary series of the diagonal
+  state. It is the ladder's start PLUS the parameters of the relation:
+  - the free cross AR terms take Phi_k (Box and Jenkins: the cross term is
+    +Phi_k), with `-links` and `-zero` respected;
+  - Q's covariances take the residuals' correlation in the ladder's
+    normalisation, q_ab = r_ab sqrt(Q_aa Q_bb), with the gate's Q_aa;
+  - the cross MA terms stay at zero.
+- The own AR is seeded only in a specification with it free and at zero
+  (route V, Tiao and Box), and then the variances too; never with
+  `-fixarma`. If elf does not accept the point, zero is used and the `.out`
+  says so.
+- The default stays `-start zero`: `tests/banco` (18 cases) and
+  `tests/escalera` are unchanged.
+- On the US monetary VAR (FRED; IPI, IPC, WTI, GS1) the zero start stops the
+  VAR(2) after 2 iterations at −1793.05, below the VAR(1) (drvarma-python
+  BUG-0027). From least squares it reaches −1741.275477, the same as the
+  port's `Ladder(start="ols")`: 46 parameters within 6e-6.
+  `tests/escalera` case 10b.
+
 ### Added — `-irfboot N`: bands for the impulse responses by parametric bootstrap
 
 - The ladder simulates the fitted model N times (the stationary VARMA of

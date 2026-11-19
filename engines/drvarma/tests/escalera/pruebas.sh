@@ -375,6 +375,21 @@ cmp -s "$TMP/bt1.irfboot" "$TMP/bt2.irfboot" \
 [ $? -ne 0 ] && grep -q "not -redet" "$TMP/btr.log" \
     && bien "-irfboot con -redet es un error" || falla "-irfboot acepta -redet"
 
+# 10b. -start ols: el arranque de drvarma original (init_varma) en la escalera.
+#     El VAR monetario de EE. UU. (FRED; IPI, IPC, WTI, GS1, ruta U): desde
+#     cero el VAR(2) se para a las 2 iteraciones por debajo del VAR(1)
+#     (drvarma-python BUG-0027); desde MCO llega al optimo, el mismo que el
+#     porte (Ladder(start="ols")) a 6 decimales.
+MON=$AQUI/data/monetario
+( cd "$TMP" && "$BIN" "$MON/IPI_m07.pre" "$MON/IPC_m07.pre" "$MON/WTI_m03.pre" "$MON/GS1_m01.pre" \
+    2 0 -start ols -o "$TMP/mols" ) > "$TMP/mols.log" 2>&1
+grep -q "^Start of the cross terms: ols" "$TMP/mols.log" \
+    && bien "-start ols: se usa" || falla "-start ols: no se usa ($(grep -a 'Start of' "$TMP/mols.log"))"
+cerca "-start ols: logL del VAR(2) monetario" -1741.275477 \
+    "$(awk '/^Exact log-likelihood/ {print $3; exit}' "$TMP/mols.log")" 1e-5
+"$BIN" "$MON/IPI_m07.pre" "$MON/GS1_m01.pre" 1 0 -start mco -o "$TMP/mmal" > "$TMP/mmal.log" 2>&1
+[ $? -ne 0 ] && bien "-start desconocido es un error" || falla "-start acepta un valor desconocido"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

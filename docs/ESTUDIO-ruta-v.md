@@ -1,6 +1,7 @@
 # Estudio: la ruta V (Tiao y Box) en la madre y en sim_gui
 
-**Estado: estudio para discutir, no un plan aprobado.** 19-nov-2026. Pedido
+**Estado: decidido por el analista (19-nov-2026): las seis recomendaciones de
+§6, tal cual.** Escrito el 19-nov-2026. Pedido
 por el analista para el vídeo «SIM 2: Tiao y Box», y para decidir si cada
 escuela necesita su propia ventana. Parte de `DISENO-sim.md` (§0.3, §3.2, §8:
 la ruta V en la segunda versión) y lo aterriza con lo que se ha medido.
@@ -244,7 +245,7 @@ también en el `.out`, es un cambio de motor con su BUG, aparte.
 
 ---
 
-## 6. Decisiones que pide
+## 6. Decisiones (aceptadas por el analista el 19-nov-2026)
 
 1. **Carril por caso (C) frente a una ventana por escuela (B).** El estudio
    recomienda C.

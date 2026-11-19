@@ -997,6 +997,10 @@ programa:
   ≤ 0 no entraba aunque λ = 1 («dato no positivo para Box-Cox»), ni la serie
   J de Box y Jenkins (el gas) en drtran. Ahora solo se rechaza con λ ≠ 1, como
   en fue, drvec y los portes. `lib/prewhiten/BUGS.md`.
+- **BUG-0002**: con λ = 1, `lib/prewhiten` y `lib/fuepre` transforman como
+  refactor·(y − 1), y fue como refactor·y. La media sale 100 por debajo, la
+  puerta marca «not an optimum» en .pre de fue y, con la media fija, el
+  sistema lee otro modelo. Repro en `lib/prewhiten/bugs/BUG-0002-repro`.
 
 **drvarma / drvarma_gui**
 

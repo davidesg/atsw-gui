@@ -991,6 +991,13 @@ programa:
   tabla). El porte de Python lo sigue: arriba, en el plan de los portes.
   `engines/fuf/BUGS.md`.
 
+**lib/prewhiten (el reparto de la escalera de drvarma, de drtran y del `-xpre` de drvec)**
+
+- ~~**BUG-0001**~~ — **arreglado** (19-nov-2026, #196): una serie con datos
+  ≤ 0 no entraba aunque λ = 1 («dato no positivo para Box-Cox»), ni la serie
+  J de Box y Jenkins (el gas) en drtran. Ahora solo se rechaza con λ ≠ 1, como
+  en fue, drvec y los portes. `lib/prewhiten/BUGS.md`.
+
 **drvarma / drvarma_gui**
 
 - El motor **sale con 0** cuando la estimación falla («ESTIMATION FAILED: AR

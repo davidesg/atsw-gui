@@ -15,7 +15,8 @@ El caso: la serie J de Box y Jenkins, el horno de gas (296 pares, dominio
 publico; openmv.net/info/gas-furnace). GAS.pre es el caudal de gas, con
 negativos; CO2.pre, la salida. Los dos los escribio fue, en niveles y con
 media. Se corren la puerta de la escalera (drvarma, p = q = 0, -diagcov) y la
-transferencia CO2 <- GAS (drtran). Y, para que el arreglo no se pase, la
+transferencia CO2 <- GAS (drtran) con los ordenes de Box y Jenkins
+(b = 3, r = 1, s = 2). Y, para que el arreglo no se pase, la
 misma puerta con lambda = 0 (logaritmos) TIENE que rechazar el gas.
 
 Sale con 1 mientras lambda = 1 se rechace (o lambda = 0 se acepte), con 0
@@ -57,7 +58,7 @@ with tempfile.TemporaryDirectory() as t:
     (d / "GASLOG.pre").write_text(log)
 
     rc1, s1 = corre(d, [DRVARMA, "GAS.pre", "CO2.pre", 0, 0, "-diagcov", "-o", "puerta"])
-    rc2, s2 = corre(d, [DRTRAN, "CO2.pre", "GAS.pre"])
+    rc2, s2 = corre(d, [DRTRAN, "CO2.pre", "GAS.pre", "-b", 3, "-r", 1, "-s", 2])
     rc3, s3 = corre(d, [DRVARMA, "GASLOG.pre", "CO2.pre", 0, 0, "-diagcov", "-o", "log"])
 
 mal = 0

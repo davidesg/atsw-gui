@@ -1,12 +1,12 @@
 # `lib/prewhiten` — partes
 
-## BUG-0001 — Una serie con datos ≤ 0 no entra aunque λ = 1
+## BUG-0001 — Una serie con datos ≤ 0 no entra aunque λ = 1 (ARREGLADO)
 
-- **Estado:** abierto
+- **Estado:** arreglado el 19-nov-2026 (#196)
 - **Gravedad:** media (la serie no entra; no da números falsos)
 - **Encontrado:** 19-nov-2026, al comprobar la ruta V (Tiao y Box) en drvarma C
   con el horno de gas, el ejemplo `tiao_box` de sima.
-- **Repro:** `bugs/BUG-0001-repro/repro.py` (sale con 1 mientras siga abierto).
+- **Repro:** `bugs/BUG-0001-repro/repro.py` (salía con 1 mientras estuvo abierto; ahora sale con 0).
 
 ### Qué pasa
 
@@ -38,8 +38,10 @@ transferencia.
 
 La comprobación `y <= 0.0` no mira λ.
 
-### Arreglo propuesto
+### El arreglo
 
-Rechazar un dato ≤ 0 solo cuando |λ − 1| > 1e-12, como `drvec.c` y
-drvec-python. El repro comprueba además que con λ = 0 (logaritmos) el gas
-se sigue rechazando.
+Un dato ≤ 0 se rechaza solo cuando |λ − 1| > 1e-12, como en `drvec.c` y en
+drvec-python. Con el arreglo, el gas entra en la puerta de drvarma y en
+drtran: con los órdenes de Box y Jenkins (b = 3, r = 1, s = 2), ω₀ = −0.57 y
+δ₁ = 0.60. El repro comprueba además que con λ = 0 (logaritmos) el gas se
+sigue rechazando.

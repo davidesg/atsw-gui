@@ -188,7 +188,9 @@ void apply_univariate_model(struct Tusmodel *Tm, struct Tseries *Ts,
        trabajar (el paso de diferencias finitas de cdgrad es ~6e-6 absoluto).  */
     for (t = 1; t <= nobs; t++) {
         real y = Ts->data[t];
-        if (y <= 0.0) {
+        /* Con λ = 1 la transformación es (y - 1): un dato <= 0 vale, como en
+           fue y en drvec (boxcox_w). Solo se rechaza con λ != 1 (BUG-0001). */
+        if (fabs(lam - 1.0) > 1.0e-12 && y <= 0.0) {
             fprintf(stderr, "Error: dato no positivo para Box-Cox (t=%d, y=%g)\n",
                     t, y);
             *w_out = NULL;

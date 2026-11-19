@@ -993,10 +993,10 @@ programa:
 
 **lib/prewhiten (el reparto de la escalera de drvarma, de drtran y del `-xpre` de drvec)**
 
-- **BUG-0001**: una serie con datos ≤ 0 no entra aunque λ = 1 («dato no
-  positivo para Box-Cox»). fue la estima y los portes de Python la aceptan;
-  aquí, ni la serie J de Box y Jenkins (el gas) entra en drtran. Repro en
-  `lib/prewhiten/bugs/BUG-0001-repro`; `lib/prewhiten/BUGS.md`.
+- ~~**BUG-0001**~~ — **arreglado** (19-nov-2026, #196): una serie con datos
+  ≤ 0 no entraba aunque λ = 1 («dato no positivo para Box-Cox»), ni la serie
+  J de Box y Jenkins (el gas) en drtran. Ahora solo se rechaza con λ ≠ 1, como
+  en fue, drvec y los portes. `lib/prewhiten/BUGS.md`.
 
 **drvarma / drvarma_gui**
 

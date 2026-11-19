@@ -46,9 +46,9 @@ drtran: con los órdenes de Box y Jenkins (b = 3, r = 1, s = 2), ω₀ = −0.57
 δ₁ = 0.60. El repro comprueba además que con λ = 0 (logaritmos) el gas se
 sigue rechazando.
 
-## BUG-0002 — Con λ = 1 la Box-Cox de la librería resta 1; la de fue, no
+## BUG-0002 — Con λ = 1 la Box-Cox de la librería resta 1; la de fue, no (ARREGLADO)
 
-- **Estado:** abierto
+- **Estado:** arreglado el 20-nov-2026 (#201)
 - **Gravedad:** media. Con d = 0 y media, un `.pre` de fue no es un óptimo
   para la escalera. Con d ≥ 1 no se nota, porque la diferencia elimina la
   constante.
@@ -56,7 +56,7 @@ sigue rechazando.
   escalera de drvarma con el porte en la ruta V. El logL era idéntico, pero las
   medias diferían en exactamente 100.
 - **Repro:** `bugs/BUG-0002-repro/repro.py`, con los ficheros de BUG-0001.
-  Sale con 1 mientras siga abierto.
+  Salía con 1 mientras estuvo abierto; ahora sale con 0.
 
 ### Qué pasa
 
@@ -96,10 +96,19 @@ su inversa los usan las previsiones de drvarma y de drtran. Con λ = 1, d = 0 y
 una media **fija** en el `.pre` (no reestimada), el desplazamiento no se
 compensa, y el modelo es otro.
 
-### Arreglo propuesto (pendiente de confirmación: toca la librería de tres motores)
+### El arreglo (decisión del analista: el formato de fue es la base de todo)
 
 Con λ = 1, refactor·y, como fue. En `prewhiten.c`, y en `fuepre_bc` y
-`fuepre_bc_inverse` (la inversa con λ = 1: y = y*/refactor). Después:
-- los bancos de los tres motores;
-- regenerar las referencias que tengan series con λ = 1 y d = 0, cuya μ
-  cambiaría en el factor, y comprobar que nada más se mueve.
+`fuepre_bc_inverse` (la inversa con λ = 1: y = y*/refactor). También las bandas de previsión de drtran (`drtran.c`), que tenían su propia
+inversa con el +1. drvec ya lo hacía bien (`bt_level`/`bt_jac`).
+
+Comprobado:
+- el repro sale con 0: `max|move|` = 0 en las dos series del gas (antes,
+  100);
+- el repro de BUG-0001 sigue saliendo con 0;
+- drvarma: `banco`, 18 casos con 0 diferencias, y `escalera`, 63 ok;
+- drtran: 330 PASS, 0 FAIL;
+- drvec: 377 pasan, y los 4 fallos que ya tenía `main`.
+
+Ninguna referencia cambió: ningún caso de los bancos tiene λ = 1 con d = 0 y
+media. Por eso no se veía.

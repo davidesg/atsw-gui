@@ -14,8 +14,8 @@ escalera de drvarma (p = q = 0, -diagcov) los reestima uno a uno: la columna
 max|move| tiene que ser ~0 (el .pre es el optimo de fue). Hoy es 100 en los
 dos: mu se mueve exactamente el factor.
 
-Sale con 1 mientras algun max|move| sea >= 1, con 0 cuando no, y con 2 si
-falta el motor.
+Salia con 1 mientras algun max|move| fue >= 1; arreglado (#201), sale con
+0. Con 2 si falta el motor.
 """
 import pathlib
 import re

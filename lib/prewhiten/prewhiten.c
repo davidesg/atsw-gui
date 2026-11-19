@@ -182,14 +182,16 @@ void apply_univariate_model(struct Tusmodel *Tm, struct Tseries *Ts,
     int t, j;
     real *detrended;
 
-    /* 1. Box-Cox: DataMat[0][t] = refactor * (data[t]^λ - 1)/λ  (o log si λ≈0).
+    /* 1. Box-Cox: DataMat[0][t] = refactor * (data[t]^λ - 1)/λ  (o log si λ≈0,
+       y refactor * data[t] si λ = 1, como fue: BUG-0002).
        El factor de reescalado de FUE MULTIPLICA la serie transformada: deja las
        varianzas en O(10), que es el rango en el que el optimizador puede
        trabajar (el paso de diferencias finitas de cdgrad es ~6e-6 absoluto).  */
     for (t = 1; t <= nobs; t++) {
         real y = Ts->data[t];
-        /* Con λ = 1 la transformación es (y - 1): un dato <= 0 vale, como en
-           fue y en drvec (boxcox_w). Solo se rechaza con λ != 1 (BUG-0001). */
+        /* Con λ = 1 la serie va sin transformar (refactor*y, BUG-0002): un
+           dato <= 0 vale, como en fue y en drvec (boxcox_w). Solo se rechaza
+           con λ != 1 (BUG-0001). */
         if (fabs(lam - 1.0) > 1.0e-12 && y <= 0.0) {
             fprintf(stderr, "Error: dato no positivo para Box-Cox (t=%d, y=%g)\n",
                     t, y);
@@ -197,8 +199,14 @@ void apply_univariate_model(struct Tusmodel *Tm, struct Tseries *Ts,
             *nstat_out = 0;
             return;
         }
+        /* La Box-Cox del formato, la de fue (BoxCox de fue.c) y drvec
+           (boxcox_w): con lambda = 1 la serie va SIN transformar, refactor*y,
+           sin el -1 de la formula de libro. Con d = 0 el -1 caia en la media:
+           un .pre de fue no era un optimo aqui (BUG-0002).                  */
         if (fabs(lam) < 1e-8)
             DataMat[0][t] = log(y) * Ts->refactor;
+        else if (fabs(lam - 1.0) < 1e-12)
+            DataMat[0][t] = y * Ts->refactor;
         else
             DataMat[0][t] = ((pow(y, lam) - 1.0) / lam) * Ts->refactor;
     }

@@ -30,9 +30,12 @@
 
 real fuepre_bc(const struct Tusmodel *Tm, const struct Tseries *Ts, real y)
 {
-    return (fabs(Tm->boxlam) < 1e-8)
-           ? log(y) * Ts->refactor
-           : ((pow(y, Tm->boxlam) - 1.0) / Tm->boxlam) * Ts->refactor;
+    /* La Box-Cox de fue: con lambda = 1, sin transformar (prewhiten BUG-0002). */
+    if (fabs(Tm->boxlam) < 1e-8)
+        return log(y) * Ts->refactor;
+    if (fabs(Tm->boxlam - 1.0) < 1e-12)
+        return y * Ts->refactor;
+    return ((pow(y, Tm->boxlam) - 1.0) / Tm->boxlam) * Ts->refactor;
 }
 
 real fuepre_bc_inverse(const struct Tusmodel *Tm, const struct Tseries *Ts,
@@ -42,6 +45,9 @@ real fuepre_bc_inverse(const struct Tusmodel *Tm, const struct Tseries *Ts,
     if (fabs(lam) < 1e-8) {
         lvl = exp(ystar / Ts->refactor);
         if (jac) *jac = lvl / Ts->refactor;
+    } else if (fabs(lam - 1.0) < 1e-12) {      /* la de fue: sin transformar */
+        lvl = ystar / Ts->refactor;
+        if (jac) *jac = 1.0 / Ts->refactor;
     } else {
         real base = lam * (ystar / Ts->refactor) + 1.0;
         lvl = pow(base, 1.0 / lam);

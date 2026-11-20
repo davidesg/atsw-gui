@@ -671,7 +671,7 @@ zero`, logL −2638.762693. Sale con 1 mientras `-start ols` no llegue al
 mismo óptimo, con 0 cuando llegue y con 2 si el control no vale. Con el
 arreglo sale con 0: −2638.762693 desde los dos arranques, como el porte.
 
-## BUG-0007 — `-split -mean` siembra la media a cero, y con las series lejos de cero la escalera no llega al óptimo (ABIERTO)
+## BUG-0007 — `-split -mean` siembra la media a cero, y con las series lejos de cero la escalera no llega al óptimo (ARREGLADO)
 
 **Encontrado:** 2026-11-20, en el estudio de las rutas U y V, al estimar el
 mismo VAR por el `.inp` original y por la escalera sobre los ficheros de
@@ -708,14 +708,17 @@ forma de escribir en C las especificaciones de la ruta V. Sus ficheros dicen
 ser «el VARMA lleno del `.inp`», y con series en niveles no lo son. El porte
 (`drvarma.ladder.split`) escribe lo mismo.
 
-### Arreglo propuesto (no hecho)
+### Arreglo (2026-11-20)
 
-Que `-split -mean` escriba como semilla la media muestral de la serie
-estacionaria (la Box-Cox de fue por el factor, y las diferencias), como
-`init_varma` y como sima. Solo toca el escritor.
+`-split -mean` escribe como semilla la media muestral de la serie
+estacionaria (`mean_seed` en `split.c`): la Box-Cox de fue por el factor, y
+las diferencias, como `init_varma` y como sima. Solo toca el escritor; el
+óptimo de los casos que ya llegaban no cambia (IPC3 VAR(1): el mismo bloque
+del modelo, byte a byte, que la vía `.inp`). El porte (`ladder.split`) se
+mueve en la rehomologación.
 
 ### Reproducción
 
 `bugs/BUG-0007-repro/repro.py` (con `NIVEL100.inp`). Sale con 1 mientras la
 escalera quede por debajo del `.inp`, con 0 cuando coincidan y con 2 si el
-caso no vale.
+caso no vale. Con el arreglo sale con 0: −3620.221054 por los dos caminos.

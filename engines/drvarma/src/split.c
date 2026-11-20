@@ -21,7 +21,8 @@
 /*  What the multivariate file says goes into every one of them: frequency,  */
 /*  dates, the series, Box-Cox lambda, d and D. What was a run option of the */
 /*  .inp path becomes part of each specification:                            */
-/*    -mean       an estimated mean              (the .inp path's -mean)     */
+/*    -mean       an estimated mean              (the .inp path's -mean),    */
+/*                seeded at the sample mean of the stationary series         */
 /*    -scale F    the rescaling factor, 100 by default (the .inp path's too) */
 /*    -harmonics  the seasonal harmonics as deterministic terms, estimated   */
 /*                (what -deseason computed outside the model)                */
@@ -56,6 +57,35 @@ static void write_coefs(FILE *f, const char *title, int order)
     if (order <= 0) { fprintf(f, "0\n"); return; }
     fprintf(f, "1 %d\n**\n", order);
     for (k = 1; k <= order; k++) fprintf(f, "0.000000  1\n");
+}
+
+/* The seed of an estimated mean: the sample mean of the stationary series,
+   as init_varma (the .inp path's start) takes it. The transformation is the
+   format's, fue's: scale*ln y, scale*y with lambda = 1, scale*(y^lambda-1)/
+   lambda otherwise; then D seasonal and d regular differences. A seed of
+   zero on a series in levels (around 10000 with the factor) let the
+   optimiser carry the level with the own AR, near a unit root (BUG-0007).
+   Zero if the series cannot be transformed: the estimator will say so.    */
+static real mean_seed(const MvInp *in, int j, real scale)
+{
+    int   n = in->nobs, s = in->freq, i, k;
+    real *w = vector(1, n), sum = 0.0, lam = in->lambda;
+
+    for (i = 1; i <= n; i++) {
+        real y = in->raw[i][j];
+        if (fabs(lam - 1.0) < 1.0e-12)      w[i] = scale * y;
+        else if (y <= 0.0)                  { free_vector(w, 1, n); return 0.0; }
+        else if (fabs(lam) < 1.0e-8)        w[i] = scale * log(y);
+        else                                w[i] = scale * (pow(y, lam) - 1.0) / lam;
+    }
+    for (k = 0; k < in->D && n > s; k++, n -= s)
+        for (i = 1; i <= n - s; i++) w[i] = w[i + s] - w[i];
+    for (k = 0; k < in->d && n > 1; k++, n -= 1)
+        for (i = 1; i <= n - 1; i++) w[i] = w[i + 1] - w[i];
+    for (i = 1; i <= n; i++) sum += w[i];
+    sum /= n;
+    free_vector(w, 1, in->nobs);
+    return sum;
 }
 
 static int write_one(const MvInp *in, int j, const char *path, const char *src,
@@ -105,7 +135,8 @@ static int write_one(const MvInp *in, int j, const char *path, const char *src,
     write_coefs(f, "Number and orders of anual MA operators", 0);
     fprintf(f, "** Number and frequencies of regular AR(2) operators with fixed frequency:\n0\n");
     fprintf(f, "** Number and frequencies of regular MA(2) operators with fixed frequency:\n0\n");
-    fprintf(f, "** Mean parameter (mu):\n%s\n", mean ? "0.000000 1" : "0");
+    if (mean) fprintf(f, "** Mean parameter (mu):\n%.6f 1\n", mean_seed(in, j, scale));
+    else      fprintf(f, "** Mean parameter (mu):\n0\n");
     fprintf(f, "** Box-Cox lambda, regular differences and complete annual differences:\n");
     fprintf(f, " %g  %d  %d\n", in->lambda, in->d, in->D);
     fprintf(f, "** Individual factors of the annual difference (starting at freq 0.0):\n");

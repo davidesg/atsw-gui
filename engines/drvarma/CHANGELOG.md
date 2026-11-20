@@ -9,6 +9,15 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Fixed — `-split -mean` seeds the mean at the sample mean (BUG-0007)
+
+- `-split -mean` wrote a free mean starting at zero. On series far from zero
+  (levels around 100, so 10000 with the factor) the gate's univariate fits
+  carried the level with the own AR, near a unit root, and the ladder on
+  those files ended 49 log-likelihood points below the `.inp` path's same
+  VAR(1). The seed is now the sample mean of the stationary series, as
+  `init_varma` and sima take it. Only the writer changes.
+
 ### Fixed — `-start ols` falls back to zero for real (BUG-0006)
 
 - When the least-squares start was not admissible, `start_ols()` zeroed the

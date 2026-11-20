@@ -1,0 +1,41 @@
+# casos.txt -- la bateria de las rutas: los VAR monetarios de EE. UU.
+#
+#   sistema | ruta | p q | ficheros (relativos a tests/) | opciones
+#
+# Cada caso se estima con -start zero y con -start ols.
+# FRED, mensual, 1990:01-2007:12 (216 meses), orden de Cholesky
+# IPI -> IPC -> WTI -> tipo. Cuatro sistemas, uno por tipo de interes:
+# GS1, GS2, GS3 (Tesoro a 1, 2 y 3 anos) y FF (fondos federales).
+# Los tipos van en puntos basicos (lambda = 1, factor 100) junto a precios
+# en % : dispersiones que difieren en cuatro ordenes de magnitud. Son los
+# sistemas que destaparon el estancamiento desde cero (drvarma-python
+# BUG-0027) y los defectos de la ruta V.
+#
+# Ruta U: los modelos univariantes del analista (art, guiados), .pre.
+# Ruta V: especificaciones (solo la transformacion, los armonicos y la media
+#         libres a cero, y un AR(p)/MA(q) propio libre a cero), escritas por
+#         sima (write_specs). Con -redet, que es como se estiman sus
+#         deterministas; un caso sin el para dejar constancia de la diferencia.
+
+GS1 | U | 1 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS1_m01.pre |
+GS1 | U | 2 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS1_m01.pre |
+GS1 | U | 3 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS1_m01.pre |
+GS1 | U | 1 1 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS1_m01.pre |
+GS2 | U | 1 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS2_m05.pre |
+GS2 | U | 2 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS2_m05.pre |
+GS2 | U | 3 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS2_m05.pre |
+GS2 | U | 1 1 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS2_m05.pre |
+GS3 | U | 1 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS3_m02.pre |
+GS3 | U | 2 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS3_m02.pre |
+GS3 | U | 3 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS3_m02.pre |
+GS3 | U | 1 1 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS3_m02.pre |
+FF  | U | 1 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre |
+FF  | U | 2 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre |
+FF  | U | 3 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre |
+FF  | U | 1 1 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre |
+
+FF  | V | 1 0 | rutas/data/monetario_v/IPI_v_p1q0.inp rutas/data/monetario_v/IPC_v_p1q0.inp rutas/data/monetario_v/WTI_v_p1q0.inp rutas/data/monetario_v/FF_v_p1q0.inp | -redet
+FF  | V | 2 0 | rutas/data/monetario_v/IPI_v_p2q0.inp rutas/data/monetario_v/IPC_v_p2q0.inp rutas/data/monetario_v/WTI_v_p2q0.inp rutas/data/monetario_v/FF_v_p2q0.inp | -redet
+FF  | V | 3 0 | rutas/data/monetario_v/IPI_v_p3q0.inp rutas/data/monetario_v/IPC_v_p3q0.inp rutas/data/monetario_v/WTI_v_p3q0.inp rutas/data/monetario_v/FF_v_p3q0.inp | -redet
+FF  | V | 1 1 | rutas/data/monetario_v/IPI_v_p1q1.inp rutas/data/monetario_v/IPC_v_p1q1.inp rutas/data/monetario_v/WTI_v_p1q1.inp rutas/data/monetario_v/FF_v_p1q1.inp | -redet
+FFs | V | 1 0 | rutas/data/monetario_v/IPI_v_p1q0.inp rutas/data/monetario_v/IPC_v_p1q0.inp rutas/data/monetario_v/WTI_v_p1q0.inp rutas/data/monetario_v/FF_v_p1q0.inp |

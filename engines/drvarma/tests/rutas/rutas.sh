@@ -18,7 +18,14 @@
 #     las iteraciones se anotan y se avisan si cambian, sin fallar: dependen
 #     de la plataforma.
 #
+#     Dos listas de casos: casos.txt (los VAR monetarios, rutas U y V) y
+#     golden.txt (el mismo VARMA lleno por el .inp original, la V y la U).
+#     La ruta U de los golden necesita fue (FUE, por defecto ../fue/bin/fue).
+#
 #  2. PROPIEDADES, que no dependen de ninguna referencia:
+#     escalera   (golden) la V y la U, con los dos arranques, dan la misma
+#                verosimilitud;
+#     original   (golden) y la misma que el .inp original;
 #     anida      un VAR(p) no queda por debajo del VAR(p-1) (mismo sistema,
 #                misma ruta, mismo arranque);
 #     arranques  -start zero y -start ols llegan al mismo optimo, y ninguno
@@ -41,10 +48,15 @@ cat > "$TMP/una.sh" <<'UNA'
 # $1 bin  $2 dir  $3 clave  $4.. argumentos de drvarma
 bin=$1; d=$2; k=$3; shift 3
 mkdir -p "$d/$k"; cd "$d/$k" || exit 2
-"$bin" "$@" -o r > r.log 2>&1; rc=$?
+if [ "$1" = INP ]; then          # el .inp multivariante: drvarma NOMBRE p q ...
+    shift; cp "$1" r.inp; shift
+    "$bin" r "$@" > r.log 2>&1; rc=$?
+else
+    "$bin" "$@" -o r > r.log 2>&1; rc=$?
+fi
 o=r.out; [ -f "$o" ] || o=/dev/null
-npar=$(awk '/^Number of parameters/ {print $NF; exit}' "$o")
-logl=$(awk '/^Exact log-likelihood/ {print $NF; exit}' "$o")
+npar=$(awk '/^Number of parameters/ {print $4; exit}' "$o")
+logl=$(awk '/^Exact log-likelihood/ {print $3; exit}' "$o")
 its=$(sed -n 's/.*OPTIMIZER .* after \([0-9]*\) iterations.*/\1/p' "$o" | head -1)
 est=FAILED
 grep -aq 'OPTIMIZER CONVERGED' "$o" && est=CONVERGED
@@ -63,12 +75,42 @@ while IFS='|' read -r sis ruta pq fich opc; do
     for st in zero ols; do
         echo "$sis-$ruta-p$1q$2-$st $abs $1 $2 -start $st $opc"
     done
-done | grep -- "${RUTAS_FILTRO:-}" > "$TMP/ordenes"
+done > "$TMP/todas"
+
+# los casos golden: -split, fue sobre cada fichero, y las cinco ordenes
+FUE=${FUE:-$RAIZ/../fue/bin/fue}
+[ -x "$FUE" ] || echo "aviso: no encuentro fue ($FUE): los casos golden van sin la ruta U"
+grep -v '^#' "$AQUI/golden.txt" | grep -v '^[[:space:]]*$' |
+while IFS='|' read -r nom inp pq opc; do
+    nom=$(echo $nom); inp=$(echo $inp); set -- $pq; p=$1; q=$2
+    g=$TMP/prep/$nom-p${p}q$q; mkdir -p "$g"; cp "$RAIZ/$inp" "$g/m.inp"
+    ar=""; [ "$p" -gt 0 ] && ar="-ar $p"; ma=""; [ "$q" -gt 0 ] && ma="-ma $q"
+    fich=$(cd "$g" && "$BIN" -split m.inp $opc $ar $ma 2>/dev/null | grep '\.inp$')
+    echo "$nom-I-p${p}q$q-inp INP $g/m.inp $p $q $opc"
+    [ -n "$fich" ] || { echo "aviso: -split no escribe nada para $nom" >&2; continue; }
+    esp=""; pre=""; conpre=1
+    for f in $fich; do
+        f=$(basename "$f"); esp="$esp $g/$f"
+        if [ -x "$FUE" ]; then
+            mkdir -p "$g/u"; cp "$g/$f" "$g/u/"
+            ( cd "$g/u" && "$FUE" "${f%.inp}" > /dev/null 2>&1 )
+            [ -f "$g/u/${f%.inp}.pre" ] && pre="$pre $g/u/${f%.inp}.pre" || conpre=0
+        else conpre=0; fi
+    done
+    for st in zero ols; do
+        echo "$nom-V-p${p}q$q-$st $esp $p $q -start $st"
+        [ $conpre = 1 ] && echo "$nom-U-p${p}q$q-$st $pre $p $q -start $st"
+    done
+done >> "$TMP/todas"
+grep -- "${RUTAS_FILTRO:-}" "$TMP/todas" > "$TMP/ordenes"
 n=$(wc -l < "$TMP/ordenes" | tr -d ' ')
 echo "rutas: $n estimaciones, $JOBS a la vez"
 tr '\n' '\0' < "$TMP/ordenes" | xargs -0 -n 1 -P "$JOBS" sh -c 'set -- $0; sh "'"$TMP"'/una.sh" "'"$BIN"'" "'"$TMP"'" "$@"'
 cat "$TMP"/*.hecho | sort > "$TMP/hechos.tsv"
 
+if [ "$MODO" = --generar ] && [ -n "${RUTAS_FILTRO:-}" ]; then
+    echo "--generar reescribe toda la referencia: no admite RUTAS_FILTRO"; exit 2
+fi
 if [ "$MODO" = --generar ]; then
     { printf '# clave\trc\tnpar\tlogL\testado\tits\tarranque\n'; cat "$TMP/hechos.tsv"; } > "$AQUI/ref/hechos.tsv"
     echo "ref/hechos.tsv reescrito ($n estimaciones)"
@@ -114,7 +156,7 @@ def propiedad(clave, cumple, texto):
         else: bien(clave)
     elif clave in ab: print(f'  ABIERTO {clave}: {texto}')
     else: falla(f'{clave}: {texto}')
-pat = re.compile(r'^(.*)-p(\d+)q(\d+)-(zero|ols)$')
+pat = re.compile(r'^(.*)-p(\d+)q(\d+)-(zero|ols|inp)$')
 M = {}
 for k, v in N.items():
     s, p, q, st = pat.match(k).groups(); M[(s, int(p), int(q), st)] = v
@@ -129,6 +171,22 @@ for (s, p, q, st), v in sorted(M.items()):
             propiedad(clave, False, f"zero sale con {v['rc']} ({v['logl']}) y ols con {o['rc']} ({o['logl']})")
         elif v['logl'] is not None:
             propiedad(clave, abs(v['logl'] - o['logl']) <= tol, f"zero {v['logl']:.6f} ({v['est']}, {v['its']} it.), ols {o['logl']:.6f} ({o['est']}, {o['its']} it.)")
+# los caminos: el mismo modelo por el .inp, la V y la U
+for (s, p, q, st), v in sorted(M.items()):
+    if st != 'inp' or not s.endswith('-I'): continue
+    nom = s[:-2]
+    esc = {f'{r}-{a}': M.get((f'{nom}-{r}', p, q, a)) for r in 'VU' for a in ('zero', 'ols')}
+    esc = {k: x for k, x in esc.items() if x is not None}
+    if not esc: continue
+    ls = {k: x['logl'] for k, x in esc.items()}
+    def txt(d): return ', '.join(f"{k} {'falla' if x is None else format(x, '.4f')}" for k, x in d.items())
+    hay = [x for x in ls.values() if x is not None]
+    igual = len(hay) == len(ls) and max(hay) - min(hay) <= tol
+    propiedad(f'escalera:{nom}-p{p}q{q}', igual, 'V y U no coinciden: ' + txt(ls))
+    if igual:
+        i = v['logl']
+        propiedad(f'original:{nom}-p{p}q{q}', i is not None and abs(i - hay[0]) <= tol,
+                  f"el .inp {'falla' if i is None else format(i, '.4f')}, la escalera {hay[0]:.4f}")
 if not filtro:
     for c in sorted(ab - vistos): falla(f'{c}: esta en abiertos.txt y no corresponde a ningun caso')
 ab_n = len(ab & vistos)

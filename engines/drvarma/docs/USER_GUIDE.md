@@ -148,7 +148,7 @@ diagonal of the system; `p`/`q` add the dynamics between series. Options:
 | `-hessian fd\|bfgs` | standard errors from fdhess (default) or the BFGS Hessian |
 | `-links "A<-B,..."` | the cross dynamics only on these pairs |
 | `-zero "AR1[A<-B],..."` | single cross coefficients held at zero |
-| `-start zero\|ols` | where the cross terms start: zero (default), or the original drvarma's least squares (`init_varma`): the cross AR terms and Q's covariances; the own models stay the univariate ones |
+| `-start zero\|ols` | where the cross terms start: zero, or the original drvarma's least squares (`init_varma`): the cross AR terms and Q's covariances; the own models stay the univariate ones. Default: `ols` with q = 0, `zero` with q > 0 (no start seeds the MA yet) |
 | `-irfboot N` | bands for the impulse responses by parametric bootstrap, N refits |
 | `-o NAME` | results to `NAME.out` (default: the `.pre` names joined by `_`) |
 | `-forecast H` | forecast H periods, every series in its level → `NAME.forecast` |

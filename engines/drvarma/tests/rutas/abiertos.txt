@@ -4,15 +4,6 @@
 # como fallo. Si deja de incumplirse, rutas.sh falla hasta que se quite de
 # aqui: la lista no puede quedarse vieja.
 #
-# drvarma-python BUG-0027: desde cero la busqueda se para a las 2
-# iteraciones, por debajo del modelo que anida y lejos de -start ols.
-anida:GS1-U-zero-p2
-arranques:GS1-U-p2q0
-anida:GS3-U-zero-p2
-arranques:GS3-U-p2q0
-arranques:GS3-U-p3q0
-anida:FF-U-zero-p3
-arranques:FF-U-p3q0
 #
 # --- golden.txt ---
 #
@@ -44,18 +35,3 @@ escalera:Svarma11-p2q1
 arranques:S3varma11-U-p1q1
 arranques:S3varma11-V-p1q1
 escalera:S3varma11-p1q1
-#
-# La escala. Con la serie 2 por 1000 la escalera llega al optimo salvo en
-# milesimas (0,003) segun el arranque; el .inp original (obsoleto, sin las
-# Q_ii de la puerta) falla por cientos de puntos y no anida. Con la serie
-# por 100 el .inp queda a 0,004 de la escalera, sin certificar.
-arranques:Sx1000-V-p2q0
-escalera:Sx1000-p2q0
-arranques:Sx1000-U-p3q0
-escalera:Sx1000-p3q0
-original:Sx1000-p1q0
-anida:Sx1000-I-inp-p2
-anida:Sx1000-I-inp-p3
-original:Sx100-p1q0
-original:Sx100-p2q0
-original:Sx100-p3q0

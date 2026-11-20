@@ -9,6 +9,24 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Changed — the default start of the ladder: `ols` with q = 0
+
+- Without `-start`, the cross terms now start at the original drvarma's
+  least squares (`-start ols`) when q = 0, and at zero when there is an MA.
+  From zero, exact ML stalled after two iterations on the US monetary VARs
+  (drvarma-python BUG-0027); from `ols` every VAR measured reaches its
+  optimum, and none ends worse (`tests/rutas`: 16 monetary VARs, 29 golden
+  models). With q > 0 no start seeds the MA yet and `ols` is not better than
+  zero, so zero stays until the echelon form's start exists. `-start zero`
+  and `-start ols` still decide when given.
+- The `.out` says which start was used. The ladder's regression reference
+  moves in one case (the WTI pass-through): the same estimates to six
+  decimals, standard errors within 0.6 %, and the search now ends by the
+  gradient criterion.
+- `tests/rutas` gains the default-start run of the monetary cases, the
+  property `defecto` and `limites.txt` (known limits that are not going to be
+  fixed), apart from `abiertos.txt` (defects to fix).
+
 ### Fixed — `-split -mean` seeds the mean at the sample mean (BUG-0007)
 
 - `-split -mean` wrote a free mean starting at zero. On series far from zero

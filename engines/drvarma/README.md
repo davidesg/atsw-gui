@@ -107,7 +107,8 @@ every series in its level, and `-estwin N` adds fixed-parameter forecasts from
 every origin, with an out-of-sample evaluation: the univariate models (the
 diagonal system) are the yardstick a VARMA has to beat. `-start ols` seeds
 the relation (the cross AR terms and Q's covariances) with the original
-drvarma's least squares; the default start is zero. See
+drvarma's least squares. It is the default with q = 0; with an MA (q > 0)
+the default start is zero. See
 `docs/DESIGN-v5-ladder.md` and, for the architecture of the ladder in the C
 and in the Python port and what is homologated between them,
 drvarma-python's `docs/ARCHITECTURE.md`.

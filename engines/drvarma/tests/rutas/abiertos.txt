@@ -17,5 +17,6 @@ arranques:FF-U-p3q0
 # Ruta V, VARMA(1,1) con -redet: el arranque ols no es admisible, el motor
 # dice que cae a cero y la estimacion falla ("AR nonstationary", codigo 3);
 # con -start zero directamente, estima. El porte, en el mismo caso, cae a
-# cero y estima: C y porte divergen. BUG-0006 (BUGS.md).
+# cero y estima: C y porte divergen. Es el BUG-0006 de drvarma, que se abre
+# y se arregla en la PR #203; al fusionarla, esta linea se quita.
 arranques:FF-V-p1q1

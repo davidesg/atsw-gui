@@ -1,0 +1,21 @@
+# abiertos.txt -- las propiedades que HOY no se cumplen, con su parte.
+# Una linea por incumplimiento, con la clave que imprime rutas.sh.
+# Mientras este aqui, el incumplimiento se anota como ABIERTO y no cuenta
+# como fallo. Si deja de incumplirse, rutas.sh falla hasta que se quite de
+# aqui: la lista no puede quedarse vieja.
+#
+# drvarma-python BUG-0027: desde cero la busqueda se para a las 2
+# iteraciones, por debajo del modelo que anida y lejos de -start ols.
+anida:GS1-U-zero-p2
+arranques:GS1-U-p2q0
+anida:GS3-U-zero-p2
+arranques:GS3-U-p2q0
+arranques:GS3-U-p3q0
+anida:FF-U-zero-p3
+arranques:FF-U-p3q0
+#
+# Ruta V, VARMA(1,1) con -redet: el arranque ols no es admisible, el motor
+# dice que cae a cero y la estimacion falla ("AR nonstationary", codigo 3);
+# con -start zero directamente, estima. El porte, en el mismo caso, cae a
+# cero y estima: C y porte divergen. BUG-0006 (BUGS.md).
+arranques:FF-V-p1q1

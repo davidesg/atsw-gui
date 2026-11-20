@@ -71,10 +71,12 @@ the regular AR and MA orders. Results are written to `file.out` (and
 |--------|---------|
 | `-mean` | estimate a mean / drift term |
 | `-diagar` / `-diagma` / `-diagcov` | restrict AR / MA / innovation covariance to diagonal |
-| `-m 1\|2` | exact (1, default) or approximate (2) maximum likelihood |
+| `-m 1\|2` | exact maximum likelihood: ξ truncated at 1e-3 (1, default) or untruncated (2) |
+| `-lik elf\|shea\|both` | the likelihood: Mauricio's AS 311 (default), Shea's AS 242, or elf checked against Shea |
+| `-hessian fd\|bfgs` | standard errors from fdhess at the optimum (default) or from the BFGS Hessian |
 | `-twostep` | two-step (Hannan–Rissanen) initialization (only with q>0) |
 | `-deseason [auto\|force]` | harmonic seasonal adjustment of the raw series (auto = only significant series; default mode auto) |
-| `-scale factor` | rescale the series after Box-Cox (**default 100**); improves the conditioning of the convergence criteria; forecasts are inverted back to original units |
+| `-scale factor` | rescale the series after Box-Cox (**default 100**); improves the conditioning of the convergence criteria; forecasts are inverted back to original units. On this path the Box-Cox is (y^λ − 1)/λ also with λ = 1 (y − 1); the ladder uses fue's, refactor·y |
 | `-forecast N` | forecast N periods ahead → `file.forecast` |
 | `-estwin N` | estimate parameters on the first N raw observations, then write `file.recursive` with **fixed-parameter** forecasts from every origin to the end of the data (use with `-forecast`); enables out-of-sample comparison across origins without re-estimating |
 | `-volexp [α window]`, `-volmov [window]` | exponential / moving-window volatility |
@@ -83,7 +85,10 @@ the regular AR and MA orders. Results are written to `file.out` (and
 
 ```
 drvarma A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma] [-m 1|2] [-o NAME]
-                                    [-forecast H [-estwin N]]
+                                    [-forecast H [-estwin N]] [-irfboot N]
+                                    [-lik elf|shea|both] [-hessian fd|bfgs]
+                                    [-links "A<-B,..."] [-zero "AR1[A<-B],..."]
+                                    [-start zero|ols]
 drvarma -split FILE[.inp] [-mean] [-harmonics] [-ar P] [-ma Q] [-scale F] [-dir DIR]
 ```
 
@@ -100,8 +105,12 @@ not. Deterministic terms stay at the `.pre` values unless `-redet`. The series
 must share their frequency and their last date (BUG-2). `-forecast H` forecasts
 every series in its level, and `-estwin N` adds fixed-parameter forecasts from
 every origin, with an out-of-sample evaluation: the univariate models (the
-diagonal system) are the yardstick a VARMA has to beat. See
-`docs/DESIGN-v5-ladder.md`.
+diagonal system) are the yardstick a VARMA has to beat. `-start ols` seeds
+the relation (the cross AR terms and Q's covariances) with the original
+drvarma's least squares; the default start is zero. See
+`docs/DESIGN-v5-ladder.md` and, for the architecture of the ladder in the C
+and in the Python port and what is homologated between them,
+drvarma-python's `docs/ARCHITECTURE.md`.
 
 ### Input file format (`.inp`)
 

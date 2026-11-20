@@ -18,6 +18,17 @@ the `.inp` path must reproduce it byte for byte.
     drvarma A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]
                                         [-m method] [-o NAME]
                                         [-forecast H [-estwin N]]
+                                        [-lik elf|shea|both] [-hessian fd|bfgs]
+                                        [-links "A<-B,..."] [-zero "AR1[A<-B],..."]
+                                        [-start zero|ols] [-irfboot N]
+
+The options after the first three lines came after this design: `-lik`, the
+likelihood; `-hessian`, the standard errors; `-links` and `-zero`, the cross
+dynamics on some pairs or single coefficients at zero; `-start`, where the
+cross terms start (§3); `-irfboot`, the bootstrap bands of the responses.
+The usage text of the program (`escalera_usage`) is the reference. The
+architecture of the ladder, in the C and in the Python port, and what is
+homologated between them, is drvarma-python's `docs/ARCHITECTURE.md`.
 
 The ladder takes **univariate model files of fue**: a `.pre` (an optimum) or
 an `.inp` (a specification). They are the same format, and the program tells
@@ -114,8 +125,14 @@ re-estimated from the `.pre`:
   instead: it was re-estimated on a different sample, and moving is
   legitimate.
 
-The diagonal system is then optimised. It is the seed of the full model and
-the base of the likelihood-ratio test of the cross dynamics:
+The diagonal system is then optimised. It is the seed of the full model: the
+own models start there, and they are re-estimated jointly unless
+`-fixarma`. The cross terms start at zero by default. With `-start ols` they
+start at the original drvarma's least squares (`init_varma` brought to the
+ladder: the cross AR terms and Q's covariances; never the own models). From
+zero, exact ML can stall when the series' scales differ (drvarma-python
+BUG-0027). The diagonal is also the base of the likelihood-ratio test of the
+cross dynamics:
 
     LR = 2 (logL_full − logL_diag)  ~  χ²(number of cross and covariance parameters)
 

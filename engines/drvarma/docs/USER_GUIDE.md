@@ -41,8 +41,9 @@ The data file is plain text. `file` on the command line is given **without** the
 - Header lines beginning with `**` are labels; the value(s) follow on the next line.
 - **Data are raw levels** (one row per observation, one column per series). The
   engine applies the transformation itself.
-- `Box-Cox lambda`: `0.0` = natural log, `1.0` = identity (no transform). Other
-  values apply the Box-Cox power transform.
+- `Box-Cox lambda`: `0.0` = natural log; any other value applies (y^λ − 1)/λ,
+  so `1.0` gives y − 1, not the identity. (The ladder reads fue's files with
+  fue's transform, refactor·y at λ = 1: lib/prewhiten BUG-0002.)
 - `regular differences` (d) and `annual differences` (D): differencing orders;
   the seasonal lag is the frequency.
 
@@ -65,11 +66,11 @@ drvarma file p q [options]
 | `-diagar` | restrict the AR coefficient matrices to diagonal |
 | `-diagma` | restrict the MA coefficient matrices to diagonal |
 | `-diagcov` | restrict the innovation covariance to diagonal |
-| `-m 1` / `-m 2` | exact (default) vs approximate maximum likelihood |
+| `-m 1` / `-m 2` | exact maximum likelihood: ξ truncated at 1e-3 (default) or untruncated |
 | `-twostep` | Hannan–Rissanen two-step start (only meaningful with q>0) |
 | `-deseason auto` | remove harmonic seasonality from series that test seasonal (default mode) |
 | `-deseason force` | remove harmonic seasonality from all series |
-| `-scale f` | rescale after Box-Cox; **default 100**. Rescaling improves the conditioning of the convergence criteria; the estimates are unchanged and forecasts are inverted |
+| `-scale f` | rescale after Box-Cox; **default 100**. Rescaling improves the conditioning of the convergence criteria; the optimum is unchanged (the optimiser's path is not: drvarma-python BUG-0027) and forecasts are inverted |
 | `-forecast N` | write N-step forecasts to `file.forecast` |
 | `-estwin N` | fixed-parameter recursive forecasting (see §6) |
 | `-volexp [α w]` | exponential-window volatility |
@@ -142,7 +143,13 @@ diagonal of the system; `p`/`q` add the dynamics between series. Options:
 | `-diagcov` | diagonal innovation covariance (default full) |
 | `-redet` | re-estimate the deterministic terms (default: fixed at the `.pre`) |
 | `-fixarma` | keep the univariate ARMA factors fixed |
-| `-m 1\|2` | exact / approximate likelihood |
+| `-m 1\|2` | exact likelihood, ξ truncated at 1e-3 / untruncated |
+| `-lik elf\|shea\|both` | the likelihood: AS 311 (default), Shea's AS 242, or elf checked against Shea |
+| `-hessian fd\|bfgs` | standard errors from fdhess (default) or the BFGS Hessian |
+| `-links "A<-B,..."` | the cross dynamics only on these pairs |
+| `-zero "AR1[A<-B],..."` | single cross coefficients held at zero |
+| `-start zero\|ols` | where the cross terms start: zero (default), or the original drvarma's least squares (`init_varma`): the cross AR terms and Q's covariances; the own models stay the univariate ones |
+| `-irfboot N` | bands for the impulse responses by parametric bootstrap, N refits |
 | `-o NAME` | results to `NAME.out` (default: the `.pre` names joined by `_`) |
 | `-forecast H` | forecast H periods, every series in its level → `NAME.forecast` |
 | `-estwin N` | estimate on the first N observations of the first series, then fixed-parameter forecasts from every origin to the end → `NAME.recursive`, with MAE/RMSE/MAPE by series and horizon in the `.out` (needs `-forecast`) |

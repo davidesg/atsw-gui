@@ -53,7 +53,7 @@ int data_start_year = 1;   /* starting year */
 char **series_names = NULL; /* nser series names (1-based) */
 
 /* Global Box-Cox / differencing spec (applied to every series) */
-real trans_lambda = 1.0;   /* Box-Cox lambda (0 = log, 1 = none) */
+real trans_lambda = 1.0;   /* Box-Cox lambda (0 = log; else (y^l - 1)/l, so 1 gives y - 1) */
 real trans_scale  = 100.0; /* rescale factor applied after Box-Cox (-scale).
                               Default 100: rescaling improves the conditioning of
                               the convergence criteria (per J.A. Mauricio); the

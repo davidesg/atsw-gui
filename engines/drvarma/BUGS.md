@@ -629,3 +629,44 @@ reglas. El porte (`drvarma-python` BUG-0025) se mueve a la vez.
 `bugs/BUG-0005-repro/repro.py` (con `NIVY.pre` y `NIVX.pre`, sintéticas). Sale
 con 1 mientras el mon% de la primera previsión sea cien veces el cambio del
 nivel. Con el arreglo sale con 0: −1.4577 donde decía −145.7721.
+
+## BUG-0006 — con `-start ols`, si el arranque de MCO no es admisible, la escalera dice que vuelve a cero y no vuelve (ARREGLADO)
+
+**Encontrado:** 2026-11-20, al revisar `-start ols` (#199, #200) con el horno
+de gas por la ruta V.
+**Dónde:** `src/escalera.c`, `start_ols()`. Evalúa el punto de MCO con
+`fit_run(&chk, 0)`; si elf no lo acepta, pone a cero los AR cruzados y las
+covarianzas de Q y **después** llama a `fit_free(&chk)`. `fit_free` cierra el
+ajuste con `shootx_esc(chk.x, …, lastx = 1)`, que empieza por
+`esc_unpack(chk.x)`: vuelve a escribir en el estado global el punto de MCO
+que se acababa de borrar.
+
+### Síntoma
+
+El `.out` dice `Start of the cross terms: zero (the ols start was not
+admissible)`, pero la estimación arranca del punto de MCO y falla:
+`Estimation error: AR nonstationary (code 3)`, rc 3. Con `-start zero` el
+mismo modelo llega a su óptimo.
+
+### Por qué importa
+
+En la ruta V el MCO del VAR(p) junto con los AR propios del ajuste diagonal
+puede no ser estacionario, así que es justo ahí donde la vuelta a cero hace
+falta. El porte (`drvarma-python`, `Ladder._take_start`) sí vuelve, con el mismo
+óptimo: el porte no tiene el defecto y no se toca. La homologación rota la
+recoge su BUG-0028 (`drvarma-python` #28), con el mismo caso como repro. Nadie en
+atsw-gui pasa todavía `-start` (sim_gui, atsw-cli), pero la ruta V lo usará.
+
+### Arreglo (2026-11-20)
+
+Liberar `chk` antes de reponer a cero: `fit_free(&chk)` justo después de
+`fit_run(&chk, 0)`. Cuando el punto se acepta no cambia nada (el
+desempaquetado escribe el mismo punto).
+
+### Reproducción
+
+`bugs/BUG-0006-repro/repro.py` (con `GAS_v.inp` y `CO2_v.inp`, las
+especificaciones de la ruta V del horno de gas, VAR(6)). Control: `-start
+zero`, logL −2638.762693. Sale con 1 mientras `-start ols` no llegue al
+mismo óptimo, con 0 cuando llegue y con 2 si el control no vale. Con el
+arreglo sale con 0: −2638.762693 desde los dos arranques, como el porte.

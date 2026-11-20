@@ -1004,6 +1004,11 @@ programa:
   nonstationary»), y el GUI lo anuncia como éxito. Pasa con el VARMA(1,1)
   por defecto sobre niveles. Es **BUG-0003**, con repro
   (`engines/drvarma/bugs/BUG-0003-repro`); el arreglo, con OK.
+- Con `-start ols`, si el arranque de MCO no es admisible, la escalera dice
+  que vuelve a cero y no vuelve: arranca del punto de MCO y falla con «AR
+  nonstationary». Pasa con el horno de gas por la ruta V, VAR(6). Es
+  **BUG-0006**, con repro (`engines/drvarma/bugs/BUG-0006-repro`); el porte
+  no lo tiene (su BUG-0028 recoge la homologación).
 - El motor aborta en el manejador de errores de GSL con datos diminutos (3×2).
 - «Use differenced data» en Select VAR Order no hace nada: sólo cambia una
   etiqueta.

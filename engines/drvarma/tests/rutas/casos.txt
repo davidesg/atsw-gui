@@ -2,7 +2,8 @@
 #
 #   sistema | ruta | p q | ficheros (relativos a tests/) | opciones
 #
-# Cada caso se estima con -start zero y con -start ols.
+# Cada caso se estima con -start zero, con -start ols y sin -start (el
+# arranque por defecto).
 # FRED, mensual, 1990:01-2007:12 (216 meses), orden de Cholesky
 # IPI -> IPC -> WTI -> tipo. Cuatro sistemas, uno por tipo de interes:
 # GS1, GS2, GS3 (Tesoro a 1, 2 y 3 anos) y FF (fondos federales).

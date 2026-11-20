@@ -127,11 +127,14 @@ re-estimated from the `.pre`:
 
 The diagonal system is then optimised. It is the seed of the full model: the
 own models start there, and they are re-estimated jointly unless
-`-fixarma`. The cross terms start at zero by default. With `-start ols` they
-start at the original drvarma's least squares (`init_varma` brought to the
-ladder: the cross AR terms and Q's covariances; never the own models). From
-zero, exact ML can stall when the series' scales differ (drvarma-python
-BUG-0027). The diagonal is also the base of the likelihood-ratio test of the
+`-fixarma`. With `-start ols` the cross terms start at the original
+drvarma's least squares (`init_varma` brought to the ladder: the cross AR
+terms and Q's covariances; never the own models); with `-start zero`, at
+zero. **The default is `ols` with q = 0 and `zero` with q > 0.** From zero,
+exact ML can stall when the series' scales differ (drvarma-python BUG-0027):
+the monetary VARs of `tests/rutas`. With an MA no start seeds it yet, and
+`ols` is not better than zero there (same battery); that waits for the
+echelon form's start. The diagonal is also the base of the likelihood-ratio test of the
 cross dynamics:
 
     LR = 2 (logL_full − logL_diag)  ~  χ²(number of cross and covariance parameters)

@@ -555,7 +555,12 @@ static void fit_run(Fit *F, int optimize)
 /*  Desde cero, la MV exacta se para a las 2 iteraciones por debajo del VAR  */
 /*  anidado en el VAR monetario de EE. UU. (drvarma-python BUG-0027).        */
 /* ------------------------------------------------------------------------- */
-static int  opt_start_ols = 0;
+/* -1: sin -start. El arranque por defecto es ols con q = 0 (un VAR sobre las
+   diagonales) y cero con MA: con q = 0 llega al optimo en todos los casos
+   medidos y saca del estancamiento a los VAR monetarios (BUG-0027); con
+   q > 0 no siembra el MA y no es mejor que cero (tests/rutas). Cambiara
+   cuando exista la siembra del MA.                                         */
+static int  opt_start_ols = -1;
 static char start_used[96] = "zero";
 
 static void fit_free(Fit *F);
@@ -1610,10 +1615,11 @@ void escalera_usage(const char *prog)
     printf("  -zero    : single cross coefficients held at zero, \"AR1[A<-B],MA2[B<-A]\"\n"
            "             (Tiao and Box's simplification by coefficient); each one has\n"
            "             to be in the model: its lag within p or q, its pair linked\n");
-    printf("  -start   : where the cross terms start: zero (default) or ols, the\n"
-           "             original drvarma's init_varma: least squares of the VAR(p)\n"
-           "             seeds the cross AR and Q's covariances; the own models\n"
-           "             stay the univariate ones (the ladder's principle)\n");
+    printf("  -start   : where the cross terms start: zero, or ols, the original\n"
+           "             drvarma's init_varma: least squares of the VAR(p) seeds\n"
+           "             the cross AR and Q's covariances; the own models stay\n"
+           "             the univariate ones (the ladder's principle).\n"
+           "             Default: ols with q = 0, zero with q > 0\n");
     printf("  -hessian : standard errors from fdhess at the optimum (fd, default) or\n"
            "             from the BFGS Hessian of the search (bfgs)\n");
     printf("  -o NAME  : results to NAME.out (default: the .pre names joined by '_')\n");
@@ -2067,11 +2073,12 @@ int escalera_main(int argc, char *argv[])
             for (a = 0; a <= ESC_MAX; a++)
                 for (b2 = 0; b2 <= ESC_MAX; b2++) qcov[a][b2] = 0.0;
         }
-        if (opt_start_ols) {
+        if (opt_start_ols > 0 || (opt_start_ols < 0 && p > 0 && q == 0)) {
             start_ols();
             printf("Start of the cross terms: %s\n", start_used);
-            fprintf(outputv, "Start of the cross terms: %s (-start ols: the original "
-                             "drvarma's init_varma, least squares)\n", start_used);
+            fprintf(outputv, "Start of the cross terms: %s (%s: the original "
+                             "drvarma's init_varma, least squares)\n", start_used,
+                    opt_start_ols > 0 ? "-start ols" : "the default with q = 0");
         }
         quiet_mode = 0;
         fit_run(&F, 1);

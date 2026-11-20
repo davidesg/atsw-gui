@@ -1,0 +1,28 @@
+# limites.txt -- las propiedades que no se cumplen y NO se van a arreglar.
+# La misma mecanica que abiertos.txt: una clave por linea; mientras este
+# aqui se anota como LIMITE y no cuenta como fallo; si deja de incumplirse,
+# rutas.sh falla hasta que se quite. Un limite se documenta y se vigila.
+#
+# El arranque cero con escalas dispares (drvarma-python BUG-0027). Con
+# -start zero la busqueda se para a las 2 iteraciones, por debajo del modelo
+# que anida y lejos de -start ols: los tipos en puntos basicos junto a
+# precios en %. El optimizador (raxopt, typx = 1) no se toca. Desde la 5.0
+# el arranque por defecto con q = 0 es ols y el motor ya no pasa por aqui
+# (la propiedad "defecto" lo comprueba); pedir -start zero sigue dando esto.
+anida:GS1-U-zero-p2
+arranques:GS1-U-p2q0
+anida:GS3-U-zero-p2
+arranques:GS3-U-p2q0
+arranques:GS3-U-p3q0
+anida:FF-U-zero-p3
+arranques:FF-U-p3q0
+#
+# El .inp multivariante original (obsoleto desde la 5.0, se retira en la
+# 6.0) con escalas dispares: sin las Q_ii de la puerta, con una serie por
+# 1000 falla por cientos de puntos y no anida. (Con una serie por 100 queda
+# a 0,004 de la escalera: dentro de la tolerancia de esos casos.)
+original:Sx1000-p1q0
+original:Sx1000-p2q0
+original:Sx1000-p3q0
+anida:Sx1000-I-inp-p2
+anida:Sx1000-I-inp-p3

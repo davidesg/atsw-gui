@@ -21,15 +21,17 @@ The codebase is C (C99), 1-based indexing throughout, with `real` = `double`
 
 | File | Responsibility |
 |------|----------------|
-| `src/drvarma.c` | `main`: CLI parsing, I/O, and the whole pipeline. Defines `shootx()` (maps the parameter vector ↔ `struct Tvarma`, builds residuals) and the starting-value routines (`init_varma`, `hannan_rissanen_diag`). |
+| `src/escalera.c` | **The ladder (5.0)**: one fue file per series; the gate, the cross orders, `-links`/`-zero`, the starts (`-start zero\|ols`: `start_ols`, the original `init_varma` in the ladder), `-lik`, `-irfboot`, forecasts and `-estwin`. It reads and casts the files with `lib/fuepre`, `lib/prewhiten` and `lib/fuedet`. Its architecture, and the homologation with the Python port: drvarma-python `docs/ARCHITECTURE.md`. |
+| `src/split.c`, `src/inpread.c` | `-split` (the multivariate `.inp` → one fue file per series) and the `.inp` reader. |
+| `src/drvarma.c` | `main`: CLI parsing, I/O, and the whole **deprecated `.inp`** pipeline (it hands the ladder's command lines to `escalera_main`). Defines `shootx()` (maps the parameter vector ↔ `struct Tvarma`, builds residuals) and the starting-value routines (`init_varma`, `hannan_rissanen_diag`). |
 | `src/drvmlest.c` | `est()` — estimation driver: prepares the problem and calls the optimiser. |
 | `src/qnewtopt.c` | Factorized BFGS quasi-Newton optimiser (J.A. Mauricio). Owns the convergence criteria (gradtol/steptol) and the final convergence report. |
 | `src/elfvarma.c` | `elf()` — the exact log-likelihood of a VARMA(p,q); `chekma()` — MA invertibility check via eigenvalues. |
-| `src/multshea.c` | Likelihood building blocks (multivariate, Shea-style). |
+| `lib/lik/lik.c`, `lib/lik/multshea.c` | `varma_lik` (elf, or Shea's AS 242 with `-lik`), shared with drvec and drtran. |
 | `src/nlatools.c` | Linear algebra + memory + strings: LU (`ludcp`/`lusol`), Cholesky (`choldcp`/`cholfor`/`cholbak`/`cholsol`), eigenvalues (`eigenqr`, **GSL**), SVD (`svdcp`/`svsol`, **GSL**), allocators (`vector`/`matrix`/`tensor`/`free_*`), `nrerror`, `pythag`, string utils. |
 | `src/diagnose.c` | Residual diagnostics (summary, ACF/PACF, Hosking Q, multivariate Jarque–Bera), Wald hypothesis tests, impulse responses and FEVD. |
 | `src/forecast.c` | `forecast_model()` (point forecasts + error variances, supports an origin offset `b`), `forecast_level_variances()`. |
-| `src/transform.c` | `transform_series()` (Box-Cox + differencing → stationary matrix) and `integrate_forecast()` (invert differencing + Box-Cox). |
+| `src/transform.c` | `transform_series()` (Box-Cox + differencing → stationary matrix) and `integrate_forecast()` (invert differencing + Box-Cox), for the `.inp` path: (y^λ − 1)/λ also at λ = 1. The ladder uses fue's transform (`lib/prewhiten`), refactor·y at λ = 1. |
 | `src/deseason.c` | `deseasonalize_raw()` — harmonic seasonal adjustment on the differenced basis; returns level dummies for re-seasonalising forecasts. |
 | `src/volatility.c` | Conditional volatility (exponential / moving window). |
 | `include/main.h` | Core types (`real`, `struct Tvarma`, `struct Tseries`) and most prototypes. |

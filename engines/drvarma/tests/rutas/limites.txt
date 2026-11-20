@@ -26,3 +26,13 @@ original:Sx1000-p2q0
 original:Sx1000-p3q0
 anida:Sx1000-I-inp-p2
 anida:Sx1000-I-inp-p3
+#
+# El criterio de parada depende del arranque. El objetivo va normalizado a
+# f(x0) = 1, asi que la misma tolerancia es otra distancia segun de donde se
+# salga. En el VAR(2) del almizclero y el vison con un cruzado a cero, desde
+# cero se llega a -559.001068 (por paso) y desde ols a -559.002248 (por
+# gradiente): 0,0012 de logL, con los parametros iguales a la milesima.
+# Ninguno de los dos puntos esta mal; no coinciden a 1e-4. El optimizador no
+# se toca.
+arranques:MMz-U-p2q0
+defecto:MMz-U-p2q0

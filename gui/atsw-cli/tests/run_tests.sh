@@ -532,8 +532,11 @@ if [ -x "$DRV" ]; then
     # numeros de la bateria de sim_gui
     "$CLI" caso-estima "$YS" C1 --p 2 --q 0 --razon "el VARMA(2,0)" > /dev/null
     J=$("$CLI" --json caso-simplifica "$YS" C1 c03 --por asistente)
-    mira "caso-simplifica: c04, hija de c03, LR = 0.4761 con 1 g.l. (los ceros se sostienen)" \
-         '[ "$(printf "%s\n" "$J" | campo "(d[\"corrida\"], d[\"padre\"], round(d[\"lr_contra\"], 4), d[\"df_contra\"])")" = "('"'"'c04'"'"', '"'"'c03'"'"', 0.4761, 1)" ]'
+    # El LR va con tolerancia: el modelo con el cero acaba a 0,001 de logL
+    # segun el arranque de drvarma (-559.0011 desde cero, -559.0022 desde
+    # ols, el arranque por defecto con q = 0 desde #207); tests/rutas lo vigila.
+    mira "caso-simplifica: c04, hija de c03, LR = 0.48 con 1 g.l. (los ceros se sostienen)" \
+         '[ "$(printf "%s\n" "$J" | campo "(d[\"corrida\"], d[\"padre\"], abs(d[\"lr_contra\"] - 0.4785) < 5e-3, d[\"df_contra\"])")" = "('"'"'c04'"'"', '"'"'c03'"'"', True, 1)" ]'
     mira "caso-simplifica: los ceros quedan en el .out de la hija" \
          'grep -q "^Zero coefficients:" "$PS/_casos/C1/work/C1_c04.out"'
     mira "caso-simplifica sin nada que simplificar: estado 1, y lo dice" \

@@ -76,7 +76,7 @@ async def corre(raiz: Path, w: Path) -> None:
                   "structure de un modelo triangular: es una red, y no pasa solo", res)
             res = await t("estimate", case="C1", reason="el VARMA(2,0)", p=2, q=0)
             res = await t("simplify", case="C1", run="c02")
-            check("C1/c03" in res and "contra c02" in res and "0.4761" in res,
+            check("C1/c03" in res and "contra c02" in res and "0.478" in res,   # 0.4761 con -start zero
                   "simplify: c03, hija de c02, con su LR", res)
             res = await t("structure", case="C1", run="c02")
             check("SIMULTÁNEO" in res, "structure del VARMA(2,0): simultáneo", res)

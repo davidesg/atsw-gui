@@ -82,9 +82,24 @@ univariate models. That is the gate (§3).
   re-estimated jointly, starting from their `.pre` values. `-fixarma` keeps
   them fixed.
 - The mean is estimated if the `.pre` estimates it.
-- The deterministic terms stay **fixed** at their `.pre` values. `-redet`
-  re-estimates them, and then the stationary series is rebuilt at every
-  evaluation.
+- The deterministic terms stay **fixed** unless asked. The decision is taken
+  term by term and twice, at the gate (each series alone) and in the joint
+  fit:
+  - `-det LIST` says which are re-estimated jointly: `all` (which is
+    `-redet`), a class (`seasonal`, `calendar`, `interv`, `trend`),
+    `SERIES:class`, or a coefficient's name as the output writes it. Only
+    what the file marks as free is freed. A shock common to several series
+    is `-det` with its name in each of them: the term comes in through the
+    univariate models, and the ladder only decides which is freed.
+  - `-detbase` says where the fixed ones stay: `file`, the file's values, or
+    `gate`, estimated at the gate on the common window and then held. By
+    default it is `gate` for a series the common window trims, whose file
+    is no longer the optimum of the sample in use, and `file` for the rest
+    (a genuine `.pre` on its own sample is a fixed point: both are the same).
+  - Whatever is free jointly is free at the gate too. The mean is not one of
+    them: it is estimated whenever the file estimates it.
+  - With fixed deterministic terms the standard errors are conditional on
+    them, and the parameter count does not include them.
 - `Σ = σ²·Q`, with `Q₁₁ = 1` and `log(Qᵢᵢ/Q₁₁)` free. `est()` concentrates σ²,
   and without this normalisation `Q → cQ` is a flat direction and the Hessian
   is singular (Mauricio 1995, eq. 2.1; the same as drtran). The covariances

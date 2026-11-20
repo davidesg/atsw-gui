@@ -9,6 +9,26 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Added — `-det` and `-detbase`: which deterministic terms are estimated
+
+- `-redet` was all or nothing. `-det LIST` re-estimates only some of the
+  deterministic terms in the joint fit: a class (`seasonal`, `calendar`,
+  `interv`, `trend`), a series' class (`IPC:seasonal`) or single terms by the
+  name the output gives them (`"w0_IPC[step 8 1990]"`); `-redet` is
+  `-det all`. A shock common to several series is `-det` with its name in
+  each. Only what the file marks as free is freed.
+- `-detbase file|gate` says where the fixed ones stay: the file's values, or
+  the gate's, estimated series by series on the common window and then held.
+- **Changed by default:** a series the common window trims has its
+  deterministic terms re-estimated at the gate and held there (`-detbase
+  gate` for that series). Until now they stayed at the values of the longer
+  sample while its ARMA and mean were re-estimated on the short one.
+  `-detbase file` gives the old behaviour. Series that are not trimmed are
+  unchanged. In the ladder's battery one reference moves (`corto`: France
+  trimmed by a year; logL of the gate 43.308 → 43.743).
+- The mean is not part of this: it is estimated whenever the file estimates
+  it, as before.
+
 ### Changed — the default start of the ladder: `ols` with q = 0
 
 - Without `-start`, the cross terms now start at the original drvarma's

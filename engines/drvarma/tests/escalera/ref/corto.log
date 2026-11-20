@@ -1,6 +1,6 @@
 Model            : VARMA with univariate diagonals; cross orders p=0 q=0
 Innovation cov.  : diagonal
-Deterministics   : fixed at the .pre
+Deterministics   : fixed at the gate's values (11 estimated there, series by series)
 Univariate ARMA  : re-estimated jointly
 Estimation method: 1
 Likelihood       : exact, Mauricio (1997), AS 311
@@ -19,19 +19,23 @@ Univariate models (one .pre per series):
 =============================================================
   series                     logL         sigma2      max|move|
   IPC_ES                -8.820102      0.0638116        0.00836  <- not an optimum
-  IPC_FR                52.128376       0.034972         0.0209  <- trimmed sample
-  SUM                   43.308275
-  joint diagonal        43.308275
-  difference            -2.27e-13
+  IPC_FR                52.563291      0.0348274         0.0278  <- trimmed sample
+  SUM                   43.743189
+  joint diagonal        43.743189
+  difference            -8.53e-14
   GATE: PASSED
   Note: IPC_ES moved 0.00836 from its .pre on its own sample. A genuine
         .pre is a fixed point (it moves ~1e-5, the rounding of its six
         decimals): this one is a specification, not an optimum.
         Its deterministic terms stayed at their SEEDS: in a
-        specification they are starting values -- use -redet.
-  Note: IPC_FR moved 0.0209 from its .pre, but the common window
+        specification they are starting values -- use -redet,
+        or -detbase gate to estimate them here and hold them.
+  Note: IPC_FR moved 0.0278 from its .pre, but the common window
         drops its first 12 stationary observations: it is
         re-estimated on a different sample, and moving is legitimate.
+        Its deterministic terms were re-estimated here too, on the
+        common window, and are held at those values (-detbase file
+        keeps the file's).
 
 Number of parameters: 5
-Exact log-likelihood: 43.308275
+Exact log-likelihood: 43.743189

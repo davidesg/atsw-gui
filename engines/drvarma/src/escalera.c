@@ -82,7 +82,39 @@ static int   n_trim[ESC_MAX + 1];    /* observaciones que el recorte le quita */
    univariantes de la puerta, todas para el sistema) y su estructura.     */
 static int act_m, act[ESC_MAX + 1];
 static int cx_p, cx_q, cx_diagcov;
-static int opt_redet, opt_fixarma;
+static int opt_fixarma;
+
+/* ------------------------------------------------------------------------- */
+/*  LA MASCARA DE LAS DETERMINISTAS                                          */
+/*                                                                           */
+/*  Cada variable determinista de un fichero lleva sus coeficientes marcados  */
+/*  libres o fijos. La escalera decide, variable a variable, si los libres   */
+/*  entran en el vector de parametros, y lo decide dos veces:                */
+/*    en la PUERTA   (cada serie sola):  det_g[i][d]                         */
+/*    en el CONJUNTO (el diagonal y el modelo pedido):  det_j[i][d]          */
+/*  Lo que no entra queda en el valor que tenga: el del fichero, o el que    */
+/*  dejo la puerta si alli se estimo ("los valores de la puerta").           */
+/*                                                                           */
+/*    -det LISTA      que se estima en el conjunto: all, none, una clase     */
+/*                    (seasonal: cos sin alter; calendar: easter; interv:    */
+/*                    impulse compimp step ramp; trend), SERIE:clase, o el   */
+/*                    nombre de un coeficiente como lo escribe la salida     */
+/*                    (w0_IPC[step 8 1990]: libera esa variable).            */
+/*    -redet          es -det all (lo de siempre).                           */
+/*    -detbase file   lo fijo, a los valores del fichero;                    */
+/*    -detbase gate   lo fijo, a los que estima la puerta en la ventana      */
+/*                    comun;                                                 */
+/*    sin -detbase    gate en las series que la ventana comun recorta (su    */
+/*                    fichero ya no es el optimo de la muestra que se usa),  */
+/*                    file en las demas.                                     */
+/*  Todo lo libre en el conjunto lo es tambien en la puerta. Solo se libera  */
+/*  lo que el fichero marca como libre.                                      */
+/* ------------------------------------------------------------------------- */
+#define DET_LISTA 1024
+static char det_lista[DET_LISTA] = "";      /* -det (o "all" con -redet) */
+static int  det_base = 0;                   /* 0 sin -detbase, 1 file, 2 gate */
+static int  det_etapa = 1;                  /* 0 la puerta, 1 el conjunto */
+static unsigned char *det_j[ESC_MAX + 1], *det_g[ESC_MAX + 1];   /* [1..NdetVar] */
 
 /* -links "A<-B,C<-A" (2026-09-29): the cross dynamics only on the pairs the
    evidence points at. cx_link[i][j] = 1 lets series j enter the equation of
@@ -138,6 +170,121 @@ static real qcov[ESC_MAX + 1][ESC_MAX + 1];    /* Q_ij, i > j             */
 /*  Las series estacionarias                                                 */
 /* ------------------------------------------------------------------------- */
 
+static int det_on(int i, int d)
+{
+    unsigned char *m = det_etapa ? det_j[i] : det_g[i];
+    return m != NULL && m[d];
+}
+/* los coeficientes libres de las deterministas de la serie i que la mascara
+   de la etapa deja entrar */
+static int det_n(int i)
+{
+    struct Tusmodel *M = &Tm[i];
+    int n = 0, d, j;
+    for (d = 1; d <= M->NdetVar; d++) {
+        if (!det_on(i, d)) continue;
+        for (j = 0; j <= M->Nomega[d]; j++) if (M->Imega[d][j] == 1) n++;
+        for (j = 1; j <= M->Ndelta[d]; j++) if (M->Ielta[d][j] == 1) n++;
+    }
+    return n;
+}
+static int det_n_etapa(int i, int etapa)
+{
+    int e = det_etapa, n;
+    det_etapa = etapa; n = det_n(i); det_etapa = e;
+    return n;
+}
+static int det_pack(int i, real *x, int idx)
+{
+    struct Tusmodel *M = &Tm[i];
+    int base = idx, d, j;
+    for (d = 1; d <= M->NdetVar; d++) {
+        if (!det_on(i, d)) continue;
+        for (j = 0; j <= M->Nomega[d]; j++) if (M->Imega[d][j] == 1) x[idx++] = M->Omega[d][j];
+        for (j = 1; j <= M->Ndelta[d]; j++) if (M->Ielta[d][j] == 1) x[idx++] = M->Delta[d][j];
+    }
+    return idx - base;
+}
+static void det_unpack(int i, real *x, int *idx)
+{
+    struct Tusmodel *M = &Tm[i];
+    int d, j;
+    for (d = 1; d <= M->NdetVar; d++) {
+        if (!det_on(i, d)) continue;
+        for (j = 0; j <= M->Nomega[d]; j++) if (M->Imega[d][j] == 1) M->Omega[d][j] = x[(*idx)++];
+        for (j = 1; j <= M->Ndelta[d]; j++) if (M->Ielta[d][j] == 1) M->Delta[d][j] = x[(*idx)++];
+    }
+}
+/* la clase de una variable por la primera palabra de su especificacion */
+static const char *det_clase(const char *spec)
+{
+    char w[16];
+    if (spec == NULL || sscanf(spec, "%15s", w) != 1) return "";
+    if (!strcmp(w, "cos") || !strcmp(w, "sin") || !strcmp(w, "alter")) return "seasonal";
+    if (!strcmp(w, "easter")) return "calendar";
+    if (!strcmp(w, "impulse") || !strcmp(w, "compimp") || !strcmp(w, "step") || !strcmp(w, "ramp"))
+        return "interv";
+    if (!strcmp(w, "trend")) return "trend";
+    return "";
+}
+/* Monta det_j y det_g. Llamar con las series leidas y n_trim ya calculado.
+   Devuelve 0, o 1 si un selector de -det no casa con nada (lo imprime).     */
+static int det_monta(void)
+{
+    char lista[DET_LISTA], *tok, *sig;
+    int  i, d;
+
+    for (i = 1; i <= n_ser; i++) {
+        det_j[i] = (unsigned char *)calloc((size_t)Tm[i].NdetVar + 2, 1);
+        det_g[i] = (unsigned char *)calloc((size_t)Tm[i].NdetVar + 2, 1);
+    }
+    snprintf(lista, sizeof lista, "%s", det_lista);
+    for (tok = lista; tok != NULL && *tok; tok = sig) {
+        int casa = 0;
+        const char *sel = tok, *ser = NULL;
+        char *c;
+        /* la coma separa selectores, salvo dentro de los corchetes de un nombre */
+        {   int hondo = 0;
+            for (c = tok; *c; c++) {
+                if (*c == '[') hondo++;
+                else if (*c == ']') hondo--;
+                else if (*c == ',' && hondo == 0) break;
+            }
+            if (*c == ',') { *c = 0; sig = c + 1; } else sig = NULL;
+        }
+        if (strcmp(sel, "none") == 0) continue;
+        if (strchr(sel, '[') == NULL && (c = strchr(tok, ':')) != NULL) { *c = 0; ser = tok; sel = c + 1; }
+        for (i = 1; i <= n_ser; i++) {
+            if (ser != NULL && strcmp(ser, Ts[i].name) != 0) continue;
+            for (d = 1; d <= Tm[i].NdetVar; d++) {
+                const char *sp = (Tm[i].detspec && Tm[i].detspec[d]) ? Tm[i].detspec[d] : "det";
+                int si = 0;
+                if (strcmp(sel, "all") == 0 || strcmp(sel, det_clase(sp)) == 0) si = 1;
+                else if (strchr(sel, '[') != NULL) {       /* un nombre: w0_SERIE[spec] */
+                    char nom[ESC_NAMELEN];
+                    const char *u = strchr(sel, '_');
+                    snprintf(nom, sizeof nom, "%s[%s]", Ts[i].name, sp);
+                    if (u != NULL && strcmp(u + 1, nom) == 0) si = 1;
+                }
+                if (si) { det_j[i][d] = 1; casa = 1; }
+            }
+        }
+        if (!casa && strcmp(sel, "all") != 0) {
+            printf("ERROR: -det: '%s%s%s' does not match any deterministic term.\n"
+                   "       Give all, none, a class (seasonal, calendar, interv, trend),\n"
+                   "       SERIES:class, or a coefficient's name as the output writes it,\n"
+                   "       for instance \"w0_IPC[step 8 1990]\".\n",
+                   ser ? ser : "", ser ? ":" : "", sel);
+            return 1;
+        }
+    }
+    for (i = 1; i <= n_ser; i++) {
+        int todo = det_base == 2 || (det_base == 0 && n_trim[i] > 0);
+        for (d = 1; d <= Tm[i].NdetVar; d++) det_g[i][d] = (unsigned char)(todo || det_j[i][d]);
+    }
+    return 0;
+}
+
 /* Cada modelo pierde tantas observaciones iniciales como el orden de su
    operador no estacionario. Todas acaban en la misma fecha (lo exige
    fuepre_check_alignment), asi que quedarse con las ULTIMAS n_stat de cada
@@ -190,8 +337,7 @@ static int esc_npar(void)
     int a, n = 0;
     if (!opt_fixarma)
         for (a = 1; a <= act_m; a++) n += esc_n_arma(act[a]);
-    if (opt_redet)
-        for (a = 1; a <= act_m; a++) n += n_det_free_params(&Tm[act[a]]);
+    for (a = 1; a <= act_m; a++) n += det_n(act[a]);
     for (a = 1; a <= act_m; a++) if (Tm[act[a]].Imu) n++;
     n += n_cross_free();
     n += act_m - 1;
@@ -208,8 +354,7 @@ static void esc_pack(real *x)
         idx += pack_ar_factors(&Tm[i], x, idx);
         idx += pack_ma_factors(&Tm[i], x, idx);
     }
-    if (opt_redet)
-        for (a = 1; a <= act_m; a++) idx += pack_det_params(&Tm[act[a]], x, idx);
+    for (a = 1; a <= act_m; a++) idx += det_pack(act[a], x, idx);
     for (a = 1; a <= act_m; a++) if (Tm[act[a]].Imu) x[idx++] = mu[act[a]];
     for (k = 1; k <= cx_p; k++)
         for (a = 1; a <= act_m; a++)
@@ -234,8 +379,7 @@ static void esc_unpack(real *x)
         unpack_ar_factors(&Tm[i], x, &idx);
         unpack_ma_factors(&Tm[i], x, &idx);
     }
-    if (opt_redet)
-        for (a = 1; a <= act_m; a++) unpack_det_params(&Tm[act[a]], x, &idx);
+    for (a = 1; a <= act_m; a++) det_unpack(act[a], x, &idx);
     for (a = 1; a <= act_m; a++) if (Tm[act[a]].Imu) mu[act[a]] = x[idx++];
     for (k = 1; k <= cx_p; k++)
         for (a = 1; a <= act_m; a++)
@@ -313,11 +457,11 @@ static void esc_names(char (*names)[ESC_NAMELEN])
         name_factors(names, &idx, act[a], 1);
         name_factors(names, &idx, act[a], 0);
     }
-    if (opt_redet)
         for (a = 1; a <= act_m; a++) {
             struct Tusmodel *M = &Tm[act[a]];
             for (d = 1; d <= M->NdetVar; d++) {
                 const char *sp = (M->detspec && M->detspec[d]) ? M->detspec[d] : "det";
+                if (!det_on(act[a], d)) continue;
                 for (j = 0; j <= M->Nomega[d]; j++)
                     if (M->Imega[d][j] == 1)
                         snprintf(names[idx++], ESC_NAMELEN, "w%d_%s[%s]", j, Ts[act[a]].name, sp);
@@ -388,13 +532,17 @@ static void shootx_esc(real *x, struct Tvarma *armax, int *ifaultx, int firstx, 
 
     esc_unpack(x);
 
-    for (a = 1; a <= m; a++) {
-        if (invalid_fixfreq(&Tm[act[a]])) { *ifaultx = 6; goto fin; }
-        if (opt_redet && unstable_delta(&Tm[act[a]])) { *ifaultx = 6; goto fin; }
+    {   int libres = 0;
+        for (a = 1; a <= m; a++) {
+            int nd = det_n(act[a]);
+            if (invalid_fixfreq(&Tm[act[a]])) { *ifaultx = 6; goto fin; }
+            if (nd > 0 && unstable_delta(&Tm[act[a]])) { *ifaultx = 6; goto fin; }
+            libres += nd;
+        }
+        /* Con deterministas libres, la serie estacionaria depende de los
+           parametros: se rehace. n_stat no cambia (depende solo del operador). */
+        if (libres > 0 && build_stationary() != 0) { *ifaultx = 6; goto fin; }
     }
-    /* Con las deterministas libres, la serie estacionaria depende de los
-       parametros: se rehace. n_stat no cambia (depende solo del operador). */
-    if (opt_redet && build_stationary() != 0) { *ifaultx = 6; goto fin; }
 
     for (k = 0; k <= P; k++)
         for (a = 1; a <= m; a++)
@@ -1598,7 +1746,7 @@ void escalera_usage(const char *prog)
 {
     printf("       %s A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]\n", prog);
     printf("                                  [-m method] [-o NAME] [-forecast H [-estwin N]]\n");
-    printf("                                  [-irfboot N]\n");
+    printf("                                  [-irfboot N] [-det LIST] [-detbase file|gate]\n");
     printf("                                  [-hessian fd|bfgs] [-lik elf|shea|both]\n");
     printf("                                  [-links \"A<-B,C<-A\"] [-zero \"AR1[A<-B],...\"]\n");
     printf("                                  [-start zero|ols]\n");
@@ -1607,7 +1755,16 @@ void escalera_usage(const char *prog)
     printf("       The VARMA keeps each model on its DIAGONAL; p and q are the orders of\n");
     printf("       the CROSS dynamics. p = q = 0 with -diagcov reproduces the univariates.\n");
     printf("  -diagcov : diagonal innovation covariance (default: full)\n");
-    printf("  -redet   : re-estimate the deterministic terms (default: fixed at the .pre)\n");
+    printf("  -redet   : re-estimate the deterministic terms (default: fixed); it is -det all\n");
+    printf("  -det LIST: re-estimate only some: all, none, a class (seasonal: cos sin\n"
+           "             alter; calendar: easter; interv: impulse compimp step ramp;\n"
+           "             trend), SERIES:class, or a coefficient's name as the output\n"
+           "             writes it (\"w0_IPC[step 8 1990]\"), separated by commas. Only\n"
+           "             what the file marks as free is freed\n");
+    printf("  -detbase : where the fixed ones stay: file (the file's values) or gate\n"
+           "             (estimated at the gate, series by series, on the common\n"
+           "             window, then held). Default: gate for a series the common\n"
+           "             window trims, file for the rest\n");
     printf("  -fixarma : keep the univariate ARMA factors fixed at the .pre\n");
     printf("  -links   : cross dynamics only on these pairs, \"A<-B\" = B enters the\n"
            "             equation of A (AR and MA, every lag up to p and q); names as\n"
@@ -1687,11 +1844,16 @@ int escalera_main(int argc, char *argv[])
         printf("ERROR: cross orders p=%d q=%d out of range 0..%d\n", p, q, ESC_MAXLAG);
         return 1;
     }
-    cx_diagcov = 0; opt_redet = 0; opt_fixarma = 0;
+    cx_diagcov = 0; opt_fixarma = 0; det_lista[0] = 0; det_base = 0; det_etapa = 1;
     est_fdhess = 1;          /* standard errors from the Hessian AT the optimum */
     for (argi += 2; argi < argc; argi++) {
         if      (strcmp(argv[argi], "-diagcov") == 0) cx_diagcov = 1;
-        else if (strcmp(argv[argi], "-redet") == 0)   opt_redet = 1;
+        else if (strcmp(argv[argi], "-redet") == 0)   snprintf(det_lista, sizeof det_lista, "all");
+        else if (strcmp(argv[argi], "-det") == 0 && argi + 1 < argc)
+            snprintf(det_lista, sizeof det_lista, "%s", argv[++argi]);
+        else if (strcmp(argv[argi], "-detbase") == 0 && argi + 1 < argc &&
+                 (strcmp(argv[argi + 1], "file") == 0 || strcmp(argv[argi + 1], "gate") == 0))
+            det_base = strcmp(argv[++argi], "gate") == 0 ? 2 : 1;
         else if (strcmp(argv[argi], "-fixarma") == 0) opt_fixarma = 1;
         else if (strcmp(argv[argi], "-m") == 0 && argi + 1 < argc) met_esc = atoi(argv[++argi]);
         else if (strcmp(argv[argi], "-o") == 0 && argi + 1 < argc)
@@ -1730,8 +1892,8 @@ int escalera_main(int argc, char *argv[])
         }
     }
     int want_diagcov = cx_diagcov;
-    if (irfboot_n < 0 || (irfboot_n > 0 && opt_redet)) {
-        printf("ERROR: -irfboot N needs N >= 1, and not -redet (the stationary\n"
+    if (irfboot_n < 0 || (irfboot_n > 0 && det_lista[0] && strcmp(det_lista, "none") != 0)) {
+        printf("ERROR: -irfboot N needs N >= 1, and not -redet or -det (the stationary\n"
                "       series are rebuilt from the data at each estimation)\n");
         return 1;
     }
@@ -1869,6 +2031,7 @@ int escalera_main(int argc, char *argv[])
         printf("ERROR: could not build the stationary series\n");
         return 2;
     }
+    if (det_monta() != 0) return 1;
 
     /* Las globales que leen los diagnosticos de drvarma. Los residuos
        arrancan donde arranca la ventana comun: su fecha se da directamente,
@@ -1928,7 +2091,20 @@ int escalera_main(int argc, char *argv[])
                 fprintf(f, "\n");
             }
             fprintf(f, "Innovation cov.  : %s\n", want_diagcov ? "diagonal" : "full");
-            fprintf(f, "Deterministics   : %s\n", opt_redet ? "re-estimated" : "fixed at the .pre");
+            {   /* "re-estimated" y "fixed at the .pre" son las de siempre (las lee
+                   lib/outvarma); lo demas dice que se estima y de donde sale lo fijo */
+                int nj = 0, ng = 0, nt = 0, k2;
+                for (k2 = 1; k2 <= n_ser; k2++) {
+                    nj += det_n_etapa(k2, 1); ng += det_n_etapa(k2, 0); nt += n_det_free_params(&Tm[k2]);
+                }
+                if (nj == nt && nt > 0)     fprintf(f, "Deterministics   : re-estimated\n");
+                else if (nj > 0)            fprintf(f, "Deterministics   : re-estimated: %s (%d of %d); "
+                                                       "the rest fixed at %s\n", det_lista, nj, nt,
+                                                    ng > nj ? "the gate's values" : "the .pre");
+                else if (ng > 0)            fprintf(f, "Deterministics   : fixed at the gate's values "
+                                                       "(%d estimated there, series by series)\n", ng);
+                else                        fprintf(f, "Deterministics   : fixed at the .pre\n");
+            }
             fprintf(f, "Univariate ARMA  : %s\n", opt_fixarma ? "fixed at the .pre" : "re-estimated jointly");
             fprintf(f, "Estimation method: %d\n", met_esc);
             fprintf(f, "Likelihood       : %s\n", lik_label());
@@ -1965,6 +2141,7 @@ int escalera_main(int argc, char *argv[])
     xitol_met = -1.0e-3;
     quiet_mode = 1;
     cx_p = cx_q = 0;  cx_diagcov = 1;
+    det_etapa = 0;                       /* la puerta: su mascara */
     for (i = 1; i <= n_ser; i++) {
         real *x0, *x1;
         int   n0, k;
@@ -1993,6 +2170,7 @@ int escalera_main(int argc, char *argv[])
         free_vector(x0, 1, n0 > 0 ? n0 : 1);
     }
 
+    det_etapa = 1;                       /* el conjunto: la suya */
     act_m = n_ser;
     for (a = 1; a <= n_ser; a++) act[a] = a;
     for (a = 1; a <= n_ser; a++) lvar[a] = log(s2_uni[a] / s2_uni[1]);
@@ -2023,19 +2201,28 @@ int escalera_main(int argc, char *argv[])
             fprintf(f, "  GATE: %s\n", pass ? "PASSED" : "FAILED");
             for (k = 1; k <= n_ser; k++)
                 if (move[k] > PRE_MOVE && n_trim[k] > 0)
+                {
                     fprintf(f, "  Note: %s moved %.3g from its .pre, but the common window\n"
                                "        drops its first %d stationary observations: it is\n"
                                "        re-estimated on a different sample, and moving is legitimate.\n",
                             Ts[k].name, move[k], n_trim[k]);
+                    if (det_n_etapa(k, 0) > det_n_etapa(k, 1))
+                        fprintf(f, "        Its deterministic terms were re-estimated here too, on the\n"
+                                   "        common window, and are held at those values (-detbase file\n"
+                                   "        keeps the file's).\n");
+                    else if (det_n_etapa(k, 0) < n_det_free_params(&Tm[k]))
+                        fprintf(f, "        Its deterministic terms stay at the file's values (-detbase file).\n");
+                }
                 else if (move[k] > PRE_MOVE)
                 {
                     fprintf(f, "  Note: %s moved %.3g from its .pre on its own sample. A genuine\n"
                                "        .pre is a fixed point (it moves ~1e-5, the rounding of its six\n"
                                "        decimals): this one is a specification, not an optimum.\n",
                             Ts[k].name, move[k]);
-                    if (!opt_redet && n_det_free_params(&Tm[k]) > 0)
+                    if (det_n_etapa(k, 0) < n_det_free_params(&Tm[k]))
                         fprintf(f, "        Its deterministic terms stayed at their SEEDS: in a\n"
-                                   "        specification they are starting values -- use -redet.\n");
+                                   "        specification they are starting values -- use -redet,\n"
+                                   "        or -detbase gate to estimate them here and hold them.\n");
                 }
             fprintf(f, "\n");
         }

@@ -390,6 +390,77 @@ cerca "-start ols: logL del VAR(2) monetario" -1741.275477 \
 "$BIN" "$MON/IPI_m07.pre" "$MON/GS1_m01.pre" 1 0 -start mco -o "$TMP/mmal" > "$TMP/mmal.log" 2>&1
 [ $? -ne 0 ] && bien "-start desconocido es un error" || falla "-start acepta un valor desconocido"
 
+# 10e. La mascara de las deterministas: -det y -detbase.
+#     Los IPC de Espana y Francia (11 armonicos libres cada uno) y, para las
+#     intervenciones, el IPC y el WTI del monetario (el escalon del Golfo y
+#     Katrina en el IPC; el impulso del Golfo en el WTI).
+det() { sed -n 's/^Deterministics   : //p' "$1" | head -1; }
+ll()  { awk '/^Exact log-likelihood/ {print $3; exit}' "$1"; }
+np()  { awk '/^Number of parameters/ {print $4; exit}' "$1"; }
+"$BIN" "$ES" "$FR" 1 0 -redet   -o "$TMP/dr" > /dev/null 2>&1
+"$BIN" "$ES" "$FR" 1 0 -det all -o "$TMP/da" > /dev/null 2>&1
+filtro2() { grep -av '^Program          : \|^Output File      : ' "$1"; }
+filtro2 "$TMP/dr.out" > "$TMP/dr.f"; filtro2 "$TMP/da.out" > "$TMP/da.f"
+[ -s "$TMP/dr.f" ] && cmp -s "$TMP/dr.f" "$TMP/da.f" && [ "$(det "$TMP/dr.out")" = "re-estimated" ] \
+    && bien "-det all es -redet (la misma salida)" || falla "-det all no es -redet"
+"$BIN" "$ES" "$FR" 1 0 -det IPC_FR:seasonal -o "$TMP/df" > /dev/null 2>&1
+[ "$(np "$TMP/df.out")" = 19 ] && [ "$(np "$TMP/dr.out")" = 30 ] \
+    && det "$TMP/df.out" | grep -q "IPC_FR:seasonal (11 of 22); the rest fixed at the .pre" \
+    && bien "-det SERIE:clase: solo los 11 armonicos de Francia (19 parametros de 30)" \
+    || falla "-det IPC_FR:seasonal: $(np "$TMP/df.out") parametros, $(det "$TMP/df.out")"
+"$BIN" "$ES" "$FR" 1 0 -o "$TMP/dn" > /dev/null 2>&1
+"$BIN" "$ES" "$FR" 1 0 -detbase gate -o "$TMP/dg" > /dev/null 2>&1
+cerca "-detbase gate con .pre genuinos sin recortar: el mismo logL (son un punto fijo)" \
+    "$(ll "$TMP/dn.out")" "$(ll "$TMP/dg.out")" 1e-5
+det "$TMP/dg.out" | grep -q "fixed at the gate's values (22 estimated there" \
+    && [ "$(det "$TMP/dn.out")" = "fixed at the .pre" ] \
+    && bien "-detbase gate: la cabecera dice de donde sale lo fijo" \
+    || falla "-detbase gate: $(det "$TMP/dg.out")"
+# la ventana recortada (el caso 7): por defecto, los de la serie recortada
+# los estima la puerta; -detbase file los deja en los del fichero
+"$BIN" "$TMP/ES_2003.pre" "$FR" 0 0 -diagcov -detbase file -o "$TMP/cf" > /dev/null 2>&1
+"$BIN" "$TMP/ES_2003.pre" "$FR" 0 0 -diagcov -detbase gate -o "$TMP/cg" > /dev/null 2>&1
+"$BIN" "$TMP/ES_2003.pre" "$FR" 0 0 -diagcov -redet        -o "$TMP/cr" > /dev/null 2>&1
+det "$TMP/corto.out" | grep -q "fixed at the gate's values (11 estimated there" \
+    && grep -q "re-estimated here too" "$TMP/corto.out" \
+    && bien "ventana recortada: por defecto la puerta reestima las deterministas de la serie recortada" \
+    || falla "ventana recortada, por defecto: $(det "$TMP/corto.out")"
+python3 -c "
+import sys
+f, d, g, r = map(float, sys.argv[1:5])
+sys.exit(0 if f < d < g and abs(g - r) < 1e-5 else 1)" \
+    "$(ll "$TMP/cf.out")" "$(ll "$TMP/corto.out")" "$(ll "$TMP/cg.out")" "$(ll "$TMP/cr.out")" \
+    && bien "ventana recortada: file < por defecto < gate, y gate = -redet en el diagonal" \
+    || falla "ventana recortada: logL $(ll "$TMP/cf.out") $(ll "$TMP/corto.out") $(ll "$TMP/cg.out") $(ll "$TMP/cr.out")"
+[ "$(np "$TMP/cg.out")" = 5 ] && [ "$(np "$TMP/cr.out")" = 27 ] \
+    && bien "-detbase gate las fija despues: 5 parametros en el conjunto; -redet, 27" \
+    || falla "-detbase gate: $(np "$TMP/cg.out") parametros; -redet, $(np "$TMP/cr.out")"
+# las intervenciones: una clase, un nombre, y el shock comun (el Golfo en los dos)
+MI=$MON/IPC_m07.pre; MW=$MON/WTI_m03.pre
+"$BIN" "$MI" "$MW" 1 0                 -o "$TMP/i0" > /dev/null 2>&1
+"$BIN" "$MI" "$MW" 1 0 -det interv     -o "$TMP/i1" > /dev/null 2>&1
+"$BIN" "$MI" "$MW" 1 0 -det "w0_IPC[step 8 1990],w0_WTI[impulse 8 1990]" -o "$TMP/i2" > /dev/null 2>&1
+"$BIN" "$MI" "$MW" 1 0 -redet          -o "$TMP/i3" > /dev/null 2>&1
+[ "$(np "$TMP/i0.out")" = 9 ] && [ "$(np "$TMP/i1.out")" = 21 ] && [ "$(np "$TMP/i2.out")" = 18 ] \
+    && [ "$(np "$TMP/i3.out")" = 32 ] \
+    && bien "-det interv (12 coeficientes) y -det con dos nombres, el Golfo en las dos series (9)" \
+    || falla "-det interv / nombres: parametros $(np "$TMP/i0.out") $(np "$TMP/i1.out") $(np "$TMP/i2.out") $(np "$TMP/i3.out")"
+python3 -c "
+import sys
+a, b, c, d = map(float, sys.argv[1:5])
+sys.exit(0 if a <= b + 1e-6 and b <= c + 1e-6 and c <= d + 1e-6 else 1)" \
+    "$(ll "$TMP/i0.out")" "$(ll "$TMP/i2.out")" "$(ll "$TMP/i1.out")" "$(ll "$TMP/i3.out")" \
+    && bien "-det: los modelos anidan (fijo <= el Golfo <= interv <= todo)" \
+    || falla "-det: no anidan: $(ll "$TMP/i0.out") $(ll "$TMP/i2.out") $(ll "$TMP/i1.out") $(ll "$TMP/i3.out")"
+grep -q "w0_IPC\[step 8 1990\]" "$TMP/i2.out" && ! grep -q "w0_IPC\[impulse 9 2005\]" "$TMP/i2.out" \
+    && bien "-det con un nombre: ese termino en la tabla, y no los demas" \
+    || falla "-det con un nombre: la tabla no es la pedida"
+"$BIN" "$MI" "$MW" 1 0 -det estacional -o "$TMP/ix" > "$TMP/ix.log" 2>&1
+[ $? -ne 0 ] && grep -q "does not match any deterministic term" "$TMP/ix.log" \
+    && bien "-det con un selector que no casa: error que dice como es" || falla "-det acepta un selector desconocido"
+"$BIN" "$MI" "$MW" 1 0 -det interv -irfboot 10 -o "$TMP/iy" > "$TMP/iy.log" 2>&1
+[ $? -ne 0 ] && bien "-irfboot con -det es un error" || falla "-irfboot acepta -det"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

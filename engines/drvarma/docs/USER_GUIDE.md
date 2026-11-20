@@ -141,13 +141,15 @@ diagonal of the system; `p`/`q` add the dynamics between series. Options:
 | Option | Meaning |
 |---|---|
 | `-diagcov` | diagonal innovation covariance (default full) |
-| `-redet` | re-estimate the deterministic terms (default: fixed at the `.pre`) |
+| `-redet` | re-estimate all the deterministic terms (default: fixed); it is `-det all` |
 | `-fixarma` | keep the univariate ARMA factors fixed |
 | `-m 1\|2` | exact likelihood, ξ truncated at 1e-3 / untruncated |
 | `-lik elf\|shea\|both` | the likelihood: AS 311 (default), Shea's AS 242, or elf checked against Shea |
 | `-hessian fd\|bfgs` | standard errors from fdhess (default) or the BFGS Hessian |
 | `-links "A<-B,..."` | the cross dynamics only on these pairs |
 | `-zero "AR1[A<-B],..."` | single cross coefficients held at zero |
+| `-det LIST` | which deterministic terms are re-estimated jointly: `all` (= `-redet`), `none`, a class (`seasonal`: cos, sin, alter; `calendar`: easter; `interv`: impulse, compimp, step, ramp; `trend`), `SERIES:class`, or a coefficient's name as the output writes it (`"w0_IPC[step 8 1990]"`, which frees that term), separated by commas. Only what the file marks as free is freed. A shock common to several series is `-det` with its name in each |
+| `-detbase file\|gate` | where the fixed deterministic terms stay: the file's values, or the gate's (estimated series by series on the common window, then held). Default: `gate` for a series the common window trims, `file` for the rest |
 | `-start zero\|ols` | where the cross terms start: zero, or the original drvarma's least squares (`init_varma`): the cross AR terms and Q's covariances; the own models stay the univariate ones. Default: `ols` with q = 0, `zero` with q > 0 (no start seeds the MA yet) |
 | `-irfboot N` | bands for the impulse responses by parametric bootstrap, N refits |
 | `-o NAME` | results to `NAME.out` (default: the `.pre` names joined by `_`) |

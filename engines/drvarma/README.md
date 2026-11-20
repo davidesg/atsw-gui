@@ -101,7 +101,9 @@ terms, differencing, mean and ARMA factors). The VARMA keeps each model on
 its **diagonal**; `p` and `q` are the orders of the **cross** dynamics. Before
 anything cross is estimated, the diagonal gate checks that the joint cast
 reproduces the univariate models exactly, and stops the program if it does
-not. Deterministic terms stay at the `.pre` values unless `-redet`. The series
+not. Deterministic terms stay fixed unless `-redet` (all of them) or
+`-det LIST` (a class, a series' class or single terms by name); `-detbase`
+says where the fixed ones stay (the file's values, or the gate's). The series
 must share their frequency and their last date (BUG-2). `-forecast H` forecasts
 every series in its level, and `-estwin N` adds fixed-parameter forecasts from
 every origin, with an out-of-sample evaluation: the univariate models (the

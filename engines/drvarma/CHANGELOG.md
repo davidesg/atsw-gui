@@ -9,6 +9,15 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Fixed — con λ = 1 la Box-Cox es la de fue (lib/prewhiten BUG-0002)
+
+- La librería compartida (`lib/prewhiten`, `lib/fuepre/fuepre_forecast.c`)
+  transformaba con refactor·(y − 1). fue, el dueño del formato, drvec y los
+  portes transforman con refactor·y. Con d = 0 el −1 caía en la media: un
+  `.pre` de fue en niveles con media no era un óptimo aquí (la puerta movía
+  μ en el factor). Ahora es refactor·y, y su inversa y/refactor.
+- Sin cambio en los bancos: ningún caso tiene λ = 1 con d = 0 y media.
+
 ### Added — `-start ols`: the original drvarma's start, in the ladder
 
 - `init_varma` of the `.inp` path brought to the ladder: least squares of the

@@ -2028,6 +2028,10 @@ static void transfer_forecast(real *x, int npar, int L, real sigma2, FILE *out)
             if (fabs(lam) < 1e-8) {
                 lo = exp(lo / Ts[i].refactor);
                 hi = exp(hi / Ts[i].refactor);
+            } else if (fabs(lam - 1.0) < 1e-12) {   /* la Box-Cox de fue: sin
+                                                     transformar (prewhiten BUG-0002) */
+                lo = lo / Ts[i].refactor;
+                hi = hi / Ts[i].refactor;
             } else {
                 lo = pow(lam * (lo / Ts[i].refactor) + 1.0, 1.0 / lam);
                 hi = pow(lam * (hi / Ts[i].refactor) + 1.0, 1.0 / lam);

@@ -1008,7 +1008,7 @@ programa:
   que vuelve a cero y no vuelve: arranca del punto de MCO y falla con «AR
   nonstationary». Pasa con el horno de gas por la ruta V, VAR(6). Es
   **BUG-0006**, con repro (`engines/drvarma/bugs/BUG-0006-repro`); el porte
-  no lo tiene.~~ **Arreglado.**
+  no lo tiene (su BUG-0028 recoge la homologación).~~ **Arreglado.**
 - El motor aborta en el manejador de errores de GSL con datos diminutos (3×2).
 - «Use differenced data» en Select VAR Order no hace nada: sólo cambia una
   etiqueta.

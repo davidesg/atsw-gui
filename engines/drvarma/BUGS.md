@@ -653,7 +653,8 @@ mismo modelo llega a su óptimo.
 En la ruta V el MCO del VAR(p) junto con los AR propios del ajuste diagonal
 puede no ser estacionario, así que es justo ahí donde la vuelta a cero hace
 falta. El porte (`drvarma-python`, `Ladder._take_start`) sí vuelve, con el mismo
-óptimo: el porte no tiene el defecto y no se toca. Nadie en
+óptimo: el porte no tiene el defecto y no se toca. La homologación rota la
+recoge su BUG-0028 (`drvarma-python` #28), con el mismo caso como repro. Nadie en
 atsw-gui pasa todavía `-start` (sim_gui, atsw-cli), pero la ruta V lo usará.
 
 ### Arreglo (2026-11-20)

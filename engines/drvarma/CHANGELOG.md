@@ -9,6 +9,15 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Fixed — `-start ols` falls back to zero for real (BUG-0006)
+
+- When the least-squares start was not admissible, `start_ols()` zeroed the
+  cross terms and then freed its check fit, whose last `shootx_esc` unpacks
+  the checked point and put the least-squares values back. The fit started
+  there and failed (AR nonstationary) while the `.out` said it started from
+  zero. The check fit is now freed first. Gas furnace, route V, VAR(6):
+  −2638.762693 from both starts, as the port (`Ladder._take_start`).
+
 ### Fixed — con λ = 1 la Box-Cox es la de fue (lib/prewhiten BUG-0002)
 
 - La librería compartida (`lib/prewhiten`, `lib/fuepre/fuepre_forecast.c`)

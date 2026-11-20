@@ -635,6 +635,7 @@ static void start_ols(void)
 
     /* Admisible?  Si elf no acepta el punto, a cero, como el porte. */
     fit_run(&chk, 0);
+    fit_free(&chk);              /* antes de reponer: fit_free desempaqueta chk.x */
     if (chk.ifault) {
         for (k = 0; k <= ESC_MAXLAG; k++)
             for (a = 0; a <= ESC_MAX; a++)
@@ -644,7 +645,6 @@ static void start_ols(void)
         snprintf(start_used, sizeof start_used, "zero (the ols start was not admissible)");
     } else
         snprintf(start_used, sizeof start_used, "ols");
-    fit_free(&chk);
 
     free_matrix(S, 1, m, 1, m);
     free_vector(rhs, 1, np);

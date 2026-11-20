@@ -630,7 +630,7 @@ reglas. El porte (`drvarma-python` BUG-0025) se mueve a la vez.
 con 1 mientras el mon% de la primera previsión sea cien veces el cambio del
 nivel. Con el arreglo sale con 0: −1.4577 donde decía −145.7721.
 
-## BUG-0006 — con `-start ols`, si el arranque de MCO no es admisible, la escalera dice que vuelve a cero y no vuelve
+## BUG-0006 — con `-start ols`, si el arranque de MCO no es admisible, la escalera dice que vuelve a cero y no vuelve (ARREGLADO)
 
 **Encontrado:** 2026-11-20, al revisar `-start ols` (#199, #200) con el horno
 de gas por la ruta V.
@@ -652,11 +652,11 @@ mismo modelo llega a su óptimo.
 
 En la ruta V el MCO del VAR(p) junto con los AR propios del ajuste diagonal
 puede no ser estacionario, así que es justo ahí donde la vuelta a cero hace
-falta. El porte (`drvarma-python`, `Ladder._take_start`) sí vuelve: la
-homologación está rota en este caso (`drvarma-python` BUG-0028). Nadie en
+falta. El porte (`drvarma-python`, `Ladder._take_start`) sí vuelve, con el mismo
+óptimo: el porte no tiene el defecto y no se toca. Nadie en
 atsw-gui pasa todavía `-start` (sim_gui, atsw-cli), pero la ruta V lo usará.
 
-### Arreglo propuesto
+### Arreglo (2026-11-20)
 
 Liberar `chk` antes de reponer a cero: `fit_free(&chk)` justo después de
 `fit_run(&chk, 0)`. Cuando el punto se acepta no cambia nada (el
@@ -667,4 +667,5 @@ desempaquetado escribe el mismo punto).
 `bugs/BUG-0006-repro/repro.py` (con `GAS_v.inp` y `CO2_v.inp`, las
 especificaciones de la ruta V del horno de gas, VAR(6)). Control: `-start
 zero`, logL −2638.762693. Sale con 1 mientras `-start ols` no llegue al
-mismo óptimo, con 0 cuando llegue y con 2 si el control no vale.
+mismo óptimo, con 0 cuando llegue y con 2 si el control no vale. Con el
+arreglo sale con 0: −2638.762693 desde los dos arranques, como el porte.

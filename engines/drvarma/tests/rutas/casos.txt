@@ -40,3 +40,11 @@ FF  | V | 2 0 | rutas/data/monetario_v/IPI_v_p2q0.inp rutas/data/monetario_v/IPC
 FF  | V | 3 0 | rutas/data/monetario_v/IPI_v_p3q0.inp rutas/data/monetario_v/IPC_v_p3q0.inp rutas/data/monetario_v/WTI_v_p3q0.inp rutas/data/monetario_v/FF_v_p3q0.inp | -redet
 FF  | V | 1 1 | rutas/data/monetario_v/IPI_v_p1q1.inp rutas/data/monetario_v/IPC_v_p1q1.inp rutas/data/monetario_v/WTI_v_p1q1.inp rutas/data/monetario_v/FF_v_p1q1.inp | -redet
 FFs | V | 1 0 | rutas/data/monetario_v/IPI_v_p1q0.inp rutas/data/monetario_v/IPC_v_p1q0.inp rutas/data/monetario_v/WTI_v_p1q0.inp rutas/data/monetario_v/FF_v_p1q0.inp |
+
+# El rato almizclero y el vison de Jenkins y Alavi (los univariantes de
+# lib/outvarma/datos), VAR(2) y el mismo con el cruzado menos significativo
+# a cero (la simplificacion de Tiao y Box, como la hace atsw-cli). El modelo
+# con el cero acaba a 0,001 de logL segun el arranque: lo destapo una prueba
+# de atsw-cli al cambiar el arranque por defecto (#207).
+MM  | U | 2 0 | ../../../lib/outvarma/datos/MUSKRAT_m03.pre ../../../lib/outvarma/datos/MINK_m02.pre |
+MMz | U | 2 0 | ../../../lib/outvarma/datos/MUSKRAT_m03.pre ../../../lib/outvarma/datos/MINK_m02.pre | -zero AR2[MINK<-MUSKRAT]

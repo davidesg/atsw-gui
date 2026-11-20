@@ -6,6 +6,7 @@
 #   RUTAS_FILTRO=GS1 sh ...             solo los casos cuya clave casa
 #   RUTAS_JOBS=4                        corridas a la vez (por defecto, los nucleos)
 #   RUTAS_HECHOS=fichero                no estima: comprueba los hechos de ese fichero
+#   RUTAS_GUARDA=fichero                deja ahi los hechos de esta pasada
 #
 # Son estimaciones largas (40 a 80 parametros, hasta 200 iteraciones): la
 # bateria entera tarda minutos, y por eso NO esta en `make check`. Se corre
@@ -120,6 +121,7 @@ else
 fi
 touch "$TMP/reglas"
 
+[ -n "${RUTAS_GUARDA:-}" ] && cp "$TMP/hechos.tsv" "$RUTAS_GUARDA"
 if [ "$MODO" = --generar ] && [ -n "${RUTAS_FILTRO:-}" ]; then
     echo "--generar reescribe toda la referencia: no admite RUTAS_FILTRO"; exit 2
 fi

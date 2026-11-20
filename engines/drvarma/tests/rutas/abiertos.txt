@@ -20,3 +20,49 @@ arranques:FF-U-p3q0
 # cero y estima: C y porte divergen. Es el BUG-0006 de drvarma, que se abre
 # y se arregla en la PR #203; al fusionarla, esta linea se quita.
 arranques:FF-V-p1q1
+#
+# --- golden.txt ---
+#
+# La siembra del MA. Con MA y factores casi comunes (VARMA(1,1) y (2,1) de
+# IPC3, PSW y el traspaso del WTI; los simulados sobreajustados) no hay
+# maximo interior o hay varios: cada camino y cada arranque acaba en un
+# punto, casi siempre en el muro de invertibilidad. Ningun arranque del
+# motor siembra el MA. Es el banco de pruebas de la forma echelon.
+arranques:IPC3-U-p1q1
+arranques:IPC3-V-p1q1
+escalera:IPC3-p1q1
+arranques:IPC3-U-p2q1
+arranques:IPC3-V-p2q1
+escalera:IPC3-p2q1
+arranques:PSW-U-p1q1
+arranques:PSW-V-p1q1
+escalera:PSW-p1q1
+arranques:PSW-U-p2q1
+arranques:PSW-V-p2q1
+escalera:PSW-p2q1
+arranques:WTIES-U-p1q1
+arranques:WTIES-V-p1q1
+escalera:WTIES-p1q1
+arranques:Svarma11-U-p2q1
+arranques:Svarma11-V-p2q1
+escalera:Svarma11-p2q1
+# el VARMA(1,1) trivariante VERDADERO: cero converge al optimo y ols queda
+# 3,3 puntos por debajo, en el muro.
+arranques:S3varma11-U-p1q1
+arranques:S3varma11-V-p1q1
+escalera:S3varma11-p1q1
+#
+# La escala. Con la serie 2 por 1000 la escalera llega al optimo salvo en
+# milesimas (0,003) segun el arranque; el .inp original (obsoleto, sin las
+# Q_ii de la puerta) falla por cientos de puntos y no anida. Con la serie
+# por 100 el .inp queda a 0,004 de la escalera, sin certificar.
+arranques:Sx1000-V-p2q0
+escalera:Sx1000-p2q0
+arranques:Sx1000-U-p3q0
+escalera:Sx1000-p3q0
+original:Sx1000-p1q0
+anida:Sx1000-I-inp-p2
+anida:Sx1000-I-inp-p3
+original:Sx100-p1q0
+original:Sx100-p2q0
+original:Sx100-p3q0

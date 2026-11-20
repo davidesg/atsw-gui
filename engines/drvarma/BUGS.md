@@ -670,3 +670,55 @@ especificaciones de la ruta V del horno de gas, VAR(6)). Control: `-start
 zero`, logL −2638.762693. Sale con 1 mientras `-start ols` no llegue al
 mismo óptimo, con 0 cuando llegue y con 2 si el control no vale. Con el
 arreglo sale con 0: −2638.762693 desde los dos arranques, como el porte.
+
+## BUG-0007 — `-split -mean` siembra la media a cero, y con las series lejos de cero la escalera no llega al óptimo (ARREGLADO)
+
+**Encontrado:** 2026-11-20, en el estudio de las rutas U y V, al estimar el
+mismo VAR por el `.inp` original y por la escalera sobre los ficheros de
+`-split`.
+**Dónde:** `src/split.c`, `write_one()`: con `-mean` escribe
+`0.000000 1`, una media libre que arranca en cero.
+
+### Síntoma
+
+Un VAR(1) bivariante simulado con las series en torno a 100, en niveles
+(λ = 1, d = 0; con el factor 100, la serie estacionaria está en torno a
+10000):
+
+```
+el .inp original, NIVEL100 1 0 -mean          logL -3620.221
+la escalera sobre -split -mean -ar 1, 1 0     logL -3669.432
+```
+
+La puerta ajusta cada serie sola desde los valores del fichero. Con la media
+en 0 y el nivel en 10000, el optimizador no lleva la media hasta allí:
+absorbe el nivel con el AR propio (0,67 y 0,86, cerca de la raíz unitaria) y
+deja medias de −385 y +400. La puerta pasa —solo comprueba que el conjunto
+reproduce a los univariantes— y el VAR se estima sobre esa base.
+
+`init_varma`, el arranque del `.inp` original, siembra la media muestral. El
+mismo defecto y el mismo arreglo están en sima desde su entrada desde datos
+crudos (`raw._mean0`: «starting at 0 on a series in levels let the optimiser
+push the AR to a unit root to carry the level instead»).
+
+### Por qué importa
+
+`-split` es la migración del `.inp` multivariante a la escalera y la única
+forma de escribir en C las especificaciones de la ruta V. Sus ficheros dicen
+ser «el VARMA lleno del `.inp`», y con series en niveles no lo son. El porte
+(`drvarma.ladder.split`) escribe lo mismo.
+
+### Arreglo (2026-11-20)
+
+`-split -mean` escribe como semilla la media muestral de la serie
+estacionaria (`mean_seed` en `split.c`): la Box-Cox de fue por el factor, y
+las diferencias, como `init_varma` y como sima. Solo toca el escritor; el
+óptimo de los casos que ya llegaban no cambia (IPC3 VAR(1): el mismo bloque
+del modelo, byte a byte, que la vía `.inp`). El porte (`ladder.split`) se
+mueve en la rehomologación.
+
+### Reproducción
+
+`bugs/BUG-0007-repro/repro.py` (con `NIVEL100.inp`). Sale con 1 mientras la
+escalera quede por debajo del `.inp`, con 0 cuando coincidan y con 2 si el
+caso no vale. Con el arreglo sale con 0: −3620.221054 por los dos caminos.

@@ -141,6 +141,42 @@ static int cx_zma[ESC_MAXLAG + 1][ESC_MAX + 1][ESC_MAX + 1];
 static int free_ar(int k, int i, int j) { return linked(i, j) && !cx_zar[k][i][j]; }
 static int free_ma(int k, int i, int j) { return linked(i, j) && !cx_zma[k][i][j]; }
 
+/* ------------------------------------------------------------------------- */
+/*  LA FORMA ECHELON (-echelon n1,n2,...), Lutkepohl y Poskitt (1996)        */
+/*                                                                           */
+/*  La forma echelon invertida, A(B) w_t = M(B) a_t con M_0 = A_0 triangular */
+/*  inferior de diagonal unidad. Cada serie lleva su indice de Kronecker n_r */
+/*  y con ellos queda fijado que coeficientes existen (su tabla, 2.3):       */
+/*      n_rc = min(n_r + 1, n_c) si c < r,   min(n_r, n_c) si c >= r         */
+/*    lo propio de la fila r   AR(n_r) y MA(n_r)                             */
+/*    los AR cruzados r <- c   los retardos n_r - n_rc + 1 .. n_r            */
+/*    los MA cruzados r <- c   los retardos 1 .. n_r                         */
+/*    A_0, el termino contemporaneo r <- c   solo si c < r y n_c > n_r       */
+/*  El orden de las series es parte del modelo. Con los indices iguales no   */
+/*  se restringe nada y A_0 = I: es el VARMA(n,n) de la ruta V.              */
+/*                                                                           */
+/*  Va por la ruta V: los univariantes por la puerta, lo propio sustituido,  */
+/*  el factor de fila. A_0 se guarda como C_0 = I - A_0 (estrictamente       */
+/*  inferior), con el signo de Box y Jenkins: AR0[r<-c] = C_0[r][c]. elf     */
+/*  quiere la forma estandar: Phi_k = A_0^-1 Phi~_k, Theta_k = A_0^-1        */
+/*  Theta~_k. Es Ladder(echelon=n, own="free") del porte.                    */
+/* ------------------------------------------------------------------------- */
+static int  ech_on = 0;                      /* -echelon */
+static int  ech_n[ESC_MAX + 1];              /* los indices, por serie */
+static real cA0[ESC_MAX + 1][ESC_MAX + 1];   /* C_0 */
+
+static int ech_nrc(int r, int c)
+{
+    int a = (c < r) ? ech_n[r] + 1 : ech_n[r];
+    return a < ech_n[c] ? a : ech_n[c];
+}
+/* el termino contemporaneo i <- j: solo con estructura cruzada activa (en el
+   ajuste diagonal, la V sin cruzados, no hay A_0) */
+static int free_a0(int i, int j)
+{
+    return ech_on && (cx_p > 0 || cx_q > 0) && j < i && linked(i, j) && ech_n[j] > ech_n[i];
+}
+
 /* The free cross coefficients among the active series: (p + q) per linked
    pair, less the -zero ones. Without -zero, (cx_p + cx_q) times the linked
    ordered pairs among the active series, as before.                       */
@@ -155,6 +191,9 @@ static int n_cross_free(void)
         for (a = 1; a <= act_m; a++)
             for (b = 1; b <= act_m; b++)
                 if (a != b && free_ma(k, act[a], act[b])) n++;
+    for (a = 1; a <= act_m; a++)
+        for (b = 1; b <= act_m; b++)
+            if (a != b && free_a0(act[a], act[b])) n++;
     return n;
 }
 
@@ -364,6 +403,9 @@ static void esc_pack(real *x)
         for (a = 1; a <= act_m; a++)
             for (b = 1; b <= act_m; b++)
                 if (a != b && free_ma(k, act[a], act[b])) x[idx++] = cMA[k][act[a]][act[b]];
+    for (a = 1; a <= act_m; a++)
+        for (b = 1; b <= act_m; b++)
+            if (a != b && free_a0(act[a], act[b])) x[idx++] = cA0[act[a]][act[b]];
     for (a = 2; a <= act_m; a++) x[idx++] = lvar[act[a]];
     if (!cx_diagcov)
         for (a = 2; a <= act_m; a++)
@@ -389,6 +431,9 @@ static void esc_unpack(real *x)
         for (a = 1; a <= act_m; a++)
             for (b = 1; b <= act_m; b++)
                 if (a != b && free_ma(k, act[a], act[b])) cMA[k][act[a]][act[b]] = x[idx++];
+    for (a = 1; a <= act_m; a++)
+        for (b = 1; b <= act_m; b++)
+            if (a != b && free_a0(act[a], act[b])) cA0[act[a]][act[b]] = x[idx++];
     for (a = 2; a <= act_m; a++) lvar[act[a]] = x[idx++];
     if (!cx_diagcov)
         for (a = 2; a <= act_m; a++)
@@ -486,6 +531,10 @@ static void esc_names(char (*names)[ESC_NAMELEN])
                     i = act[a]; j = act[b];
                     snprintf(names[idx++], ESC_NAMELEN, "MA%d[%s<-%s]", k, Ts[i].name, Ts[j].name);
                 }
+    for (a = 1; a <= act_m; a++)
+        for (b = 1; b <= act_m; b++)
+            if (a != b && free_a0(act[a], act[b]))
+                snprintf(names[idx++], ESC_NAMELEN, "AR0[%s<-%s]", Ts[act[a]].name, Ts[act[b]].name);
     for (a = 2; a <= act_m; a++)
         snprintf(names[idx++], ESC_NAMELEN, "log(Q[%s]/Q[%s])", Ts[act[a]].name, Ts[act[1]].name);
     if (!cx_diagcov)
@@ -552,10 +601,12 @@ static void v_un_factor(int *Num, int **ord, real ***coef, int ***flag, int k, c
 
 /* La sustitucion. Lo propio arranca en los polinomios regulares del
    univariante si caben en p (en q); si no, en cero.                         */
-static void v_sustituye(int p, int q)
+static void v_sustituye(int pc, int qc)
 {
     int i, k;
     for (i = 1; i <= n_ser; i++) {
+        /* los ordenes propios: los del vector, o el indice de la fila */
+        int p = ech_on ? ech_n[i] : pc, q = ech_on ? ech_n[i] : qc;
         struct Tusmodel R = v_parte(i, 1), F = v_parte(i, 0);
         int   da = total_ar_order(&R), dm = total_ma_order(&R);
         real *ca = vector(0, p > da ? p : da), *cm = vector(0, q > dm ? q : dm);
@@ -581,7 +632,7 @@ static void v_sustituye(int p, int q)
 /* La fila a de un polinomio matricial C(B) = I - SUM c_k B^k (k = 1..K, en
    la convencion de elf) por su factor escalar F(B) = 1 - SUM f_j B^j
    (j = 1..d). El resultado, en la misma convencion, ocupa hasta K + d.      */
-static void v_fila_por_factor(real ***c, int a, int m, int K, const real *f, int d)
+static void v_fila_por_factor(real ***c, int a, int m, int K, const real *f, int d, const real *c0)
 {
     int  l, j, b;
     real **n = matrix(1, K + d, 1, m);
@@ -590,7 +641,9 @@ static void v_fila_por_factor(real ***c, int a, int m, int K, const real *f, int
             real s = (l <= K) ? c[l][a][b] : 0.0;
             for (j = 1; j <= d && j <= l; j++) {
                 int  r = l - j;                    /* el retardo de C que toca */
-                real cr = (r == 0) ? (a == b ? 1.0 : 0.0) : (r <= K ? -c[r][a][b] : 0.0);
+                /* el retardo 0 de la fila es el de A_0: e_a - C_0[a] */
+                real cr = (r == 0) ? ((a == b ? 1.0 : 0.0) - (c0 ? c0[b] : 0.0))
+                                   : (r <= K ? -c[r][a][b] : 0.0);
                 s += f[j] * cr;
             }
             n[l][b] = s;
@@ -619,6 +672,7 @@ static void orders(int *P, int *Q)
 static void shootx_esc(real *x, struct Tvarma *armax, int *ifaultx, int firstx, int lastx)
 {
     int m = act_m, P, Q, a, b, k, t;
+    real c0[ESC_MAX + 1][ESC_MAX + 1];           /* C_0 de las series activas */
 
     *ifaultx = 0;
     orders(&P, &Q);
@@ -691,6 +745,13 @@ static void shootx_esc(real *x, struct Tvarma *armax, int *ifaultx, int firstx, 
             for (b = 1; b <= m; b++)
                 if (a != b && free_ma(k, act[a], act[b])) armax->theta[k][a][b] = cMA[k][act[a]][act[b]];
 
+    /* La forma echelon: C_0 de las series activas (0 si no hay A_0). */
+    if (ech_on)
+        for (a = 1; a <= m; a++) {
+            c0[a][0] = 0.0;
+            for (b = 1; b <= m; b++)
+                c0[a][b] = free_a0(act[a], act[b]) ? cA0[act[a]][act[b]] : 0.0;
+        }
     /* La ruta V: cada fila por su factor (lo anual y lo de frecuencia fija
        del univariante).                                                    */
     if (v_on)
@@ -701,17 +762,31 @@ static void shootx_esc(real *x, struct Tvarma *armax, int *ifaultx, int firstx, 
                 real *f = vector(1, v_fac_ar[i]);
                 expand_ar_factors(&M, f, v_fac_ar[i]);
                 v_fila_por_factor(armax->phi, a, m, v_reg_ar[i] > cx_p ? v_reg_ar[i] : cx_p,
-                                  f, v_fac_ar[i]);
+                                  f, v_fac_ar[i], ech_on ? c0[a] : NULL);
                 free_vector(f, 1, v_fac_ar[i]);
             }
             if (v_fac_ma[i] > 0) {
                 real *g = vector(1, v_fac_ma[i]);
                 expand_ma_factors(&M, g, v_fac_ma[i]);
                 v_fila_por_factor(armax->theta, a, m, v_reg_ma[i] > cx_q ? v_reg_ma[i] : cx_q,
-                                  g, v_fac_ma[i]);
+                                  g, v_fac_ma[i], ech_on ? c0[a] : NULL);
                 free_vector(g, 1, v_fac_ma[i]);
             }
         }
+
+    /* La forma echelon: a la forma estandar, Phi_k = A_0^-1 Phi~_k y
+       Theta_k = A_0^-1 Theta~_k. A_0 = I - C_0 es triangular de diagonal
+       unidad: fila a fila, X[a] = X~[a] + SUM_{b<a} C_0[a][b] X[b].        */
+    if (ech_on)
+        for (a = 2; a <= m; a++)
+            for (b = 1; b < a; b++) {
+                int c;
+                if (c0[a][b] == 0.0) continue;
+                for (k = 1; k <= P; k++)
+                    for (c = 1; c <= m; c++) armax->phi[k][a][c] += c0[a][b] * armax->phi[k][b][c];
+                for (k = 1; k <= Q; k++)
+                    for (c = 1; c <= m; c++) armax->theta[k][a][c] += c0[a][b] * armax->theta[k][b][c];
+            }
 
     /* Q, normalizada con Q_11 = 1: est() concentra sigma2, y Q -> cQ es una
        direccion exactamente plana (Mauricio 1995, ec. 2.1).               */
@@ -978,8 +1053,8 @@ static void start_ols_v(void)
     /* lo propio como esta (el optimo de la V sin cruzados), por si hay que volver */
     ar0 = matrix(1, m, 0, p);  ma0 = matrix(1, m, 0, q > 0 ? q : 1);
     for (a = 1; a <= m; a++) {
-        for (k = 1; k <= p; k++) ar0[a][k] = Tm[act[a]].Ar1[1][k];
-        for (k = 1; k <= q; k++) ma0[a][k] = Tm[act[a]].Ma1[1][k];
+        for (k = 1; k <= v_reg_ar[act[a]]; k++) ar0[a][k] = Tm[act[a]].Ar1[1][k];
+        for (k = 1; k <= v_reg_ma[act[a]]; k++) ma0[a][k] = Tm[act[a]].Ma1[1][k];
     }
     mean = vector(1, m);
     for (a = 1; a <= m; a++) {
@@ -1031,10 +1106,10 @@ static void start_ols_v(void)
         for (k = 1; k <= p; k++)
             for (b = 1; b <= m; b++) {
                 real c = rhs[(k - 1) * m + b];
-                if (b == a) Tm[act[a]].Ar1[1][k] = c;
+                if (b == a) { if (k <= v_reg_ar[act[a]]) Tm[act[a]].Ar1[1][k] = c; }
                 else if (free_ar(k, act[a], act[b])) cAR[k][act[a]][act[b]] = c;
             }
-        for (k = 1; k <= q; k++) Tm[act[a]].Ma1[1][k] = 0.0;
+        for (k = 1; k <= v_reg_ma[act[a]]; k++) Tm[act[a]].Ma1[1][k] = 0.0;
     }
     S = matrix(1, m, 1, m);
     for (a = 1; a <= m; a++)
@@ -1055,8 +1130,8 @@ static void start_ols_v(void)
     fit_free(&chk);                 /* antes de reponer (BUG-0006) */
     if (rechazado) {
         for (a = 1; a <= m; a++) {
-            for (k = 1; k <= p; k++) Tm[act[a]].Ar1[1][k] = ar0[a][k];
-            for (k = 1; k <= q; k++) Tm[act[a]].Ma1[1][k] = ma0[a][k];
+            for (k = 1; k <= v_reg_ar[act[a]]; k++) Tm[act[a]].Ar1[1][k] = ar0[a][k];
+            for (k = 1; k <= v_reg_ma[act[a]]; k++) Tm[act[a]].Ma1[1][k] = ma0[a][k];
         }
         for (k = 0; k <= ESC_MAXLAG; k++)
             for (a = 0; a <= ESC_MAX; a++)
@@ -2185,7 +2260,7 @@ void escalera_usage(const char *prog)
     printf("       %s A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]\n", prog);
     printf("                                  [-m method] [-o NAME] [-forecast H [-estwin N]]\n");
     printf("                                  [-irfboot N] [-det LIST] [-detbase file|gate]\n");
-    printf("                                  [-route u|v] [-factortest]\n");
+    printf("                                  [-route u|v] [-factortest] [-echelon n1,n2,...]\n");
     printf("                                  [-hessian fd|bfgs] [-lik elf|shea|both]\n");
     printf("                                  [-links \"A<-B,C<-A\"] [-zero \"AR1[A<-B],...\"]\n");
     printf("                                  [-start zero|ols]\n");
@@ -2200,6 +2275,11 @@ void escalera_usage(const char *prog)
            "             AR(p)/MA(q) -- the whole VARMA(p,q) matrix is free -- and its\n"
            "             seasonal and fixed-frequency factors multiply its row. The LR\n"
            "             is then against the same model without cross terms\n");
+    printf("  -echelon : the echelon form (Lutkepohl and Poskitt), on route V: one\n"
+           "             Kronecker index per series, in the order of the files. Row r\n"
+           "             has its own AR(n_r)/MA(n_r); the indices say which cross lags\n"
+           "             and which contemporaneous terms (AR0[r<-c]) exist. Equal\n"
+           "             indices are the VARMA(n,n). Give 0 0 as cross orders\n");
     printf("  -factortest : on route V, the LR of the row factor: the fitted model\n"
            "             against the same rows with every position the factor reaches\n"
            "             free (Tiao and Box's caveat on univariate operators)\n");
@@ -2256,7 +2336,7 @@ int escalera_main(int argc, char *argv[])
     char  outname[512] = "", outfile[520], why[600];
     int   irfboot_n = 0;
     const char *links_arg = NULL;
-    const char *zero_arg = NULL;
+    const char *zero_arg = NULL, *ech_arg = NULL;
     int   i, a, argi, met_esc = 1, p, q, rc = 0, fc_h = 0, estwin = 0;
     real  logL_uni[ESC_MAX + 1], s2_uni[ESC_MAX + 1], move[ESC_MAX + 1];
     real  sum_uni = 0.0, logL_gate, logL_diag;
@@ -2293,7 +2373,8 @@ int escalera_main(int argc, char *argv[])
         return 1;
     }
     cx_diagcov = 0; opt_fixarma = 0; det_lista[0] = 0; det_base = 0; det_etapa = 1;
-    opt_route_v = 0; v_on = 0; opt_factortest = 0;
+    opt_route_v = 0; v_on = 0; opt_factortest = 0; ech_on = 0; ech_arg = NULL;
+    memset(cA0, 0, sizeof cA0);
     est_fdhess = 1;          /* standard errors from the Hessian AT the optimum */
     for (argi += 2; argi < argc; argi++) {
         if      (strcmp(argv[argi], "-diagcov") == 0) cx_diagcov = 1;
@@ -2305,6 +2386,9 @@ int escalera_main(int argc, char *argv[])
             det_base = strcmp(argv[++argi], "gate") == 0 ? 2 : 1;
         else if (strcmp(argv[argi], "-fixarma") == 0) opt_fixarma = 1;
         else if (strcmp(argv[argi], "-factortest") == 0) opt_factortest = 1;
+        else if (strcmp(argv[argi], "-echelon") == 0 && argi + 1 < argc) {
+            ech_arg = argv[++argi];  opt_route_v = 1;      /* la echelon va por la ruta V */
+        }
         else if (strcmp(argv[argi], "-route") == 0 && argi + 1 < argc &&
                  (strcmp(argv[argi + 1], "u") == 0 || strcmp(argv[argi + 1], "v") == 0))
             opt_route_v = (strcmp(argv[++argi], "v") == 0);
@@ -2354,7 +2438,7 @@ int escalera_main(int argc, char *argv[])
         printf("ERROR: -factortest is route V's (-route v): it tests the row factor.\n");
         return 1;
     }
-    if (opt_route_v && p == 0 && q == 0) {
+    if (opt_route_v && !ech_arg && p == 0 && q == 0) {
         printf("ERROR: -route v needs p or q above zero: it is the full VARMA(p,q).\n");
         return 1;
     }
@@ -2435,6 +2519,41 @@ int escalera_main(int argc, char *argv[])
     /* -zero, resolved against the names of the .pre files: each coefficient
        has to exist in the model asked for (its lag within p or q, its pair
        linked), or it is an error -- never a restriction ignored in silence. */
+    /* -echelon n1,n2,...: un indice por serie, en el orden de los ficheros.
+       Los ordenes cruzados son el mayor de ellos (p y q se dan 0 0, o ese). */
+    if (ech_arg) {
+        char buf[256], *tok, *save = NULL;
+        int  nn = 0, nmax = 0;
+        snprintf(buf, sizeof buf, "%s", ech_arg);
+        for (tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+            char *fin;
+            long v = strtol(tok, &fin, 10);
+            while (*fin == ' ') fin++;
+            if (*fin || v < 0 || v > ESC_MAXLAG || nn >= n_ser) { nn = -1; break; }
+            ech_n[++nn] = (int)v;
+            if ((int)v > nmax) nmax = (int)v;
+        }
+        if (nn != n_ser) {
+            printf("ERROR: -echelon: give %d Kronecker indices between 0 and %d, one per\n"
+                   "       series in the order of the files, separated by commas\n", n_ser, ESC_MAXLAG);
+            return 1;
+        }
+        if (!((p == 0 && q == 0) || (p == nmax && q == nmax))) {
+            printf("ERROR: -echelon: the cross orders are the largest index, %d: give 0 0\n", nmax);
+            return 1;
+        }
+        if (opt_factortest) {
+            int igual = 1;
+            for (i = 2; i <= n_ser; i++) if (ech_n[i] != ech_n[1]) igual = 0;
+            if (!igual) {
+                printf("ERROR: -factortest with unequal Kronecker indices is not available yet\n");
+                return 1;
+            }
+        }
+        p = q = nmax;
+        ech_on = 1;
+    }
+
     opt_zero = 0;
     memset(cx_zar, 0, sizeof cx_zar);
     memset(cx_zma, 0, sizeof cx_zma);
@@ -2476,6 +2595,21 @@ int escalera_main(int argc, char *argv[])
             else                          cx_zma[k][ti][tj] = 1;
         }
         opt_zero = 1;
+    }
+
+    /* La forma echelon: su tabla de indices sobre la mascara de los ceros.
+       Los AR cruzados i <- j, solo en n_i - n_ij + 1 .. n_i; los MA, en
+       1 .. n_i.                                                            */
+    if (ech_on) {
+        int k, j;
+        for (i = 1; i <= n_ser; i++)
+            for (j = 1; j <= n_ser; j++) {
+                if (i == j) continue;
+                for (k = 1; k <= ESC_MAXLAG; k++) {
+                    if (k < ech_n[i] - ech_nrc(i, j) + 1 || k > ech_n[i]) cx_zar[k][i][j] = 1;
+                    if (k > ech_n[i]) cx_zma[k][i][j] = 1;
+                }
+            }
     }
 
     /* -estwin N: the parameters are estimated on the first N observations of
@@ -2525,7 +2659,12 @@ int escalera_main(int argc, char *argv[])
             FILE *f = i ? outputv : stdout;
             fprintf(f, "Program          : drvarma %s (ladder mode: .pre input)\n", DRVARMA_VERSION_FULL);
             fprintf(f, "Output File      : %s\n", outfile);
-            if (opt_route_v)
+            if (ech_on) {
+                int k3;
+                fprintf(f, "Model            : echelon form, Kronecker indices");
+                for (k3 = 1; k3 <= n_ser; k3++) fprintf(f, "%s%d", k3 > 1 ? "," : " ", ech_n[k3]);
+                fprintf(f, " (route V; the univariates' seasonal factors on the rows)\n");
+            } else if (opt_route_v)
                 fprintf(f, "Model            : VARMA(%d,%d), route V: the whole matrix free, the "
                            "univariates' seasonal factors on the rows\n", p, q);
             else
@@ -2716,22 +2855,33 @@ int escalera_main(int argc, char *argv[])
         for (i = 0; i < 2; i++) {
             FILE *f = i ? outputv : stdout;
             fprintf(f, "=============================================================\n");
+            if (ech_on) {
+                fprintf(f, "  THE ECHELON FORM (route V), Kronecker indices");
+                for (k2 = 1; k2 <= n_ser; k2++) fprintf(f, "%s%d", k2 > 1 ? "," : " ", ech_n[k2]);
+                fprintf(f, "\n  Past the gate, each series' regular ARMA is replaced by a free\n");
+                fprintf(f, "  AR(n)/MA(n), n its index; the indices say which cross terms\n");
+                fprintf(f, "  exist. Its seasonal and fixed-frequency factors multiply its\n");
+                fprintf(f, "  whole row. The order of the series is part of the model.\n");
+            } else {
             fprintf(f, "  ROUTE V: THE VECTOR FIRST\n");
             fprintf(f, "  Past the gate, each series' regular ARMA is replaced by a free\n");
             fprintf(f, "  AR(%d)/MA(%d), the vector's. Its seasonal and fixed-frequency\n", p, q);
             fprintf(f, "  factors multiply its whole row, cross terms included.\n");
+            }
             fprintf(f, "=============================================================\n");
             fprintf(f, "  %-14s %22s %22s\n", "series", "univariate, regular", "row factor (degrees)");
             for (k2 = 1; k2 <= n_ser; k2++)
                 fprintf(f, "  %-14s          AR(%d) MA(%d)           AR %d  MA %d\n", Ts[k2].name,
                         v_uni_ar[k2], v_uni_ma[k2], v_fac_ar[k2], v_fac_ma[k2]);
             for (k2 = 1; k2 <= n_ser; k2++) {
-                if (v_uni_ar[k2] > p)
+                if (v_uni_ar[k2] > v_reg_ar[k2])
                     fprintf(f, "  Note: %s's univariate model has a regular AR(%d): this model,\n"
-                               "        with p = %d, does not contain it.\n", Ts[k2].name, v_uni_ar[k2], p);
-                if (v_uni_ma[k2] > q)
+                               "        with %s = %d, does not contain it.\n", Ts[k2].name, v_uni_ar[k2],
+                            ech_on ? "its index" : "p", v_reg_ar[k2]);
+                if (v_uni_ma[k2] > v_reg_ma[k2])
                     fprintf(f, "  Note: %s's univariate model has a regular MA(%d): this model,\n"
-                               "        with q = %d, does not contain it.\n", Ts[k2].name, v_uni_ma[k2], q);
+                               "        with %s = %d, does not contain it.\n", Ts[k2].name, v_uni_ma[k2],
+                            ech_on ? "its index" : "q", v_reg_ma[k2]);
             }
             fprintf(f, "\n");
         }

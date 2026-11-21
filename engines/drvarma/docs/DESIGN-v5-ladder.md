@@ -188,6 +188,33 @@ what the own part is and how it is seeded:
 - Homologated with the port on the VARMA(1,1) of IPI and WTI:
   `Ladder(echelon=(1,1), own="free")`, logL −924.846133.
 
+**The echelon form (`-echelon n1,n2,…`).** A VARMA with an MA is not
+identified without restrictions, and from any start it tends to end on the
+MA wall (`tests/rutas`, the open cases). Lütkepohl and Poskitt's echelon form
+is the identified one: each series has a Kronecker index n_r, and the indices
+fix which coefficients exist. It runs on route V:
+- row r's own part is a free AR(n_r)/MA(n_r) (the substitution, with the
+  row's order);
+- the cross AR r ← c exists at lags n_r − n_rc + 1 … n_r, with
+  n_rc = min(n_r + 1, n_c) for c < r and min(n_r, n_c) otherwise; the cross
+  MA at 1 … n_r. They are set on the mask of `-zero`;
+- A₀ is lower triangular with unit diagonal: a contemporaneous term r ← c
+  only for c < r and n_c > n_r. It is kept as C₀ = I − A₀, with Box and
+  Jenkins' sign (`AR0[r<-c]`), and the cast goes to the standard form,
+  Φ_k = A₀⁻¹Φ̃_k and Θ_k = A₀⁻¹Θ̃_k, after the row factors (whose lag 0 is
+  A₀'s row);
+- the order of the series is part of the model;
+- with equal indices nothing is restricted and A₀ = I: it is the VARMA(n,n)
+  of `-route v`.
+
+Homologated with the port, `Ladder(echelon=n, own="free", start="zero")`, in
+every case both certify: IPC and WTI at (1,0), (1,1), (2,1) and (1,2);
+muskrat and mink at (1,0); IPI, IPC and WTI, with IPI's row factor, at
+(0,1,1). The parameter counts and the model without cross terms agree in
+every case tried. Where neither certifies (indices larger than the data
+ask for) the two stop at different points. The index search and the stage II
+start come next.
+
 The diagonal system is then optimised. On route V it is the model without
 cross terms, the base of its LR. It is the seed of the full model: the
 own models start there, and they are re-estimated jointly unless

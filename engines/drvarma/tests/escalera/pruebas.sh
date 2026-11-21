@@ -624,6 +624,47 @@ cerca "echelon (0,1,1), IPI, IPC y WTI, con factor de fila: el logL del porte" \
 [ $? -ne 0 ] && bien "-factortest con indices desiguales: todavia no, y lo dice" \
     || falla "-factortest con indices desiguales pasa"
 
+# 10i. -echelon search: la busqueda de los indices de Kronecker (etapas I y
+#     II de Lutkepohl y Poskitt). Los numeros son los de echelon.search del
+#     porte (search_row_factors, una pasada): la tabla entera coincide a seis
+#     decimales en los seis casos comparados. Aqui se fijan los indices
+#     elegidos y las filas bien condicionadas.
+elig() { sed -n 's/^  Chosen by [A-Z]*: \([0-9,]*\) .*/\1/p' "$1" | head -1; }
+otro() { sed -n 's/^  Chosen by .*(by [A-Z]*: \([0-9,]*\)).*/\1/p' "$1" | head -1; }
+fila() { awk -v n="$2" '$1 == n && NF >= 5 {print $2, $3; exit}' "$1"; }
+ncan() { sed -n 's/.* \([0-9]*\) candidates\..*/\1/p' "$1" | head -1; }
+"$BIN" "$EI" "$EW" 0 0 -echelon search -o "$TMP/s1" > /dev/null 2>&1
+[ "$(elig "$TMP/s1.out")" = "1,0" ] && [ "$(otro "$TMP/s1.out")" = "1,1" ] && [ "$(ncan "$TMP/s1.out")" = 16 ] \
+    && bien "echelon search, IPC y WTI: 16 candidatos, (1,0) por SC y (1,1) por HQ, como el porte" \
+    || falla "echelon search, IPC y WTI: $(elig "$TMP/s1.out") / $(otro "$TMP/s1.out"), $(ncan "$TMP/s1.out") candidatos"
+set -- $(fila "$TMP/s1.out" 1,0)
+[ "${1:-}" = 4 ] && bien "echelon search: (1,0) tiene 4 coeficientes" || falla "echelon search: dim de (1,0) ${1:-?}"
+cerca "echelon search: log|S| de (1,0), el del porte" 0.282751 "${2:-nan}" 1e-5
+set -- $(fila "$TMP/s1.out" 1,1)
+cerca "echelon search: log|S| de (1,1), el del porte" 0.202069 "${2:-nan}" 1e-5
+grep -q "long VAR(1) by least squares" "$TMP/s1.out" && ! grep -q "ESTIMATED MODEL" "$TMP/s1.out" \
+    && bien "echelon search: VAR(1) en la etapa I; da la tabla y no estima por MV" \
+    || falla "echelon search: la salida no es solo la tabla"
+"$BIN" ../../lib/outvarma/datos/MUSKRAT_m03.pre ../../lib/outvarma/datos/MINK_m02.pre 0 0 -echelon search -o "$TMP/s2" > /dev/null 2>&1
+[ "$(elig "$TMP/s2.out")" = "3,1" ] && bien "echelon search, almizclero y vison: (3,1), como el porte" \
+    || falla "echelon search, almizclero y vison: $(elig "$TMP/s2.out")"
+"$BIN" "$MON/IPI_m07.pre" "$EI" "$EW" 0 0 -echelon search -o "$TMP/s3" > /dev/null 2>&1
+[ "$(elig "$TMP/s3.out")" = "0,1,0" ] && [ "$(ncan "$TMP/s3.out")" = 64 ] && grep -q "filtered by its row factor" "$TMP/s3.out" \
+    && bien "echelon search con factor de fila (IPI, IPC, WTI): 64 candidatos, (0,1,0), como el porte" \
+    || falla "echelon search con factor de fila: $(elig "$TMP/s3.out"), $(ncan "$TMP/s3.out") candidatos"
+"$BIN" "$MON/IPI_m07.pre" "$EW" 0 0 -echelon search -nmax 2 -criterion HQ -o "$TMP/s4" > /dev/null 2>&1
+[ "$(elig "$TMP/s4.out")" = "2,0" ] && [ "$(ncan "$TMP/s4.out")" = 9 ] \
+    && bien "echelon search -nmax 2 -criterion HQ (IPI, WTI): 9 candidatos, (2,0), como el porte" \
+    || falla "echelon search HQ: $(elig "$TMP/s4.out")"
+# mas de 256 candidatos: los dos pasos de Hannan y Kavalieris
+"$BIN" "$MON/IPI_m07.pre" "$EI" "$EW" "$MON/FF_m03.pre" 0 0 -echelon search -nmax 4 -o "$TMP/s5" > /dev/null 2>&1
+[ "$(elig "$TMP/s5.out")" = "0,0,0,1" ] && [ "$(ncan "$TMP/s5.out")" = 8 ] && grep -q "Hannan and Kavalieris' two steps" "$TMP/s5.out" \
+    && bien "echelon search, cuatro series y -nmax 4: los dos pasos, 8 candidatos, (0,0,0,1), como el porte" \
+    || falla "echelon search en dos pasos: $(elig "$TMP/s5.out"), $(ncan "$TMP/s5.out") candidatos"
+"$BIN" "$EI" "$EW" 1 0 -echelon search -o "$TMP/sx" > "$TMP/sx.log" 2>&1
+[ $? -ne 0 ] && bien "-echelon search con ordenes cruzados distintos de 0 0 es un error" \
+    || falla "-echelon search acepta p = 1"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

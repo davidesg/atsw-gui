@@ -20,8 +20,15 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
   decimals wherever both certify the optimum: IPC and WTI at (1,0), (1,1),
   (2,1), (1,2); muskrat and mink at (1,0); IPI, IPC and WTI at (0,1,1), with
   a row factor.
-- Not yet: the index search, the stage II start, and `-factortest` with
-  unequal indices.
+- **`-echelon search`**: the Kronecker indices from the data, Lütkepohl and
+  Poskitt's stages I and II (a long VAR, then least squares per candidate
+  with one round of Hannan and Kavalieris' correction, and SC or HQ). It
+  gives the table and stops. The port's `echelon.search`, homologated on six
+  cases: the same candidates and choice and every number to six decimals.
+  The least squares are solved by singular values, as numpy's `lstsq`: the
+  normal equations gave other coefficients in the over-parameterised
+  candidates.
+- Not yet: the stage II start, and `-factortest` with unequal indices.
 
 ### Added — `-route v`: the vector first, through the gate
 

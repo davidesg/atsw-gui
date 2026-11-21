@@ -1080,6 +1080,172 @@ static void start_ols_v(void)
     free_matrix(ar0, 1, m, 0, p);
 }
 
+/* ------------------------------------------------------------------------- */
+/*  -factortest: EL CONTRASTE DEL FACTOR DE FILA (ruta V)                    */
+/*                                                                           */
+/*  Multiplicar la fila por los factores anuales y de frecuencia fija del    */
+/*  univariante es una RESTRICCION: es la salvedad de Tiao y Box a mezclar   */
+/*  operadores univariantes con el modelo conjunto. Se contrasta por LR      */
+/*  contra las mismas filas con la restriccion quitada: toda posicion que el */
+/*  producto F_a(B)[Phi(B)]_a (y G_a(B)[Theta(B)]_a) alcanza, propia y       */
+/*  cruzada, libre. La alternativa arranca en la expansion del optimo, donde */
+/*  su verosimilitud es la misma, asi que el LR es >= 0 por construccion.    */
+/*  Es factor_test() del porte (drvarma-python, la forma echelon).           */
+/*                                                                           */
+/*  Reescribe la estructura del modelo (lo propio pasa a ser un operador     */
+/*  regular con huecos, los cruzados ganan retardos): por eso va lo ultimo.  */
+/* ------------------------------------------------------------------------- */
+static int    opt_factortest = 0;
+static const char *fault_msg(int ifault);
+static real ***ft_phi = NULL, ***ft_th = NULL;
+static int    ft_P, ft_Q, ft_npar;
+static real   ft_logL;
+
+/* los retardos donde el factor (AR si ar, MA si no) de la serie i puede no
+   ser cero, el 0 incluido; s[0..ESC_MAXLAG] */
+static void ft_soporte(int i, int ar, unsigned char *s)
+{
+    struct Tusmodel *M = &Tm[i];
+    unsigned char n[ESC_MAXLAG + 1];
+    int f, j, l, nf = ar ? M->NumAr2 : M->NumMa2, *ord = ar ? M->p2 : M->q2;
+    int nff = ar ? M->NumAr1f : M->NumMa1f;
+    memset(s, 0, ESC_MAXLAG + 1);  s[0] = 1;
+    for (f = 1; f <= nf; f++) {                   /* anuales: multiplos del periodo */
+        memset(n, 0, sizeof n);
+        for (l = 0; l <= ESC_MAXLAG; l++)
+            if (s[l])
+                for (j = 0; j <= ord[f]; j++)
+                    if (l + j * M->sper <= ESC_MAXLAG) n[l + j * M->sper] = 1;
+        memcpy(s, n, sizeof n);
+    }
+    for (f = 1; f <= nff; f++) {                  /* frecuencia fija: grado 2 */
+        memset(n, 0, sizeof n);
+        for (l = 0; l <= ESC_MAXLAG; l++)
+            if (s[l])
+                for (j = 0; j <= 2; j++)
+                    if (l + j <= ESC_MAXLAG) n[l + j] = 1;
+        memcpy(s, n, sizeof n);
+    }
+}
+
+static void v_factor_test(FILE *out, int p, int q)
+{
+    static unsigned char sA[ESC_MAX + 1][ESC_MAXLAG + 1], sM[ESC_MAX + 1][ESC_MAXLAG + 1];
+    static unsigned char oA[ESC_MAXLAG + 1][ESC_MAX + 1][ESC_MAX + 1], oM[ESC_MAXLAG + 1][ESC_MAX + 1][ESC_MAX + 1];
+    int  m = n_ser, i, j, k, l, jj, dA = 0, dM = 0, hay = 0, f;
+    Fit  A;
+    real logL0, logL1, lr, pv;
+    int  np1, df;
+
+    for (i = 1; i <= m; i++) {
+        if (v_fac_ar[i] > dA) dA = v_fac_ar[i];
+        if (v_fac_ma[i] > dM) dM = v_fac_ma[i];
+        if (v_fac_ar[i] > 0 || v_fac_ma[i] > 0) hay = 1;
+    }
+    for (f = 0; f < 2; f++) {
+        FILE *o = f ? out : stdout;
+        fprintf(o, "\n=============================================================\n");
+        fprintf(o, "  THE ROW FACTOR (-factortest)\n");
+        fprintf(o, "=============================================================\n");
+        if (!hay)
+            fprintf(o, "  No series has seasonal or fixed-frequency factors: there is no\n"
+                       "  row factor to test.\n");
+        else if (p + dA > ESC_MAXLAG || q + dM > ESC_MAXLAG)
+            fprintf(o, "  Not available: the rows without the factor need cross lags up to\n"
+                       "  %d, beyond the engine's %d.\n", p + dA > q + dM ? p + dA : q + dM, ESC_MAXLAG);
+    }
+    if (!hay || p + dA > ESC_MAXLAG || q + dM > ESC_MAXLAG) return;
+
+    for (i = 1; i <= m; i++) { ft_soporte(i, 1, sA[i]); ft_soporte(i, 0, sM[i]); }
+    for (k = 0; k <= ESC_MAXLAG; k++)
+        for (i = 1; i <= m; i++)
+            for (j = 1; j <= m; j++) {
+                oA[k][i][j] = (unsigned char)(k >= 1 && k <= p && i != j && free_ar(k, i, j));
+                oM[k][i][j] = (unsigned char)(k >= 1 && k <= q && i != j && free_ma(k, i, j));
+            }
+    /* lo propio: un operador regular con los retardos que el producto alcanza */
+    for (i = 1; i <= m; i++) {
+        int   DA = v_reg_ar[i] + v_fac_ar[i], DM = v_reg_ma[i] + v_fac_ma[i];
+        real *ca = vector(0, DA > 0 ? DA : 1), *cm = vector(0, DM > 0 ? DM : 1);
+        for (l = 1; l <= DA; l++) ca[l] = (l <= ft_P) ? ft_phi[l][i][i] : 0.0;
+        for (l = 1; l <= DM; l++) cm[l] = (l <= ft_Q) ? ft_th[l][i][i]  : 0.0;
+        Tm[i].NumAr2 = Tm[i].NumMa2 = 0;  Tm[i].NumAr1f = Tm[i].NumMa1f = 0;
+        v_un_factor(&Tm[i].NumAr1, &Tm[i].p1, &Tm[i].Ar1, &Tm[i].Ia1, DA, ca);
+        v_un_factor(&Tm[i].NumMa1, &Tm[i].q1, &Tm[i].Ma1, &Tm[i].Im1, DM, cm);
+        for (l = 1; l <= DA; l++) {
+            int libre = 0;
+            for (jj = 0; jj <= l && jj <= ESC_MAXLAG; jj++)
+                if (sA[i][jj] && l - jj <= v_reg_ar[i]) libre = 1;
+            if (!libre) { Tm[i].Ia1[1][l] = 0; Tm[i].Ar1[1][l] = 0.0; }
+        }
+        for (l = 1; l <= DM; l++) {
+            int libre = 0;
+            for (jj = 0; jj <= l && jj <= ESC_MAXLAG; jj++)
+                if (sM[i][jj] && l - jj <= v_reg_ma[i]) libre = 1;
+            if (!libre) { Tm[i].Im1[1][l] = 0; Tm[i].Ma1[1][l] = 0.0; }
+        }
+        ar_deg[i] = total_ar_order(&Tm[i]);
+        ma_deg[i] = total_ma_order(&Tm[i]);
+        free_vector(cm, 0, DM > 0 ? DM : 1);  free_vector(ca, 0, DA > 0 ? DA : 1);
+    }
+    /* los cruzados: el retardo l de la fila i es libre si l = k + jj, con k un
+       retardo libre del modelo y jj un retardo del factor de la fila */
+    for (l = 1; l <= ESC_MAXLAG; l++)
+        for (i = 1; i <= m; i++)
+            for (j = 1; j <= m; j++) {
+                int la = 0, lm = 0;
+                if (i == j) continue;
+                for (jj = 0; jj < l; jj++) {
+                    if (sA[i][jj] && oA[l - jj][i][j]) la = 1;
+                    if (sM[i][jj] && oM[l - jj][i][j]) lm = 1;
+                }
+                cx_zar[l][i][j] = !la;  cx_zma[l][i][j] = !lm;
+                cAR[l][i][j] = (la && l <= ft_P) ? ft_phi[l][i][j] : 0.0;
+                cMA[l][i][j] = (lm && l <= ft_Q) ? ft_th[l][i][j]  : 0.0;
+            }
+    v_on = 0;
+    cx_p = p + dA;  cx_q = q + dM;
+
+    quiet_mode = 1;
+    fit_run(&A, 0);                              /* el mismo punto, sin el factor */
+    logL0 = A.logL;  np1 = A.npar;
+    i = A.ifault;
+    fit_free(&A);
+    if (i || fabs(logL0 - ft_logL) > 1.0e-6 * (1.0 + fabs(ft_logL))) {
+        for (f = 0; f < 2; f++)
+            fprintf(f ? out : stdout,
+                    "  The rows without the factor do not reproduce the fitted model at its\n"
+                    "  optimum (logL %.6f against %.6f%s): the test is not reported.\n",
+                    logL0, ft_logL, i ? "; the point was rejected" : "");
+        return;
+    }
+    fit_run(&A, 1);
+    if (A.ifault) {
+        for (f = 0; f < 2; f++)
+            fprintf(f ? out : stdout, "  The estimation without the factor failed: %s.\n", fault_msg(A.ifault));
+        fit_free(&A);
+        return;
+    }
+    logL1 = A.logL;
+    df = np1 - ft_npar;
+    lr = 2.0 * (logL1 - ft_logL);
+    pv = df > 0 ? 1.0 - chisq(lr > 0.0 ? lr : 0.0, df) : 1.0;
+    for (f = 0; f < 2; f++) {
+        FILE *o = f ? out : stdout;
+        fprintf(o, "  The univariate models' seasonal and fixed-frequency factors multiply\n");
+        fprintf(o, "  their whole rows: a restriction. Against the same rows with every\n");
+        fprintf(o, "  position the product reaches free (it starts at this optimum):\n");
+        fprintf(o, "    with the row factor      logL %14.6f   %3d parameters\n", ft_logL, ft_npar);
+        fprintf(o, "    without it               logL %14.6f   %3d parameters   (optimizer %s after %d iterations)\n",
+                logL1, np1, (opt_termcode == 1 || opt_termcode == 2) ? "converged" : "STOPPED", opt_iters);
+        fprintf(o, "    row factor: LR = %.4f   df = %d   p-value = %.4f\n", lr, df, pv);
+        if (!(opt_termcode == 1 || opt_termcode == 2))
+            fprintf(o, "  The search without the factor did not certify an optimum: its logL is\n"
+                       "  a lower bound, and so is the LR.\n");
+    }
+    fit_free(&A);
+}
+
 static void fit_free(Fit *F)
 {
     int ifault = 0, np = F->npar > 0 ? F->npar : 1;
@@ -2019,7 +2185,7 @@ void escalera_usage(const char *prog)
     printf("       %s A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]\n", prog);
     printf("                                  [-m method] [-o NAME] [-forecast H [-estwin N]]\n");
     printf("                                  [-irfboot N] [-det LIST] [-detbase file|gate]\n");
-    printf("                                  [-route u|v]\n");
+    printf("                                  [-route u|v] [-factortest]\n");
     printf("                                  [-hessian fd|bfgs] [-lik elf|shea|both]\n");
     printf("                                  [-links \"A<-B,C<-A\"] [-zero \"AR1[A<-B],...\"]\n");
     printf("                                  [-start zero|ols]\n");
@@ -2034,6 +2200,9 @@ void escalera_usage(const char *prog)
            "             AR(p)/MA(q) -- the whole VARMA(p,q) matrix is free -- and its\n"
            "             seasonal and fixed-frequency factors multiply its row. The LR\n"
            "             is then against the same model without cross terms\n");
+    printf("  -factortest : on route V, the LR of the row factor: the fitted model\n"
+           "             against the same rows with every position the factor reaches\n"
+           "             free (Tiao and Box's caveat on univariate operators)\n");
     printf("  -redet   : re-estimate the deterministic terms (default: fixed); it is -det all\n");
     printf("  -det LIST: re-estimate only some: all, none, a class (seasonal: cos sin\n"
            "             alter; calendar: easter; interv: impulse compimp step ramp;\n"
@@ -2124,7 +2293,7 @@ int escalera_main(int argc, char *argv[])
         return 1;
     }
     cx_diagcov = 0; opt_fixarma = 0; det_lista[0] = 0; det_base = 0; det_etapa = 1;
-    opt_route_v = 0; v_on = 0;
+    opt_route_v = 0; v_on = 0; opt_factortest = 0;
     est_fdhess = 1;          /* standard errors from the Hessian AT the optimum */
     for (argi += 2; argi < argc; argi++) {
         if      (strcmp(argv[argi], "-diagcov") == 0) cx_diagcov = 1;
@@ -2135,6 +2304,7 @@ int escalera_main(int argc, char *argv[])
                  (strcmp(argv[argi + 1], "file") == 0 || strcmp(argv[argi + 1], "gate") == 0))
             det_base = strcmp(argv[++argi], "gate") == 0 ? 2 : 1;
         else if (strcmp(argv[argi], "-fixarma") == 0) opt_fixarma = 1;
+        else if (strcmp(argv[argi], "-factortest") == 0) opt_factortest = 1;
         else if (strcmp(argv[argi], "-route") == 0 && argi + 1 < argc &&
                  (strcmp(argv[argi + 1], "u") == 0 || strcmp(argv[argi + 1], "v") == 0))
             opt_route_v = (strcmp(argv[++argi], "v") == 0);
@@ -2178,6 +2348,10 @@ int escalera_main(int argc, char *argv[])
     if (opt_route_v && opt_fixarma) {
         printf("ERROR: -route v with -fixarma: on route V the own ARMA is the vector's,\n"
                "       free by definition; there is no univariate ARMA to hold.\n");
+        return 1;
+    }
+    if (opt_factortest && !opt_route_v) {
+        printf("ERROR: -factortest is route V's (-route v): it tests the row factor.\n");
         return 1;
     }
     if (opt_route_v && p == 0 && q == 0) {
@@ -2657,6 +2831,20 @@ int escalera_main(int argc, char *argv[])
             irf_bootstrap(&F, (F.vm.n < 40) ? 10 : 20, irfboot_n, outname, outputv);
     }
 
+    /* [5b] -factortest keeps the fitted matrices: it runs last, after the
+       forecasts, because it rewrites the structure of the model.          */
+    if (opt_factortest && F.ifault == 0 && v_on) {
+        int k2, a2, b2;
+        ft_P = F.vm.p;  ft_Q = F.vm.q;  ft_logL = F.logL;  ft_npar = F.npar;
+        ft_phi = tensor(0, ft_P, 1, n_ser, 1, n_ser);
+        ft_th  = tensor(0, ft_Q, 1, n_ser, 1, n_ser);
+        for (a2 = 1; a2 <= n_ser; a2++)
+            for (b2 = 1; b2 <= n_ser; b2++) {
+                for (k2 = 0; k2 <= ft_P; k2++) ft_phi[k2][a2][b2] = F.vm.phi[k2][a2][b2];
+                for (k2 = 0; k2 <= ft_Q; k2++) ft_th[k2][a2][b2]  = F.vm.theta[k2][a2][b2];
+            }
+    }
+
     /* [6] Forecasts. The estimated model is released first: the forecast
        rebuilds the stationary series at other lengths, and the cast fills
        buffers with the current one.                                      */
@@ -2668,6 +2856,21 @@ int escalera_main(int argc, char *argv[])
         if (ok && fc_h > 0) {
             rc = esc_forecasts(xf, s2, fc_h, estwin, outname);
             if (rc) printf("Forecasting failed (code %d)\n", rc);
+        }
+        if (ft_phi != NULL) {
+            /* el estado del ajuste, de vuelta: la muestra entera, la
+               estructura del modelo pedido y sus parametros */
+            set_origin(0);
+            act_m = n_ser;
+            for (a = 1; a <= n_ser; a++) act[a] = a;
+            cx_p = p; cx_q = q; cx_diagcov = want_diagcov; det_etapa = 1;
+            if (build_stationary() == 0) {
+                esc_unpack(xf);
+                v_factor_test(outputv, p, q);
+            }
+            free_tensor(ft_phi, 0, ft_P, 1, n_ser, 1, n_ser);
+            free_tensor(ft_th,  0, ft_Q, 1, n_ser, 1, n_ser);
+            ft_phi = ft_th = NULL;
         }
         free_vector(xf, 1, np);
     }

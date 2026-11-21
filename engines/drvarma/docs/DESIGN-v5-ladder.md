@@ -164,6 +164,18 @@ what the own part is and how it is seeded:
   the univariate's regular polynomials when they fit (at zero otherwise) and
   the cross terms at zero. A seed the likelihood rejects goes back to the
   model without cross terms, and the output says so.
+- **The row factor is a restriction, and `-factortest` checks it.** It is
+  Tiao and Box's caveat on carrying univariate operators into the joint
+  model. The alternative is the same rows with every position the product
+  F_a(B)[Φ(B)]_a (and G_a(B)[Θ(B)]_a) reaches free, own and cross; it starts
+  at the expansion of the fitted optimum, where its likelihood is the same,
+  so the LR is ≥ 0 by construction (the port's `factor_test`). Checked by an
+  independent path: for the VAR(1) of IPI and WTI, a hand-made file with a
+  regular AR of order 13 free at 1, 12 and 13 and `-zero` on the cross lags
+  the product does not reach gives the same model, logL −925.888325, 11
+  parameters. With an MA the model without the factor has the usual
+  identification problem: the search may not certify an optimum, and the
+  output then says the LR is a lower bound.
 - Measured: the same optimum as from zero in every case; on the gas furnace
   VAR(6) the whole-matrix seed is admissible where route U's (cross terms
   only, on the diagonal fit's own models) is not.

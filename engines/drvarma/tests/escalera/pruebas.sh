@@ -535,6 +535,56 @@ cerca "horno de gas, VAR(6), ruta U: el mismo logL" "$(ll "$TMP/gv.out")" "$(ll 
 "$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 0 0 -route v -o "$TMP/ve" > "$TMP/ve.log" 2>&1
 [ $? -ne 0 ] && bien "-route v con p = q = 0 es un error" || falla "-route v acepta p = q = 0"
 
+# 10g. -factortest: el contraste del factor de fila (ruta V). El IPI lleva
+#     un AR(1)_12; el WTI, nada. VAR(1): la restriccion son 2 (el retardo 13
+#     propio y el 13 cruzado del IPI salen del producto).
+lrf() { sed -n 's/.*row factor: LR = \([-0-9.]*\)   df = \([0-9]*\).*/\1 \2/p' "$1" | head -1; }
+sinf() { awk '/^    without it / {print $4; exit}' "$1"; }
+"$BIN" "$MON/IPI_m07.pre" "$MON/WTI_m03.pre" 1 0 -route v -factortest -o "$TMP/ft1" > /dev/null 2>&1
+set -- $(lrf "$TMP/ft1.out")
+[ "${2:-}" = 2 ] && bien "-factortest, VAR(1): 2 grados de libertad" || falla "-factortest, VAR(1): g.l. ${2:-?}"
+cerca "-factortest, VAR(1): LR" 1.5532 "${1:-nan}" 1e-3
+# el mismo modelo sin el factor, por otro camino: un fichero del IPI con un
+# AR regular de orden 13 libre en 1, 12 y 13, y -zero en los cruzados que el
+# producto no alcanza. La escalera de siempre, sin -route v.
+python3 - "$MON/IPI_m07.pre" "$TMP/IPI_libre.inp" <<'PY'
+import sys
+L = open(sys.argv[1], errors="replace").read().split("\n")
+i = [k for k, l in enumerate(L) if "regular AR operators" in l][0]
+j = [k for k, l in enumerate(L) if "regular MA operators" in l][0]
+b = ["**Number and orders of regular AR operators:", "1 13", "**"]
+b += ["0.1 1" if lag in (1, 12, 13) else "0.000000 0" for lag in range(1, 14)]
+b += ["** Number and orders of annual AR operators:", "0"]
+open(sys.argv[2], "w").write("\n".join(L[:i] + b + L[j:]))
+PY
+Z=""
+for k in 2 3 4 5 6 7 8 9 10 11 12; do Z="$Z,AR$k[IPI<-WTI]"; done
+for k in 2 3 4 5 6 7 8 9 10 11 12 13; do Z="$Z,AR$k[WTI<-IPI]"; done
+"$BIN" "$TMP/IPI_libre.inp" "$MON/WTI_m03.pre" 13 0 -zero "${Z#,}" -o "$TMP/ft1i" > /dev/null 2>&1
+cerca "-factortest, VAR(1): el modelo sin el factor es el del camino independiente" \
+    "$(ll "$TMP/ft1i.out")" "$(sinf "$TMP/ft1.out")" 1e-5
+[ "$(np "$TMP/ft1i.out")" = 11 ] && grep -q "without it .* 11 parameters" "$TMP/ft1.out" \
+    && bien "-factortest, VAR(1): 11 parametros sin el factor, por los dos caminos" \
+    || falla "-factortest, VAR(1): parametros del modelo sin el factor"
+"$BIN" "$MON/IPI_m07.pre" "$MON/WTI_m03.pre" 3 0 -route v -factortest -o "$TMP/ft3" > /dev/null 2>&1
+set -- $(lrf "$TMP/ft3.out")
+[ "${2:-}" = 6 ] && bien "-factortest, VAR(3): 6 grados de libertad" || falla "-factortest, VAR(3): g.l. ${2:-?}"
+"$BIN" "$MON/IPI_m07.pre" "$MON/WTI_m03.pre" 1 0 -route v -factortest -forecast 6 -o "$TMP/ftf" > /dev/null 2>&1
+[ "$(lrf "$TMP/ftf.out")" = "$(lrf "$TMP/ft1.out")" ] && [ -s "$TMP/ftf.forecast" ] \
+    && bien "-factortest con -forecast: el mismo contraste, despues de prever" \
+    || falla "-factortest con -forecast: '$(lrf "$TMP/ftf.out")' frente a '$(lrf "$TMP/ft1.out")'"
+"$BIN" "$MON/IPI_m07.pre" "$MON/WTI_m03.pre" 1 1 -route v -factortest -o "$TMP/ft11" > /dev/null 2>&1
+set -- $(lrf "$TMP/ft11.out")
+[ "${2:-}" = 2 ] && grep -q "with the row factor      logL    -924.846133    13 parameters" "$TMP/ft11.out" \
+    && python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) >= 0 else 1)" "${1:-nan}" \
+    && bien "-factortest, VARMA(1,1): parte del optimo del porte, 2 g.l., LR >= 0" \
+    || falla "-factortest, VARMA(1,1): $(lrf "$TMP/ft11.out")"
+"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0 -route v -factortest -o "$TMP/ftn" > /dev/null 2>&1
+grep -q "there is no" "$TMP/ftn.out" && grep -q "row factor to test" "$TMP/ftn.out" \
+    && bien "-factortest sin factores estacionales: lo dice" || falla "-factortest sin factor: no lo dice"
+"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0 -factortest -o "$TMP/fte" > "$TMP/fte.log" 2>&1
+[ $? -ne 0 ] && bien "-factortest sin -route v es un error" || falla "-factortest sin -route v pasa"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

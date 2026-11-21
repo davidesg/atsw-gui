@@ -561,6 +561,12 @@ static void esc_names(char (*names)[ESC_NAMELEN])
 /*  Con el ajuste diagonal de despues (la V sin cruzados) como base del LR.  */
 /* ------------------------------------------------------------------------- */
 static int opt_route_v = 0;      /* -route v */
+/* -zero sobre lo PROPIO (ruta V): phi_SERIE[B^k] o theta_SERIE[B^k] a cero.
+   En la V todo coeficiente es libre, los propios incluidos, y la
+   simplificacion de Tiao y Box tambien es sobre ellos. En la U lo propio es
+   el univariante y sus ceros son de art. Es own_zeros del porte.           */
+static unsigned char v_zar[ESC_MAX + 1][ESC_MAXLAG + 1], v_zma[ESC_MAX + 1][ESC_MAXLAG + 1];
+static int v_nzeros = 0;
 static int v_on = 0;             /* la sustitucion ya esta hecha: el molde lleva el factor de fila */
 static int v_reg_ar[ESC_MAX + 1], v_reg_ma[ESC_MAX + 1];   /* grados regulares (tras sustituir) */
 static int v_fac_ar[ESC_MAX + 1], v_fac_ma[ESC_MAX + 1];   /* grados del factor de fila */
@@ -621,6 +627,10 @@ static void v_sustituye(int pc, int qc)
         v_un_factor(&Tm[i].NumAr1, &Tm[i].p1, &Tm[i].Ar1, &Tm[i].Ia1, p, ca);
         v_un_factor(&Tm[i].NumMa1, &Tm[i].q1, &Tm[i].Ma1, &Tm[i].Im1, q, cm);
         v_reg_ar[i] = p;  v_reg_ma[i] = q;
+        for (k = 1; k <= p && k <= ESC_MAXLAG; k++)
+            if (v_zar[i][k]) { Tm[i].Ia1[1][k] = 0; Tm[i].Ar1[1][k] = 0.0; }
+        for (k = 1; k <= q && k <= ESC_MAXLAG; k++)
+            if (v_zma[i][k]) { Tm[i].Im1[1][k] = 0; Tm[i].Ma1[1][k] = 0.0; }
         ar_deg[i] = total_ar_order(&Tm[i]);
         ma_deg[i] = total_ma_order(&Tm[i]);
         free_vector(ca, 0, p > da ? p : da);
@@ -834,12 +844,14 @@ static void es_stage2(const int *n, double **E, int t0, EsFit *F)
             int k0 = (c == r) ? 1 : n[r] - es_nrc(n, r, c) + 1;
             for (k = k0; k <= n[r]; k++) {
                 if (es_modelo && c != r && !(k == 0 ? free_a0(r + 1, c + 1) : free_ar(k, r + 1, c + 1))) continue;
+                if (es_modelo && c == r && k <= ESC_MAXLAG && v_zar[r + 1][k]) continue;
                 tipo[ncol] = 0; lag[ncol] = k; col[ncol++] = c;
             }
         }
         for (c = 0; c < m; c++)
             for (k = 1; k <= n[r]; k++) {
                 if (es_modelo && c != r && !free_ma(k, r + 1, c + 1)) continue;
+                if (es_modelo && c == r && k <= ESC_MAXLAG && v_zma[r + 1][k]) continue;
                 tipo[ncol] = 1; lag[ncol] = k; col[ncol++] = c;
             }
         X = es_mat(nt, ncol);
@@ -1589,7 +1601,7 @@ static void start_ols_v(void)
         for (k = 1; k <= p; k++)
             for (b = 1; b <= m; b++) {
                 real c = rhs[(k - 1) * m + b];
-                if (b == a) { if (k <= v_reg_ar[act[a]]) Tm[act[a]].Ar1[1][k] = c; }
+                if (b == a) { if (k <= v_reg_ar[act[a]] && Tm[act[a]].Ia1[1][k]) Tm[act[a]].Ar1[1][k] = c; }
                 else if (free_ar(k, act[a], act[b])) cAR[k][act[a]][act[b]] = c;
             }
         for (k = 1; k <= v_reg_ma[act[a]]; k++) Tm[act[a]].Ma1[1][k] = 0.0;
@@ -1751,13 +1763,13 @@ static void v_factor_test(FILE *out, int p, int q)
         for (l = 1; l <= DA; l++) {
             int libre = 0;
             for (jj = 0; jj <= l && jj <= ESC_MAXLAG; jj++)
-                if (sA[i][jj] && l - jj <= v_reg_ar[i]) libre = 1;
+                if (sA[i][jj] && l - jj <= v_reg_ar[i] && !(l - jj >= 1 && v_zar[i][l - jj])) libre = 1;
             if (!libre) { Tm[i].Ia1[1][l] = 0; Tm[i].Ar1[1][l] = 0.0; }
         }
         for (l = 1; l <= DM; l++) {
             int libre = 0;
             for (jj = 0; jj <= l && jj <= ESC_MAXLAG; jj++)
-                if (sM[i][jj] && l - jj <= v_reg_ma[i]) libre = 1;
+                if (sM[i][jj] && l - jj <= v_reg_ma[i] && !(l - jj >= 1 && v_zma[i][l - jj])) libre = 1;
             if (!libre) { Tm[i].Im1[1][l] = 0; Tm[i].Ma1[1][l] = 0.0; }
         }
         ar_deg[i] = total_ar_order(&Tm[i]);
@@ -1874,8 +1886,8 @@ static void start_echelon(void)
     }
     for (i = 1; i <= m; i++) {
         for (k = 1; k <= ech_n[i]; k++) {
-            Tm[i].Ar1[1][k] = -F.A[k][i - 1][i - 1];
-            Tm[i].Ma1[1][k] = -F.M[k][i - 1][i - 1];
+            if (Tm[i].Ia1[1][k]) Tm[i].Ar1[1][k] = -F.A[k][i - 1][i - 1];
+            if (Tm[i].Im1[1][k]) Tm[i].Ma1[1][k] = -F.M[k][i - 1][i - 1];
         }
         for (j = 1; j <= m; j++) {
             if (i == j) continue;
@@ -3167,6 +3179,7 @@ int escalera_main(int argc, char *argv[])
     opt_zero = 0;
     memset(cx_zar, 0, sizeof cx_zar);
     memset(cx_zma, 0, sizeof cx_zma);
+    memset(v_zar, 0, sizeof v_zar);  memset(v_zma, 0, sizeof v_zma);  v_nzeros = 0;
     if (zero_arg) {
         char buf[2048], *tok, *save = NULL;
         if (p == 0 && q == 0) {
@@ -3178,6 +3191,30 @@ int escalera_main(int argc, char *argv[])
             char kind[3] = "", lhs[ESC_NAMELEN] = "", rhs[ESC_NAMELEN] = "";
             int  k = 0, ti = 0, tj = 0, j, top;
             while (*tok == ' ') tok++;
+            {   /* lo propio: phi_SERIE[B^k] o theta_SERIE[B^k], solo en la ruta V */
+                char pt[8] = "", ser[ESC_NAMELEN] = "";
+                int  kk = 0, ti2 = 0, j2;
+                if (sscanf(tok, "%5[a-z]_%63[^[][B^%d]", pt, ser, &kk) == 3 &&
+                    (strcmp(pt, "phi") == 0 || strcmp(pt, "theta") == 0)) {
+                    int ar = strcmp(pt, "phi") == 0, tope;
+                    if (!opt_route_v) {
+                        printf("ERROR: -zero %s: an own coefficient can be held at zero on route V\n"
+                               "       (-route v, -echelon), where the own part is the vector's. On\n"
+                               "       route U it is the univariate model's, and its zeros are art's.\n", tok);
+                        return 1;
+                    }
+                    for (j2 = 1; j2 <= n_ser; j2++) if (strcmp(Ts[j2].name, ser) == 0) ti2 = j2;
+                    tope = ti2 ? (ech_on ? ech_n[ti2] : (ar ? p : q)) : 0;
+                    if (!ti2 || kk < 1 || kk > tope) {
+                        printf("ERROR: -zero: %s is not an own coefficient of the model (%s order %d)\n",
+                               tok, ti2 ? Ts[ti2].name : "no such series;", tope);
+                        return 1;
+                    }
+                    if (ar) v_zar[ti2][kk] = 1; else v_zma[ti2][kk] = 1;
+                    v_nzeros++;
+                    continue;
+                }
+            }
             if (sscanf(tok, "%2[ARM]%d[%63[^<]<-%63[^]]]", kind, &k, lhs, rhs) != 4 ||
                 (strcmp(kind, "AR") && strcmp(kind, "MA"))) {
                 printf("ERROR: -zero: '%s' is not of the form AR1[A<-B] or MA1[A<-B]\n", tok);
@@ -3296,17 +3333,23 @@ int escalera_main(int argc, char *argv[])
                 for (k = 1; k <= p; k++)
                     for (li = 1; li <= n_ser; li++)
                         for (lj = 1; lj <= n_ser; lj++)
-                            if (cx_zar[k][li][lj]) {
+                            if (cx_zar[k][li][lj] && li != lj &&      /* no los que quita la tabla de indices */
+                                !(ech_on && (k < ech_n[li] - ech_nrc(li, lj) + 1 || k > ech_n[li]))) {
                                 fprintf(f, "%sAR%d[%s<-%s]", first ? "" : ", ", k, Ts[li].name, Ts[lj].name);
                                 first = 0;
                             }
                 for (k = 1; k <= q; k++)
                     for (li = 1; li <= n_ser; li++)
                         for (lj = 1; lj <= n_ser; lj++)
-                            if (cx_zma[k][li][lj]) {
+                            if (cx_zma[k][li][lj] && li != lj && !(ech_on && k > ech_n[li])) {
                                 fprintf(f, "%sMA%d[%s<-%s]", first ? "" : ", ", k, Ts[li].name, Ts[lj].name);
                                 first = 0;
                             }
+                for (li = 1; li <= n_ser; li++)                      /* los propios (ruta V) */
+                    for (k = 1; k <= ESC_MAXLAG; k++) {
+                        if (v_zar[li][k]) { fprintf(f, "%sphi_%s[B^%d]", first ? "" : ", ", Ts[li].name, k); first = 0; }
+                        if (v_zma[li][k]) { fprintf(f, "%stheta_%s[B^%d]", first ? "" : ", ", Ts[li].name, k); first = 0; }
+                    }
                 fprintf(f, "\n");
             }
             fprintf(f, "Innovation cov.  : %s\n", want_diagcov ? "diagonal" : "full");

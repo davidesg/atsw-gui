@@ -9,6 +9,14 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Added — `-zero` on own coefficients, on route V
+
+- `-zero "phi_WTI[B^2]"` or `"theta_IPC[B^1]"` holds an own coefficient at
+  zero on route V (`-route v`, `-echelon`): Tiao and Box's simplification on
+  the own part. The port's `own_zeros`, with the same numbers (the echelon
+  (2,1) of IPC and WTI with two own zeros: logL −630.160565, 14 parameters).
+  The row factor's test keeps the zero in its alternative.
+
 ### Fixed — the header `-split` writes fits fue's format (BUG-0001)
 
 - `-split` wrote the source's whole path and the version on one free header

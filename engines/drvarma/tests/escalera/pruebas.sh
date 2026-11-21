@@ -469,12 +469,21 @@ suma() { awk '/^  SUM / {print $2; exit}' "$1"; }
 tabla() { sed -n '/ESTIMATED MODEL/,/^Exact log-likelihood/p' "$1"; }
 # caso golden: univariantes cuyo ARMA regular ES un AR(p), sin factores
 # estacionales. La V sustituye un AR(p) por un AR(p) libre: es la U.
-"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0          -o "$TMP/vu1" > /dev/null 2>&1
-"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0 -route v -o "$TMP/vv1" > /dev/null 2>&1
+# Desde cero el punto de partida es el mismo (lo propio del univariante, los
+# cruzados a cero): la misma tabla, byte a byte. Con el arranque por defecto
+# la V siembra toda la matriz y la U solo los cruzados: el mismo optimo.
+"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0          -start zero -o "$TMP/vu1" > /dev/null 2>&1
+"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0 -route v -start zero -o "$TMP/vv1" > /dev/null 2>&1
 tabla "$TMP/vu1.out" > "$TMP/vu1.t"; tabla "$TMP/vv1.out" > "$TMP/vv1.t"
 [ -s "$TMP/vu1.t" ] && cmp -s "$TMP/vu1.t" "$TMP/vv1.t" \
     && bien "ruta V, caso golden (WTI y GS2, AR(1); VAR(1)): la misma tabla que la ruta U" \
     || falla "ruta V, caso golden VAR(1): la tabla no es la de la U"
+"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0 -route v -o "$TMP/vv1d" > /dev/null 2>&1
+grep -q "^Start of the cross terms: ols, the whole matrix" "$TMP/vv1d.out" \
+    && bien "ruta V: el arranque por defecto con q = 0 siembra toda la matriz, y lo dice" \
+    || falla "ruta V: $(grep -a 'Start of' "$TMP/vv1d.out")"
+cerca "ruta V, caso golden con la siembra de toda la matriz: el mismo logL" \
+    "$(ll "$TMP/vu1.out")" "$(ll "$TMP/vv1d.out")" 1e-5
 "$BIN" "$MON/GS1_m01.pre" "$MON/FF_m03.pre" 3 0          -o "$TMP/vu3" > /dev/null 2>&1
 "$BIN" "$MON/GS1_m01.pre" "$MON/FF_m03.pre" 3 0 -route v -o "$TMP/vv3" > /dev/null 2>&1
 cerca "ruta V, caso golden (GS1 y FF, AR(3); VAR(3)): el logL de la ruta U" \
@@ -507,6 +516,19 @@ cerca "ruta V, VARMA(1,1): la V sin cruzados, la del porte" \
     && grep -q "IPI's univariate model has a regular AR(3)" "$TMP/v11.out" \
     && bien "ruta V: 13 parametros; dice contra que es el LR y que el AR(3) del IPI no cabe en p = 1" \
     || falla "ruta V: la salida del VARMA(1,1) no dice lo que debe"
+# la siembra de toda la matriz: el horno de gas, VAR(6) (los ficheros de
+# BUG-0006). Sembrando solo los cruzados sobre lo propio del ajuste diagonal
+# (la U) el punto no es admisible y se vuelve a cero; sembrando toda la
+# matriz (la V) si lo es. El mismo optimo, -2638.762693.
+GAS=bugs/BUG-0006-repro
+"$BIN" "$GAS/GAS_v.inp" "$GAS/CO2_v.inp" 6 0          -o "$TMP/gu" > /dev/null 2>&1
+"$BIN" "$GAS/GAS_v.inp" "$GAS/CO2_v.inp" 6 0 -route v -o "$TMP/gv" > /dev/null 2>&1
+grep -q "^Start of the cross terms: zero (the ols start was not admissible)" "$TMP/gu.out" \
+    && grep -q "^Start of the cross terms: ols, the whole matrix" "$TMP/gv.out" \
+    && bien "horno de gas, VAR(6): la siembra de toda la matriz es admisible donde la de los cruzados no" \
+    || falla "horno de gas: U '$(grep -a 'Start of' "$TMP/gu.out")', V '$(grep -a 'Start of' "$TMP/gv.out")'"
+cerca "horno de gas, VAR(6), ruta V: logL" -2638.762693 "$(ll "$TMP/gv.out")" 1e-5
+cerca "horno de gas, VAR(6), ruta U: el mismo logL" "$(ll "$TMP/gv.out")" "$(ll "$TMP/gu.out")" 1e-5
 "$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0 -route v -fixarma -o "$TMP/ve" > "$TMP/ve.log" 2>&1
 [ $? -ne 0 ] && grep -q "no univariate ARMA to hold" "$TMP/ve.log" \
     && bien "-route v con -fixarma es un error" || falla "-route v acepta -fixarma"

@@ -5,8 +5,9 @@ Maximum-likelihood estimation, diagnostics and forecasting of **vector ARMA
 adjustment, impulse-response / variance-decomposition analysis, and
 fixed-parameter recursive (multi-origin) forecasting.
 
-A command-line program (`drvarma`) and an optional GTK graphical front-end
-(`drvarma_gui`).
+A command-line program (`drvarma`). Its window is SIM (`gui/sim` in this
+repository), which runs this engine; the engine's own GTK front-end was
+retired in November 2026.
 
 ## License
 
@@ -34,22 +35,17 @@ relied on NR routines (eigenvalues, SVD) now uses the GNU Scientific Library
 | Component | Needs |
 |-----------|-------|
 | `drvarma` (CLI) | **GSL** (`libgsl`, `libgslcblas`), **GLib 2.0**, libm, a C compiler |
-| `drvarma_gui` (GUI) | the above **+ GTK+ 3.0** |
 
-`pkg-config` is used to locate GSL and GTK+. On Debian/Ubuntu:
+`pkg-config` is used to locate GSL. On Debian/Ubuntu:
 
 ```sh
-sudo apt install build-essential pkg-config libgsl-dev libglib2.0-dev libgtk-3-dev
+sudo apt install build-essential pkg-config libgsl-dev libglib2.0-dev
 ```
-
-(The GTK package is only required for the GUI.)
 
 ## Build
 
 ```sh
-make            # build both drvarma and drvarma_gui
-make drvarma    # CLI only (no GTK needed)
-make gui        # GUI only
+make            # build bin/drvarma
 make clean      # remove objects and binaries
 make help       # list all targets
 ```
@@ -148,18 +144,17 @@ drvarma data/models_group1/IPC3 3 0 -mean -deseason auto -forecast 24
 
 ## Graphical interface
 
-```sh
-bin/drvarma_gui
-```
-
-Load a whitespace-separated numeric data file (one column per series; the GUI
-assigns generic names `y1, y2, …`), choose the options, generate the `.inp` and
-run the engine.
+The window for these models is SIM (`gui/sim`, `sim_gui`), built from the
+repository root. It runs this engine on the ladder's files.
 
 ## Repository layout
 
 - `src/`, `include/` — engine sources and headers.
-- `gui/` — GTK front-end (plus Johansen / VECM cointegration helpers).
+- `gui/` — `seasonal_detection.c` only (the harmonic seasonal detection the
+  `.inp` path's `-deseason auto` uses). The GTK front-end is gone.
+- `tests/` — the batteries: `banco` (the `.inp` path), `escalera` (the
+  ladder), `rutas` (the routes; long, not in `make check`). `bugs/` — one
+  repro per bug of `BUGS.md`.
 - `data/` — example datasets and case studies.
 - `cases/` — reference-model evaluation scripts and outputs.
 - `MODELS_PLAN.md`, `MODELS_RESULTS.md` — reference-model battery (plan + results).

@@ -6,8 +6,8 @@ codebase; the notes below keep contributions consistent and license-clean.
 ## Getting started
 
 ```sh
-sudo apt install build-essential pkg-config libgsl-dev libglib2.0-dev libgtk-3-dev
-make            # builds bin/drvarma and bin/drvarma_gui
+sudo apt install build-essential pkg-config libgsl-dev libglib2.0-dev
+make            # builds bin/drvarma
 ```
 
 Read [`docs/DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md) for the architecture and
@@ -33,20 +33,25 @@ the tree.
   `m[i][j]`; do not assume a tight contiguous layout.
 - Keep public signatures stable; if you change one, update `include/main.h` and
   all callers.
-- Confine GSL includes to `nlatools.c` and keep 1-based wrappers there.
+- Keep GSL behind the 1-based wrappers of `nlatools.c` (`gui/seasonal_detection.c`
+  is the one other file that includes it).
 
 ## Before opening a pull request
 
 1. `make` succeeds with no new warnings.
-2. **Regression check**: re-run the reference cases and confirm results are
-   unchanged for unrelated changes —
+2. **The batteries pass.** The rules for a change in an engine (the study
+   first, the C before the port, which batteries to run) are in the
+   repository's `docs/MOTORES.md`. In short:
 
    ```sh
-   ./bin/drvarma data/models_group1/IPC3 3 0 -mean -deseason auto
+   sh tests/run_tests.sh        # banco (.inp path), escalera (the ladder), the output reader
+   sh tests/rutas/rutas.sh      # the routes: minutes; before and after any change in the engine
+   make -C ../.. check          # every battery of the repository: others drive this engine
    ```
 
-   The objective, parameters and diagnostics in `IPC3.out` should match the
-   committed output (to full precision) unless your change is meant to alter them.
+   The `.out` files kept in `data/` come from older binaries and are **not** a
+   reference. A reference (`tests/*/ref`) is regenerated only when the change
+   of output is deliberate, and the pull request says which one moved and why.
 3. **License scan** is clean:
 
    ```sh

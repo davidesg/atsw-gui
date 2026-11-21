@@ -1,12 +1,14 @@
 #!/bin/sh
-# banco.sh -- regresion de drvarma contra la referencia de la 0.4.1.
+# banco.sh -- regresion de la via .inp de drvarma contra su referencia.
 #
 #   sh tests/banco/banco.sh            compara (desde engines/drvarma)
-#   sh tests/banco/banco.sh --generar  reescribe ref/ (solo antes de tocar src/)
+#   sh tests/banco/banco.sh --generar  reescribe ref/: solo cuando el cambio de
+#                                      la salida es deliberado, y diciendolo
+#                                      en el PR (docs/MOTORES.md)
 #
 # Cada caso corre en un directorio temporal con una copia de su .inp; se
 # comparan byte a byte la salida estandar y todos los ficheros que escribe.
-# With TWO exceptions, both from 5.0 and so absent from the 0.4.1 reference:
+# With TWO exceptions, both from 5.0:
 # the "Program" line of the .out, which carries the version, and the one-line
 # deprecation note of the multivariate .inp on stderr.
 set -u

@@ -10,8 +10,10 @@ hand-over from fue was prose (`docs/DISENO-escalera.md` §6, at the root of
 the monorepo).
 
 5.0 accepts the `.pre` files, as drtran does, **and still behaves exactly as
-before with an `.inp`**. The bench `tests/banco/` stores the 0.4.1 output, and
-the `.inp` path must reproduce it byte for byte.
+before with an `.inp`**. The bench `tests/banco/` pins the `.inp` path's output
+byte for byte. It started as the 0.4.1 output and has been regenerated on
+purpose with each deliberate change of that output (`git log --
+tests/banco/ref`).
 
 ## 1. Usage
 
@@ -317,13 +319,17 @@ with `-dirty` when the tree had uncommitted changes. The full string is used
 by:
 
 - the CLI usage and `-version`;
-- a `Program` line in the `.out` of both paths (the bench ignores it, and it
-  is the only line it ignores);
-- the GUI title.
+- a `Program` line in the `.out` of both paths (the bench ignores it, and the
+  deprecation note);
+- the header `-split` writes.
 
 ## 7. Tests
 
-- `tests/banco/banco.sh`: 18 `.inp` cases; the 0.4.1 output, byte for byte.
+- `tests/banco/banco.sh`: 18 `.inp` cases, byte for byte against a reference
+  that started as the 0.4.1 output and is regenerated with each deliberate
+  change.
+- `tests/rutas/rutas.sh`: the routes U and V, the echelon form and the three
+  paths of the same VARMA; long, outside `make check`.
 - `tests/escalera/pruebas.sh`: explicit assertions and a byte regression of
   the 5.0 ladder output. The assertions cover:
   - the gate;
@@ -380,8 +386,8 @@ reference is today's fue. The CSVs in `cases/*/work/*_recursive_eval*.csv`
 came from an older fue and do not agree with it: at origin 12/2019, h=1,
 IPC_ES gives 97.1389 there and 97.0785 in today's fue and in the ladder.
 
-Not yet: the block Wald tests of the `.inp` path; the ladder mode in the GUI;
-forecasts conditional on a scenario for one of the series.
+Not yet: the block Wald tests of the `.inp` path; forecasts conditional on a
+scenario for one of the series.
 
 ## 9. Where drvarma enters: a cycle is where drtran ends
 
@@ -440,10 +446,10 @@ So from 5.0:
   - and the ladder on the files of `-split -mean -ar 1`, with p = 1, reaches
     **the same VAR(1)** as the `.inp` path with `IPC3 1 0 -mean`, with μ and
     the whole of φ(1) identical to six decimals.
-- The `.inp` path still reads the multivariate file, unchanged byte for byte
-  (tests/banco). It prints a one-line deprecation note on stderr, the only
-  other line the bench ignores. It stays until the GUI of drvarma, its only
-  producer, is migrated to fue's files. It is removed in 6.0.
+- The `.inp` path still reads the multivariate file (tests/banco pins its
+  output). It prints a one-line deprecation note on stderr, which the bench
+  ignores with the `Program` line. Its only producer, the engine's GTK
+  front-end, was retired in November 2026. It is removed in 6.0.
 - A multivariate `.inp` given to the ladder (with its extension) is refused
   with fue's validator's reason and the `-split` command to convert it.
 

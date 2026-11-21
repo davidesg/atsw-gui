@@ -1,7 +1,8 @@
 # Las pruebas
 
 Qué se prueba, cómo se corre, qué se exige en cada plataforma y qué queda
-sin probar. Estado a 2026-10-04: la CI pasa en **Linux, macOS y Windows**
+sin probar. Las reglas para cambiar un motor (el orden, qué baterías
+correr, cuándo se regenera una referencia) están en **`docs/MOTORES.md`**. Estado a 2026-10-04: la CI pasa en **Linux, macOS y Windows**
 (run 37215962338, PR #1).
 
 ---

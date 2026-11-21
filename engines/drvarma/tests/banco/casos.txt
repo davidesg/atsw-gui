@@ -2,8 +2,12 @@
 #
 #   nombre | fichero de entrada (relativo a engines/drvarma) | argumentos
 #
-# La referencia (ref/<nombre>.*) se genero con drvarma 0.4.1 (con escala 100
-# compilada) antes de tocar src/: la v5 tiene que reproducirla BYTE A BYTE.
+# La referencia (ref/<nombre>.*) nacio como la salida de drvarma 0.4.1 (con
+# escala 100 compilada) y se compara BYTE A BYTE. Se ha regenerado a
+# proposito con cada cambio deliberado de esa salida (los errores estandar
+# por fdhess, la verosimilitud de Shea, el informe del muro del MA, el
+# objetivo de la busqueda en linea, la diagnosis multivariante compartida):
+# git log -- tests/banco/ref. No es ya la salida de la 0.4.1.
 #
 c1_ipc_ar1        | data/IPC.inp                              | 1 0 -mean
 c2_ipc_arma21     | data/IPC.inp                              | 2 1 -mean -diagcov

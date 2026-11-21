@@ -2,7 +2,7 @@
 
 drvarma estimates **vector ARMA (VARMA)** models by exact maximum likelihood and
 produces diagnostics, impulse-response analysis and forecasts. This guide covers
-the command-line program; the graphical front-end mirrors the same options.
+the command-line program. The window for these models is SIM (`gui/sim`).
 
 ## 1. Quick start
 
@@ -188,13 +188,9 @@ exist, however significant its cross terms are in sample.
 
 ## 7. Graphical interface
 
-```sh
-bin/drvarma_gui
-```
-
-Load a whitespace-separated numeric file (one column per series; series are named
-`y1, y2, …`), set the options, generate the `.inp` and run the engine. The GUI
-also offers Johansen cointegration and VECM tools.
+The engine's own GTK front-end was retired in November 2026. The window for
+these models is SIM (`gui/sim`, `sim_gui`), built from the repository root:
+it runs this engine on the ladder's files. Cointegration is drvec's.
 
 ## 8. Worked examples
 

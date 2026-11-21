@@ -24,6 +24,10 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
   factors, routes U and V give the same table. With a row factor and cross
   terms, the VARMA(1,1) of IPI and WTI gives the port's number,
   `Ladder(echelon=(1,1), own="free")`: −924.846133.
+- **`-factortest`**: the LR of the row factor, the fitted model against the
+  same rows with every position the factor reaches free. On the monetary
+  VAR(1) (IPI, IPC, WTI, FF): LR 6.16, 4 df, p 0.19. Checked against an
+  independent path (a hand-made file and `-zero`), to six decimals.
 - **The seed of route V is the whole matrix**: least squares of the VAR(p)
   give the diagonal and the cross terms (the original drvarma's
   `init_varma`, whole), the MA starts at zero, and Q takes the variances of

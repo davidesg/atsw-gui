@@ -28,7 +28,12 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
   The least squares are solved by singular values, as numpy's `lstsq`: the
   normal equations gave other coefficients in the over-parameterised
   candidates.
-- Not yet: the stage II start, and `-factortest` with unequal indices.
+- **`-start echelon`**: the stage II least squares as the start of the whole
+  echelon model, the port's `_echelon_start`, homologated on ten cases (the
+  same start, iterations and optimum wherever both certify). Not the
+  default: with indices larger than the data ask for it can start far worse
+  than zero.
+- Not yet: `-factortest` with unequal indices.
 
 ### Added — `-route v`: the vector first, through the gate
 

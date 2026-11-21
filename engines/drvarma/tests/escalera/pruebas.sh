@@ -665,6 +665,28 @@ grep -q "long VAR(1) by least squares" "$TMP/s1.out" && ! grep -q "ESTIMATED MOD
 [ $? -ne 0 ] && bien "-echelon search con ordenes cruzados distintos de 0 0 es un error" \
     || falla "-echelon search acepta p = 1"
 
+# 10j. -start echelon: la siembra de la etapa II de Lutkepohl y Poskitt. Es
+#     _echelon_start del porte: el mismo punto de partida (las mismas
+#     lambdas cuando hay que recoger las raices), las mismas iteraciones y
+#     el mismo optimo en los casos que certifican.
+ini() { sed -n 's/^Start of the cross terms: \(.*\) (-start echelon.*/\1/p' "$1" | head -1; }
+eche() { "$BIN" "$EI" "$EW" 0 0 -echelon "$1" -start echelon -o "$TMP/k$2" > "$TMP/k$2.log" 2>&1; }
+eche 1,0 10; eche 1,1 11; eche 2,1 21
+[ "$(ini "$TMP/k10.out")" = echelon ] && [ "$(ini "$TMP/k11.out")" = echelon ] \
+    && bien "-start echelon: el arranque se usa y lo dice" || falla "-start echelon: '$(ini "$TMP/k10.out")'"
+cerca "-start echelon, (1,0): el optimo del porte" -638.329701 "$(ll "$TMP/k10.out")" 1e-5
+cerca "-start echelon, (1,1): el optimo del porte" -630.843671 "$(ll "$TMP/k11.out")" 1e-5
+[ "$(ini "$TMP/k21.out")" = "echelon (AR x 0.388^k, MA x 0.459^k: inside the unit circle)" ] \
+    && bien "-start echelon, (2,1): las raices se recogen dentro con las lambdas del porte (0.388, 0.459)" \
+    || falla "-start echelon, (2,1): '$(ini "$TMP/k21.out")'"
+"$BIN" ../../lib/outvarma/datos/MUSKRAT_m03.pre ../../lib/outvarma/datos/MINK_m02.pre 0 0 -echelon 2,1 -start echelon -o "$TMP/km" > /dev/null 2>&1
+cerca "-start echelon, almizclero y vison (2,1): el logL del porte" -557.637479 "$(ll "$TMP/km.out")" 1e-5
+"$BIN" "$MON/IPI_m07.pre" "$EI" "$EW" 0 0 -echelon 0,1,1 -start echelon -o "$TMP/kt" > /dev/null 2>&1
+cerca "-start echelon, (0,1,1) con factor de fila: el logL del porte" -835.732462 "$(ll "$TMP/kt.out")" 1e-5
+"$BIN" "$EI" "$EW" 1 1 -route v -start echelon -o "$TMP/kx" > "$TMP/kx.log" 2>&1
+[ $? -ne 0 ] && grep -q "give -echelon" "$TMP/kx.log" \
+    && bien "-start echelon sin -echelon es un error" || falla "-start echelon sin -echelon pasa"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

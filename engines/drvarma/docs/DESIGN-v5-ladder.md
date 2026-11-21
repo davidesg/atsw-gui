@@ -236,7 +236,22 @@ beyond. It gives the table and stops.
   and without row factors; SC and HQ; every candidate and the two steps):
   the same candidates, dimensions and choice, and every log|Σ| and criterion
   to six decimals.
-The stage II start comes next.
+**The stage II start (`-start echelon`)** is the port's `_echelon_start`:
+the long VAR, plain stage II on the positions the model holds free (links
+and zeros stay out), and everything seeded from it: own AR and MA, cross
+terms, A₀, and Q from the stage II residuals (Q₁₁ = 1). Least squares can
+leave a root outside the unit circle: A_k and M_k are scaled by λ^k so that
+the largest inverse root is 0.95, and the output says so. A point the
+likelihood rejects goes back to the model without cross terms.
+- Homologated with the port on ten cases: the same start (the same λ when
+  the roots are pulled in), and the same iterations and optimum wherever the
+  search certifies.
+- **It is not the default, and the measurement says why.** With the indices
+  the search chooses, zero and stage II reach the same optimum. With larger
+  ones neither dominates: on IPC and WTI the stage II start ends above zero
+  at (2,1) and below it at (1,2), and on IPI, IPC and WTI at (2,1,1) it
+  starts at logL −1421 against −858 from zero and stalls there. The start
+  does not make an over-parameterised VARMA estimable; the indices do.
 
 The diagonal system is then optimised. On route V it is the model without
 cross terms, the base of its LR. It is the seed of the full model: the

@@ -679,9 +679,11 @@ typedef struct {
     int    dim, T, p;
     double logdet;
     double ***A, ***M;          /* [k][r][c], k = 0..p, 0-based; A[0] = M[0] = A_0 */
+    double S[ESC_MAX + 1][ESC_MAX + 1];    /* la covarianza de los residuos */
 } EsFit;
 
 static int      es_m, es_T;
+static int      es_modelo = 0;  /* 1: la etapa II deja fuera lo que el modelo no tiene libre (-links, -zero) */
 static double **es_wd;          /* la serie estacionaria, centrada: [t][c] */
 static double **es_f, **es_g;   /* los factores de fila: es_f[r][1..es_df[r]] */
 static int     *es_df, *es_dg;
@@ -830,10 +832,16 @@ static void es_stage2(const int *n, double **E, int t0, EsFit *F)
         free(x);
         for (c = 0; c < m; c++) {
             int k0 = (c == r) ? 1 : n[r] - es_nrc(n, r, c) + 1;
-            for (k = k0; k <= n[r]; k++) { tipo[ncol] = 0; lag[ncol] = k; col[ncol++] = c; }
+            for (k = k0; k <= n[r]; k++) {
+                if (es_modelo && c != r && !(k == 0 ? free_a0(r + 1, c + 1) : free_ar(k, r + 1, c + 1))) continue;
+                tipo[ncol] = 0; lag[ncol] = k; col[ncol++] = c;
+            }
         }
         for (c = 0; c < m; c++)
-            for (k = 1; k <= n[r]; k++) { tipo[ncol] = 1; lag[ncol] = k; col[ncol++] = c; }
+            for (k = 1; k <= n[r]; k++) {
+                if (es_modelo && c != r && !free_ma(k, r + 1, c + 1)) continue;
+                tipo[ncol] = 1; lag[ncol] = k; col[ncol++] = c;
+            }
         X = es_mat(nt, ncol);
         y = (double *)calloc((size_t)nt, sizeof(double));
         b = (double *)calloc((size_t)(ncol > 0 ? ncol : 1), sizeof(double));
@@ -863,6 +871,7 @@ static void es_stage2(const int *n, double **E, int t0, EsFit *F)
         }
     F->logdet = es_logdet(S, m);
     F->dim = d;  F->T = nt;
+    for (r = 0; r < m; r++) for (c = 0; c < m; c++) F->S[r][c] = S[r][c];
     es_free_mat(z, m); es_free_mat(S, m); es_free_mat(U, nt);
 }
 static void es_free_fit(EsFit *F)
@@ -975,13 +984,13 @@ static double es_crit(const EsFit *F, int sc)
     return F->logdet + cT * F->dim / F->T;
 }
 
-/* La busqueda. Devuelve 0, o 1 si la muestra no da. Escribe la tabla.      */
-static int ech_search(FILE *out, int n_max, int sc)
+/* Los datos de las dos etapas: la serie estacionaria (centrada para la II),
+   los factores de fila del estado actual, y la etapa I. Devuelve las
+   innovaciones E[t][c] del VAR(h) largo (validas en t >= h).               */
+static double **es_etapa1(double ***wraw_out, int *h_out, int *hmax_out, int *dmax_out)
 {
-    int     m = n_ser, T = n_stat, h_max, h, t0, i, t, c, j, dmax = 0, nfit = 0, cap, lleno, f;
-    double **wraw, **E, *aic, best;
-    EsFit  *fits;
-    int     elegido = -1, otro = -1;
+    int     m = n_ser, T = n_stat, i, j, t, c, h, h_max, dmax = 0;
+    double **wraw, **E, *aic;
 
     es_m = m;  es_T = T;
     wraw = es_mat(T, m);  es_wd = es_mat(T, m);
@@ -1005,7 +1014,6 @@ static int ech_search(FILE *out, int n_max, int sc)
         if (es_df[i] > dmax) dmax = es_df[i];
         if (es_dg[i] > dmax) dmax = es_dg[i];
     }
-    /* etapa I */
     h_max = (int)pow(log((double)T), 1.5);
     { int tope = (T - 1) / (m + 1) - 1; if (h_max > tope) h_max = tope; if (h_max < 1) h_max = 1; }
     aic = (double *)calloc((size_t)h_max + 1, sizeof(double));
@@ -1014,8 +1022,32 @@ static int ech_search(FILE *out, int n_max, int sc)
         aic[i] = es_var(wraw, i, h_max, NULL) + 2.0 * i * m * m / (double)(T - h_max);
         if (aic[i] < aic[h]) h = i;
     }
+    free(aic);
     E = es_mat(T, m);
     es_var(wraw, h, h, E);
+    *wraw_out = wraw;  *h_out = h;  *hmax_out = h_max;  *dmax_out = dmax;
+    return E;
+}
+static void es_cierra(double **E, double **wraw)
+{
+    int i;
+    es_free_mat(E, es_T);
+    for (i = 0; i < es_m; i++) { free(es_f[i]); free(es_g[i]); }
+    free(es_f); free(es_g); free(es_df); free(es_dg);
+    es_free_mat(es_wd, es_T); es_free_mat(wraw, es_T);
+}
+
+/* La busqueda. Devuelve 0, o 1 si la muestra no da. Escribe la tabla.      */
+static int ech_search(FILE *out, int n_max, int sc)
+{
+    int     m = n_ser, T = n_stat, h_max, h, t0, i, t, c, j, dmax = 0, nfit = 0, cap, lleno, f;
+    double **wraw, **E, *aic, best;
+    EsFit  *fits;
+    int     elegido = -1, otro = -1;
+
+    (void)t; (void)c;
+    E = es_etapa1(&wraw, &h, &h_max, &dmax);
+    aic = NULL;
     t0 = h + n_max + dmax;
     { int nn[ESC_MAX + 1]; for (i = 0; i < m; i++) nn[i] = n_max;
       if (T - t0 < 2 * es_dim(nn, m) / m + 10) {
@@ -1099,10 +1131,8 @@ static int ech_search(FILE *out, int n_max, int sc)
                    "  exact maximum likelihood with -echelon and those indices.\n\n");
     }
     for (i = 0; i < nfit; i++) es_free_fit(&fits[i]);
-    free(fits); es_free_mat(E, T); free(aic);
-    for (i = 0; i < m; i++) { free(es_f[i]); free(es_g[i]); }
-    free(es_f); free(es_g); free(es_df); free(es_dg);
-    es_free_mat(es_wd, T); es_free_mat(wraw, T);
+    free(fits); free(aic);
+    es_cierra(E, wraw);
     return 0;
 }
 
@@ -1772,6 +1802,90 @@ static void v_factor_test(FILE *out, int p, int q)
                        "  a lower bound, and so is the LR.\n");
     }
     fit_free(&A);
+}
+
+/* ------------------------------------------------------------------------- */
+/*  -start echelon: LA SIEMBRA DE LA ETAPA II (la forma echelon)             */
+/*                                                                           */
+/*  Las estimaciones de la etapa II de Lutkepohl y Poskitt como arranque de  */
+/*  la maxima verosimilitud: el VAR largo y los minimos cuadrados sobre las  */
+/*  posiciones libres de la forma -- las que el modelo tiene libres: los     */
+/*  enlaces y los ceros quedan fuera. Siembra TODO: lo propio (AR y MA), los */
+/*  cruzados, A_0 y Q (las varianzas y covarianzas de los residuos de la     */
+/*  etapa II, con Q_11 = 1). Los minimos cuadrados pueden dejar una raiz     */
+/*  fuera del circulo: se recogen dentro (por lambda^k) y se dice. Si elf no */
+/*  acepta el punto, se vuelve al modelo sin cruzados. Es _echelon_start     */
+/*  del porte: la etapa II llana, sin la ronda de Hannan y Kavalieris.       */
+/* ------------------------------------------------------------------------- */
+static void start_echelon(void)
+{
+    int     m = n_ser, h, h_max, dmax, t0, i, j, k, nmax = 0, n0[ESC_MAX + 1], rechazado;
+    double **wraw, **E, la, lm;
+    real  **ar0, **ma0, lv0[ESC_MAX + 1];
+    EsFit   F;
+    Fit     chk;
+
+    for (i = 1; i <= m; i++) { n0[i - 1] = ech_n[i]; if (ech_n[i] > nmax) nmax = ech_n[i]; }
+    E = es_etapa1(&wraw, &h, &h_max, &dmax);
+    t0 = h + nmax + dmax;
+    if (n_stat - t0 < 2 * es_dim(n0, m) / m + 10) {
+        snprintf(start_used, sizeof start_used, "zero (too few observations for the echelon start)");
+        es_cierra(E, wraw);
+        return;
+    }
+    memset(&F, 0, sizeof F);
+    es_modelo = 1;
+    es_stage2(n0, E, t0, &F);
+    es_modelo = 0;
+    es_recoge(&F, 0.95, &la, &lm);
+
+    ar0 = matrix(1, m, 0, nmax > 0 ? nmax : 1);  ma0 = matrix(1, m, 0, nmax > 0 ? nmax : 1);
+    for (i = 1; i <= m; i++) {
+        lv0[i] = lvar[i];
+        for (k = 1; k <= ech_n[i]; k++) { ar0[i][k] = Tm[i].Ar1[1][k]; ma0[i][k] = Tm[i].Ma1[1][k]; }
+    }
+    for (i = 1; i <= m; i++) {
+        for (k = 1; k <= ech_n[i]; k++) {
+            Tm[i].Ar1[1][k] = -F.A[k][i - 1][i - 1];
+            Tm[i].Ma1[1][k] = -F.M[k][i - 1][i - 1];
+        }
+        for (j = 1; j <= m; j++) {
+            if (i == j) continue;
+            for (k = 1; k <= nmax; k++) {
+                if (free_ar(k, i, j)) cAR[k][i][j] = -F.A[k][i - 1][j - 1];
+                if (free_ma(k, i, j)) cMA[k][i][j] = -F.M[k][i - 1][j - 1];
+            }
+            if (free_a0(i, j)) cA0[i][j] = -F.A[0][i - 1][j - 1];
+        }
+    }
+    for (i = 2; i <= m; i++) lvar[i] = log(F.S[i - 1][i - 1] / F.S[0][0]);
+    if (!cx_diagcov)
+        for (i = 2; i <= m; i++)
+            for (j = 1; j < i; j++) qcov[i][j] = F.S[i - 1][j - 1] / F.S[0][0];
+
+    fit_run(&chk, 0);
+    rechazado = chk.ifault;
+    fit_free(&chk);                 /* antes de reponer (BUG-0006) */
+    if (rechazado) {
+        for (i = 1; i <= m; i++) {
+            lvar[i] = lv0[i];
+            for (k = 1; k <= ech_n[i]; k++) { Tm[i].Ar1[1][k] = ar0[i][k]; Tm[i].Ma1[1][k] = ma0[i][k]; }
+        }
+        memset(cAR, 0, sizeof cAR);  memset(cMA, 0, sizeof cMA);
+        memset(cA0, 0, sizeof cA0);  memset(qcov, 0, sizeof qcov);
+        snprintf(start_used, sizeof start_used,
+                 "the model without cross terms (the echelon start was not admissible)");
+    } else if (la < 1.0 || lm < 1.0) {
+        char a[40] = "", b[40] = "";
+        if (la < 1.0) snprintf(a, sizeof a, "AR x %.3f^k", la);
+        if (lm < 1.0) snprintf(b, sizeof b, "%sMA x %.3f^k", la < 1.0 ? ", " : "", lm);
+        snprintf(start_used, sizeof start_used, "echelon (%s%s: inside the unit circle)", a, b);
+    } else
+        snprintf(start_used, sizeof start_used, "echelon");
+
+    free_matrix(ma0, 1, m, 0, nmax > 0 ? nmax : 1);  free_matrix(ar0, 1, m, 0, nmax > 0 ? nmax : 1);
+    es_free_fit(&F);
+    es_cierra(E, wraw);
 }
 
 static void fit_free(Fit *F)
@@ -2880,6 +2994,8 @@ int escalera_main(int argc, char *argv[])
         else if (strcmp(argv[argi], "-start") == 0 && argi + 1 < argc &&
                  (strcmp(argv[argi + 1], "ols") == 0 || strcmp(argv[argi + 1], "zero") == 0))
             opt_start_ols = (strcmp(argv[++argi], "ols") == 0);
+        else if (strcmp(argv[argi], "-start") == 0 && argi + 1 < argc &&
+                 strcmp(argv[argi + 1], "echelon") == 0) { argi++; opt_start_ols = 2; }
         else if (strcmp(argv[argi], "-hessian") == 0 && argi + 1 < argc &&
                  (strcmp(argv[argi + 1], "fd") == 0 || strcmp(argv[argi + 1], "bfgs") == 0))
             est_fdhess = (strcmp(argv[++argi], "fd") == 0);
@@ -2897,6 +3013,10 @@ int escalera_main(int argc, char *argv[])
     if (ech_busca && (p != 0 || q != 0 || ech_nmax < 0 || ech_nmax > ESC_MAXLAG)) {
         printf("ERROR: -echelon search: give 0 0 as cross orders, and -nmax between 0 and %d\n",
                ESC_MAXLAG);
+        return 1;
+    }
+    if (opt_start_ols == 2 && !ech_arg) {
+        printf("ERROR: -start echelon is the echelon form's: give -echelon n1,n2,...\n");
         return 1;
     }
     if (opt_route_v && opt_fixarma) {
@@ -3389,7 +3509,12 @@ int escalera_main(int argc, char *argv[])
             for (a = 0; a <= ESC_MAX; a++)
                 for (b2 = 0; b2 <= ESC_MAX; b2++) qcov[a][b2] = 0.0;
         }
-        if (opt_start_ols > 0 || (opt_start_ols < 0 && p > 0 && q == 0)) {
+        if (opt_start_ols == 2) {
+            start_echelon();
+            printf("Start of the cross terms: %s\n", start_used);
+            fprintf(outputv, "Start of the cross terms: %s (-start echelon: Lutkepohl and "
+                             "Poskitt's stage II least squares, the whole model)\n", start_used);
+        } else if (opt_start_ols > 0 || (opt_start_ols < 0 && p > 0 && q == 0)) {
             if (v_on) start_ols_v(); else start_ols();
             printf("Start of the cross terms: %s\n", start_used);
             fprintf(outputv, "Start of the cross terms: %s (%s: the original "

@@ -653,6 +653,459 @@ static void v_fila_por_factor(real ***c, int a, int m, int K, const real *f, int
     free_matrix(n, 1, K + d, 1, m);
 }
 
+
+/* ------------------------------------------------------------------------- */
+/*  -echelon search: LA BUSQUEDA DE LOS INDICES DE KRONECKER                 */
+/*                                                                           */
+/*  Lutkepohl y Poskitt (1996, seccion 3), etapas I y II; es echelon.search  */
+/*  del porte (drvarma-python, echelon.py), operacion por operacion.         */
+/*   Etapa I   un VAR(h) largo por minimos cuadrados, h por AIC hasta        */
+/*             (log T)^1.5: sus residuos hacen de innovaciones.              */
+/*   Etapa II  por cada candidato n, minimos cuadrados fila a fila sobre     */
+/*               w_t = (I - A_0)(w_t - e_t) - SUM A_k w_t-k + SUM M_k e_t-k  */
+/*             y el criterio log|Sigma(n)| + c_T dim(n) / T, con             */
+/*             c_T = log T (SC) o 2 log log T (HQ). Despues, una ronda de la */
+/*             correccion de Hannan y Kavalieris (1984): los residuos se     */
+/*             recalculan con el modelo recien ajustado (sus raices          */
+/*             recogidas dentro) y se repite la etapa II.                    */
+/*   La busqueda  todos los n de {0..n_max}^m mientras no pasen de 256; si   */
+/*             no, los dos pasos de Hannan y Kavalieris.                     */
+/*  Con factor de fila, la fila r se ajusta sobre (F_r/G_r)(B) w.            */
+/*  Solo da la tabla: no estima por maxima verosimilitud.                    */
+/* ------------------------------------------------------------------------- */
+#define ES_FULL_MAX 256
+typedef struct {
+    int    n[ESC_MAX + 1];
+    int    dim, T, p;
+    double logdet;
+    double ***A, ***M;          /* [k][r][c], k = 0..p, 0-based; A[0] = M[0] = A_0 */
+} EsFit;
+
+static int      es_m, es_T;
+static double **es_wd;          /* la serie estacionaria, centrada: [t][c] */
+static double **es_f, **es_g;   /* los factores de fila: es_f[r][1..es_df[r]] */
+static int     *es_df, *es_dg;
+
+static double **es_mat(int r, int c)
+{
+    int i;
+    double **a = (double **)calloc((size_t)(r > 0 ? r : 1), sizeof(double *));
+    for (i = 0; i < r; i++) a[i] = (double *)calloc((size_t)(c > 0 ? c : 1), sizeof(double));
+    return a;
+}
+static void es_free_mat(double **a, int r) { int i; for (i = 0; i < r; i++) free(a[i]); free(a); }
+static double ***es_ten(int k, int m)
+{
+    int i;
+    double ***a = (double ***)calloc((size_t)k, sizeof(double **));
+    for (i = 0; i < k; i++) a[i] = es_mat(m, m);
+    return a;
+}
+static void es_free_ten(double ***a, int k, int m) { int i; for (i = 0; i < k; i++) es_free_mat(a[i], m); free(a); }
+
+/* minimos cuadrados: b = argmin |y - X b|, u los residuos. X[fila][col].
+   Por la descomposicion en valores singulares de X (no por las ecuaciones
+   normales, que elevan al cuadrado el numero de condicion): en los
+   candidatos que sobran los regresores son casi colineales, y los
+   coeficientes -- de los que salen las raices y la correccion de Hannan y
+   Kavalieris -- solo quedan determinados asi. Es el lstsq del porte, con su
+   umbral: los valores singulares por debajo de eps * max(n, k) * el mayor
+   se dan por cero (la solucion de norma minima).                           */
+static void es_ls(double **X, const double *y, int n, int k, double *b, double *u)
+{
+    int i, j, r;
+    if (k > 0) {
+        real **a = matrix(1, n, 1, k), **v = matrix(1, k, 1, k), *sv = vector(1, k);
+        double smax = 0.0, tol;
+        for (r = 0; r < n; r++) for (i = 0; i < k; i++) a[r + 1][i + 1] = X[r][i];
+        svdcp(a, n, k, sv, v);
+        for (j = 1; j <= k; j++) if (sv[j] > smax) smax = sv[j];
+        tol = 2.220446049250313e-16 * (n > k ? n : k) * smax;
+        for (i = 0; i < k; i++) b[i] = 0.0;
+        for (j = 1; j <= k; j++) {
+            double s = 0.0;
+            if (sv[j] <= tol) continue;
+            for (r = 0; r < n; r++) s += a[r + 1][j] * y[r];
+            s /= sv[j];
+            for (i = 0; i < k; i++) b[i] += v[i + 1][j] * s;
+        }
+        free_vector(sv, 1, k); free_matrix(v, 1, k, 1, k); free_matrix(a, 1, n, 1, k);
+    }
+    for (r = 0; r < n; r++) {
+        double s = y[r];
+        for (i = 0; i < k; i++) s -= X[r][i] * b[i];
+        u[r] = s;
+    }
+}
+/* log|S| de una matriz simetrica definida positiva (Cholesky); -inf si no lo es */
+static double es_logdet(double **S, int m)
+{
+    double **L = es_mat(m, m), ld = 0.0;
+    int i, j, k, mal = 0;
+    for (i = 0; i < m && !mal; i++)
+        for (j = 0; j <= i; j++) {
+            double s = S[i][j];
+            for (k = 0; k < j; k++) s -= L[i][k] * L[j][k];
+            if (i == j) {
+                if (s <= 0.0) { mal = 1; break; }
+                L[i][i] = sqrt(s);  ld += 2.0 * log(L[i][i]);
+            } else L[i][j] = s / L[j][j];
+        }
+    es_free_mat(L, m);
+    return mal ? -HUGE_VAL : ld;
+}
+/* (F/G)(B) de una columna, con los valores previos a la muestra a cero */
+static void es_filtra(const double *x, int T, const double *f, int df, const double *g, int dg, double *z)
+{
+    int t, j;
+    for (t = 0; t < T; t++) {
+        double s = x[t];
+        for (j = 1; j <= df && j <= t; j++) s -= f[j] * x[t - j];
+        z[t] = s;
+    }
+    if (dg > 0)
+        for (t = 1; t < T; t++)
+            for (j = 1; j <= dg && j <= t; j++) z[t] += g[j] * z[t - j];
+}
+/* Etapa I: el VAR(h) por minimos cuadrados (con constante) en t = t0..T-1.
+   Devuelve log|Sigma|; si e != NULL, sus residuos en e[t][c] (t >= t0).   */
+static double es_var(double **wraw, int h, int t0, double **e)
+{
+    int    m = es_m, T = es_T, n = T - t0, k = 1 + h * m, r, c, j, l;
+    double **X = es_mat(n, k), *y = (double *)calloc((size_t)n, sizeof(double));
+    double *b = (double *)calloc((size_t)k, sizeof(double)), **U = es_mat(n, m), **S = es_mat(m, m), ld;
+    for (r = 0; r < n; r++) {
+        X[r][0] = 1.0;
+        for (l = 1; l <= h; l++)
+            for (c = 0; c < m; c++) X[r][1 + (l - 1) * m + c] = wraw[t0 + r - l][c];
+    }
+    for (c = 0; c < m; c++) {
+        double *u = (double *)calloc((size_t)n, sizeof(double));
+        for (r = 0; r < n; r++) y[r] = wraw[t0 + r][c];
+        es_ls(X, y, n, k, b, u);
+        for (r = 0; r < n; r++) U[r][c] = u[r];
+        free(u);
+    }
+    for (c = 0; c < m; c++)
+        for (j = 0; j < m; j++) {
+            double s = 0.0;
+            for (r = 0; r < n; r++) s += U[r][c] * U[r][j];
+            S[c][j] = s / n;
+        }
+    ld = es_logdet(S, m);
+    if (e) for (r = 0; r < n; r++) for (c = 0; c < m; c++) e[t0 + r][c] = U[r][c];
+    es_free_mat(S, m); es_free_mat(U, n); free(b); free(y); es_free_mat(X, n);
+    return ld;
+}
+static int es_nrc(const int *n, int r, int c)
+{
+    int a = (c < r) ? n[r] + 1 : n[r];
+    return a < n[c] ? a : n[c];
+}
+static int es_dim(const int *n, int m)
+{
+    int r, c, d = 0;
+    for (r = 0; r < m; r++)
+        for (c = 0; c < m; c++)
+            d += (r == c ? n[r] : es_nrc(n, r, c)) + n[r];
+    return d;
+}
+/* Etapa II para los indices n (0-based), con las innovaciones E[t][c]
+   (validas en t >= h), sobre t = t0..T-1.                                  */
+static void es_stage2(const int *n, double **E, int t0, EsFit *F)
+{
+    int    m = es_m, T = es_T, nt = T - t0, p = 0, r, c, k, j, d = 0;
+    double **U = es_mat(nt, m), **S = es_mat(m, m), **z = es_mat(m, T);
+    for (r = 0; r < m; r++) { F->n[r] = n[r]; if (n[r] > p) p = n[r]; }
+    F->p = p;
+    F->A = es_ten(p + 1, m);  F->M = es_ten(p + 1, m);
+    for (r = 0; r < m; r++) F->A[0][r][r] = 1.0;
+    for (r = 0; r < m; r++) {
+        int     ncol = 0, tipo[4 * ESC_MAX * (ESC_MAXLAG + 2)], lag[4 * ESC_MAX * (ESC_MAXLAG + 2)], col[4 * ESC_MAX * (ESC_MAXLAG + 2)];
+        double **X, *y, *b, *u, *x = (double *)calloc((size_t)T, sizeof(double));
+        for (c = 0; c < m; c++) {                  /* todas las series por el factor de ESTA fila */
+            for (j = 0; j < T; j++) x[j] = es_wd[j][c];
+            es_filtra(x, T, es_f[r], es_df[r], es_g[r], es_dg[r], z[c]);
+        }
+        free(x);
+        for (c = 0; c < m; c++) {
+            int k0 = (c == r) ? 1 : n[r] - es_nrc(n, r, c) + 1;
+            for (k = k0; k <= n[r]; k++) { tipo[ncol] = 0; lag[ncol] = k; col[ncol++] = c; }
+        }
+        for (c = 0; c < m; c++)
+            for (k = 1; k <= n[r]; k++) { tipo[ncol] = 1; lag[ncol] = k; col[ncol++] = c; }
+        X = es_mat(nt, ncol);
+        y = (double *)calloc((size_t)nt, sizeof(double));
+        b = (double *)calloc((size_t)(ncol > 0 ? ncol : 1), sizeof(double));
+        u = (double *)calloc((size_t)nt, sizeof(double));
+        for (j = 0; j < nt; j++) {
+            int t = t0 + j;
+            y[j] = z[r][t];
+            for (k = 0; k < ncol; k++)
+                X[j][k] = tipo[k] ? E[t - lag[k]][col[k]]
+                        : (lag[k] == 0 ? z[col[k]][t] - E[t][col[k]] : z[col[k]][t - lag[k]]);
+        }
+        es_ls(X, y, nt, ncol, b, u);
+        for (j = 0; j < nt; j++) U[j][r] = u[j];
+        for (k = 0; k < ncol; k++) {
+            if (tipo[k]) F->M[lag[k]][r][col[k]] = b[k];
+            else         F->A[lag[k]][r][col[k]] = -b[k];
+        }
+        d += ncol;
+        free(u); free(b); free(y); es_free_mat(X, nt);
+    }
+    for (r = 0; r < m; r++) for (c = 0; c < m; c++) F->M[0][r][c] = F->A[0][r][c];
+    for (r = 0; r < m; r++)
+        for (c = 0; c < m; c++) {
+            double s = 0.0;
+            for (j = 0; j < nt; j++) s += U[j][r] * U[j][c];
+            S[r][c] = s / nt;
+        }
+    F->logdet = es_logdet(S, m);
+    F->dim = d;  F->T = nt;
+    es_free_mat(z, m); es_free_mat(S, m); es_free_mat(U, nt);
+}
+static void es_free_fit(EsFit *F)
+{
+    if (F->A) es_free_ten(F->A, F->p + 1, es_m);
+    if (F->M) es_free_ten(F->M, F->p + 1, es_m);
+    F->A = F->M = NULL;
+}
+/* X = A_0^-1 B, con A_0 triangular inferior de diagonal unidad */
+static void es_a0inv(double **A0, double **B, double **X, int m)
+{
+    int r, c, j;
+    for (r = 0; r < m; r++)
+        for (j = 0; j < m; j++) {
+            double s = B[r][j];
+            for (c = 0; c < r; c++) s -= A0[r][c] * X[c][j];
+            X[r][j] = s;
+        }
+}
+/* la mayor raiz inversa de I - SUM C_k z^k, C_k = -A_0^-1 P_k (k = 1..p) */
+static double es_raiz(double **A0, double ***P, int p)
+{
+    int    m = es_m, k, r, c, i;
+    real ***th, *wr, *wi, *wm;
+    double **X, mx = 0.0;
+    int    ifc = 0;
+    if (p < 1) return 0.0;
+    th = tensor(0, p, 1, m, 1, m);
+    X = es_mat(m, m);
+    for (k = 1; k <= p; k++) {
+        es_a0inv(A0, P[k], X, m);
+        for (r = 0; r < m; r++) for (c = 0; c < m; c++) th[k][r + 1][c + 1] = -X[r][c];
+    }
+    wr = vector(1, m * p); wi = vector(1, m * p); wm = vector(1, m * p);
+    chekma(m, p, th, wr, wi, wm, &ifc);
+    for (i = 1; i <= m * p; i++) if (wm[i] > mx) mx = wm[i];
+    free_vector(wm, 1, m * p); free_vector(wi, 1, m * p); free_vector(wr, 1, m * p);
+    es_free_mat(X, m); free_tensor(th, 0, p, 1, m, 1, m);
+    return mx;
+}
+/* recoge dentro: A_k por lambda_A^k y M_k por lambda_M^k si la mayor raiz
+   inversa pasa de rho. Devuelve las lambdas.                               */
+static void es_recoge(EsFit *F, double rho, double *la, double *lm)
+{
+    int    m = es_m, k, r, c;
+    double ra = es_raiz(F->A[0], F->A, F->p), rm = es_raiz(F->A[0], F->M, F->p);
+    *la = ra >= rho ? rho / ra : 1.0;
+    *lm = rm >= rho ? rho / rm : 1.0;
+    for (k = 1; k <= F->p; k++)
+        for (r = 0; r < m; r++)
+            for (c = 0; c < m; c++) {
+                F->A[k][r][c] *= pow(*la, k);
+                F->M[k][r][c] *= pow(*lm, k);
+            }
+}
+/* las innovaciones del modelo echelon sobre la serie centrada, valores
+   previos a cero: A_0 e_t = A_0 w_t + SUM A'_k w_t-k - SUM M'_k e_t-k, con
+   A' y M' las filas por sus factores                                       */
+static void es_residuos(const EsFit *F, double **e)
+{
+    int    m = es_m, T = es_T, p = F->p, K, k, r, c, j, t, dmax = 0;
+    double ***A, ***M, **X = es_mat(m, m);
+    for (r = 0; r < m; r++) {
+        if (es_df[r] > dmax) dmax = es_df[r];
+        if (es_dg[r] > dmax) dmax = es_dg[r];
+    }
+    K = p + dmax;
+    A = es_ten(K + 1, m);  M = es_ten(K + 1, m);
+    for (k = 0; k <= K; k++)
+        for (r = 0; r < m; r++)
+            for (c = 0; c < m; c++) {
+                double a = k <= p ? F->A[k][r][c] : 0.0, b = k <= p ? F->M[k][r][c] : 0.0;
+                for (j = 1; j <= es_df[r] && j <= k; j++) if (k - j <= p) a -= es_f[r][j] * F->A[k - j][r][c];
+                for (j = 1; j <= es_dg[r] && j <= k; j++) if (k - j <= p) b -= es_g[r][j] * F->M[k - j][r][c];
+                A[k][r][c] = a;  M[k][r][c] = b;
+            }
+    for (k = 1; k <= K; k++) {                 /* A_0^-1 A'_k y A_0^-1 M'_k */
+        es_a0inv(F->A[0], A[k], X, m);
+        for (r = 0; r < m; r++) for (c = 0; c < m; c++) A[k][r][c] = X[r][c];
+        es_a0inv(F->A[0], M[k], X, m);
+        for (r = 0; r < m; r++) for (c = 0; c < m; c++) M[k][r][c] = X[r][c];
+    }
+    for (t = 0; t < T; t++)
+        for (r = 0; r < m; r++) {
+            double s = es_wd[t][r];
+            for (k = 1; k <= K && k <= t; k++)
+                for (c = 0; c < m; c++) s += A[k][r][c] * es_wd[t - k][c] - M[k][r][c] * e[t - k][c];
+            e[t][r] = s;
+        }
+    es_free_ten(M, K + 1, m); es_free_ten(A, K + 1, m); es_free_mat(X, m);
+}
+/* etapa II y una ronda de la correccion de Hannan y Kavalieris */
+static void es_refinada(const int *n, double **E1, int h, int t0, EsFit *F)
+{
+    EsFit    G;
+    double   la, lm, **e = es_mat(es_T, es_m);
+    int      t, c;
+    memset(&G, 0, sizeof G);
+    es_stage2(n, E1, t0, &G);
+    es_recoge(&G, 0.95, &la, &lm);
+    es_residuos(&G, e);
+    for (t = 0; t < h; t++) for (c = 0; c < es_m; c++) e[t][c] = 0.0;   /* no se usan */
+    es_free_fit(&G);
+    es_stage2(n, e, t0, F);
+    es_free_mat(e, es_T);
+}
+static double es_crit(const EsFit *F, int sc)
+{
+    double cT = sc ? log((double)F->T) : 2.0 * log(log((double)F->T));
+    return F->logdet + cT * F->dim / F->T;
+}
+
+/* La busqueda. Devuelve 0, o 1 si la muestra no da. Escribe la tabla.      */
+static int ech_search(FILE *out, int n_max, int sc)
+{
+    int     m = n_ser, T = n_stat, h_max, h, t0, i, t, c, j, dmax = 0, nfit = 0, cap, lleno, f;
+    double **wraw, **E, *aic, best;
+    EsFit  *fits;
+    int     elegido = -1, otro = -1;
+
+    es_m = m;  es_T = T;
+    wraw = es_mat(T, m);  es_wd = es_mat(T, m);
+    for (c = 0; c < m; c++) {
+        double s = 0.0;
+        for (t = 0; t < T; t++) { wraw[t][c] = w[c + 1][t + 1]; s += wraw[t][c]; }
+        for (t = 0; t < T; t++) es_wd[t][c] = wraw[t][c] - s / T;
+    }
+    es_f = (double **)calloc((size_t)m, sizeof(double *));  es_g = (double **)calloc((size_t)m, sizeof(double *));
+    es_df = (int *)calloc((size_t)m, sizeof(int));          es_dg = (int *)calloc((size_t)m, sizeof(int));
+    for (i = 0; i < m; i++) {
+        struct Tusmodel M = v_parte(i + 1, 0);
+        real *v;
+        es_df[i] = total_ar_order(&M);  es_dg[i] = total_ma_order(&M);
+        es_f[i] = (double *)calloc((size_t)es_df[i] + 2, sizeof(double));
+        es_g[i] = (double *)calloc((size_t)es_dg[i] + 2, sizeof(double));
+        if (es_df[i] > 0) { v = vector(1, es_df[i]); expand_ar_factors(&M, v, es_df[i]);
+                            for (j = 1; j <= es_df[i]; j++) es_f[i][j] = v[j]; free_vector(v, 1, es_df[i]); }
+        if (es_dg[i] > 0) { v = vector(1, es_dg[i]); expand_ma_factors(&M, v, es_dg[i]);
+                            for (j = 1; j <= es_dg[i]; j++) es_g[i][j] = v[j]; free_vector(v, 1, es_dg[i]); }
+        if (es_df[i] > dmax) dmax = es_df[i];
+        if (es_dg[i] > dmax) dmax = es_dg[i];
+    }
+    /* etapa I */
+    h_max = (int)pow(log((double)T), 1.5);
+    { int tope = (T - 1) / (m + 1) - 1; if (h_max > tope) h_max = tope; if (h_max < 1) h_max = 1; }
+    aic = (double *)calloc((size_t)h_max + 1, sizeof(double));
+    h = 1;
+    for (i = 1; i <= h_max; i++) {
+        aic[i] = es_var(wraw, i, h_max, NULL) + 2.0 * i * m * m / (double)(T - h_max);
+        if (aic[i] < aic[h]) h = i;
+    }
+    E = es_mat(T, m);
+    es_var(wraw, h, h, E);
+    t0 = h + n_max + dmax;
+    { int nn[ESC_MAX + 1]; for (i = 0; i < m; i++) nn[i] = n_max;
+      if (T - t0 < 2 * es_dim(nn, m) / m + 10) {
+          for (f = 0; f < 2; f++)
+              fprintf(f ? out : stdout, "ERROR: %d observations are too few for a largest index of %d with a "
+                                        "VAR(%d) first stage\n", T, n_max, h);
+          return 1;
+      } }
+    cap = 1; lleno = 1;
+    for (i = 0; i < m; i++) { if (cap > ES_FULL_MAX) { lleno = 0; break; } cap *= (n_max + 1); }
+    if (cap > ES_FULL_MAX) lleno = 0;
+    if (!lleno) cap = (n_max + 1) + m * (n_max + 1) + 2;
+    fits = (EsFit *)calloc((size_t)cap, sizeof(EsFit));
+
+    if (lleno) {
+        int n[ESC_MAX + 1];
+        for (i = 0; i < m; i++) n[i] = 0;
+        for (;;) {
+            es_refinada(n, E, h, t0, &fits[nfit++]);
+            for (i = m - 1; i >= 0; i--) { if (++n[i] <= n_max) break; n[i] = 0; }   /* el ultimo corre mas */
+            if (i < 0) break;
+        }
+        for (i = 0; i < nfit; i++)
+            if (elegido < 0 || es_crit(&fits[i], sc) < es_crit(&fits[elegido], sc)) elegido = i;
+    } else {                                   /* Hannan y Kavalieris: dos pasos */
+        int n[ESC_MAX + 1], cur;
+        for (j = 0; j <= n_max; j++) {
+            for (i = 0; i < m; i++) n[i] = j;
+            es_refinada(n, E, h, t0, &fits[nfit++]);
+            if (elegido < 0 || es_crit(&fits[nfit - 1], sc) < es_crit(&fits[elegido], sc)) elegido = nfit - 1;
+        }
+        cur = elegido;
+        for (i = 0; i < m; i++)
+            for (;;) {
+                if (fits[cur].n[i] == 0) break;
+                int ya = -1, l;
+                for (j = 0; j < m; j++) n[j] = fits[cur].n[j];
+                n[i]--;
+                for (l = 0; l < nfit && ya < 0; l++) {       /* un candidato no se ajusta dos veces */
+                    int ig = 1;
+                    for (j = 0; j < m; j++) if (fits[l].n[j] != n[j]) ig = 0;
+                    if (ig) ya = l;
+                }
+                if (ya < 0) { es_refinada(n, E, h, t0, &fits[nfit]); ya = nfit++; }
+                if (es_crit(&fits[ya], sc) < es_crit(&fits[cur], sc)) cur = ya; else break;
+            }
+        elegido = cur;
+    }
+    for (i = 0; i < nfit; i++)
+        if (otro < 0 || es_crit(&fits[i], !sc) < es_crit(&fits[otro], !sc)) otro = i;
+    best = es_crit(&fits[elegido], sc);
+    (void)best;
+
+    for (f = 0; f < 2; f++) {
+        FILE *o = f ? out : stdout;
+        fprintf(o, "=============================================================\n");
+        fprintf(o, "  THE ECHELON INDEX SEARCH (Lutkepohl and Poskitt 1996, stages I-II)\n");
+        fprintf(o, "=============================================================\n");
+        fprintf(o, "  Stage I: a long VAR(%d) by least squares, its order by AIC up to %d.\n", h, h_max);
+        fprintf(o, "  Stage II: least squares per candidate, with one round of Hannan and\n");
+        fprintf(o, "  Kavalieris' correction, on the same %d observations for all of them.\n", fits[0].T);
+        if (dmax > 0)
+            fprintf(o, "  Each row is fitted on the series filtered by its row factor (the\n"
+                       "  univariate model's seasonal and fixed-frequency factors).\n");
+        fprintf(o, "  %s, %d candidates.\n", lleno ? "Every candidate" : "Hannan and Kavalieris' two steps", nfit);
+        fprintf(o, "  Series, in order:");
+        for (i = 1; i <= m; i++) fprintf(o, " %s", Ts[i].name);
+        fprintf(o, "   (the order is part of the echelon form)\n\n");
+        fprintf(o, "  %-14s %5s %14s %14s %14s\n", "indices", "dim", "log|S|", "HQ", "SC");
+        for (i = 0; i < nfit; i++) {
+            char nb[64] = "";
+            for (j = 0; j < m; j++) snprintf(nb + strlen(nb), sizeof nb - strlen(nb), "%s%d", j ? "," : "", fits[i].n[j]);
+            fprintf(o, "  %-14s %5d %14.6f %14.6f %14.6f%s\n", nb, fits[i].dim, fits[i].logdet,
+                    es_crit(&fits[i], 0), es_crit(&fits[i], 1), i == elegido ? "  <-" : "");
+        }
+        fprintf(o, "\n  Chosen by %s:", sc ? "SC" : "HQ");
+        for (j = 0; j < m; j++) fprintf(o, "%s%d", j ? "," : " ", fits[elegido].n[j]);
+        fprintf(o, "      (by %s:", sc ? "HQ" : "SC");
+        for (j = 0; j < m; j++) fprintf(o, "%s%d", j ? "," : " ", fits[otro].n[j]);
+        fprintf(o, ")\n  This is an identification by least squares: the model is then fitted by\n"
+                   "  exact maximum likelihood with -echelon and those indices.\n\n");
+    }
+    for (i = 0; i < nfit; i++) es_free_fit(&fits[i]);
+    free(fits); es_free_mat(E, T); free(aic);
+    for (i = 0; i < m; i++) { free(es_f[i]); free(es_g[i]); }
+    free(es_f); free(es_g); free(es_df); free(es_dg);
+    es_free_mat(es_wd, T); es_free_mat(wraw, T);
+    return 0;
+}
+
 static void orders(int *P, int *Q)
 {
     int a;
@@ -2280,6 +2733,11 @@ void escalera_usage(const char *prog)
            "             has its own AR(n_r)/MA(n_r); the indices say which cross lags\n"
            "             and which contemporaneous terms (AR0[r<-c]) exist. Equal\n"
            "             indices are the VARMA(n,n). Give 0 0 as cross orders\n");
+    printf("  -echelon search : the Kronecker indices from the data (Lutkepohl and\n"
+           "             Poskitt's stages I and II): a long VAR, then least squares\n"
+           "             per candidate and a criterion (-criterion SC|HQ, default\n"
+           "             SC), indices up to -nmax N (default 3). It gives the table\n"
+           "             and stops: no maximum likelihood. Give 0 0 as cross orders\n");
     printf("  -factortest : on route V, the LR of the row factor: the fitted model\n"
            "             against the same rows with every position the factor reaches\n"
            "             free (Tiao and Box's caveat on univariate operators)\n");
@@ -2337,6 +2795,7 @@ int escalera_main(int argc, char *argv[])
     int   irfboot_n = 0;
     const char *links_arg = NULL;
     const char *zero_arg = NULL, *ech_arg = NULL;
+    int   ech_busca = 0, ech_nmax = 3, ech_sc = 1;
     int   i, a, argi, met_esc = 1, p, q, rc = 0, fc_h = 0, estwin = 0;
     real  logL_uni[ESC_MAX + 1], s2_uni[ESC_MAX + 1], move[ESC_MAX + 1];
     real  sum_uni = 0.0, logL_gate, logL_diag;
@@ -2386,6 +2845,12 @@ int escalera_main(int argc, char *argv[])
             det_base = strcmp(argv[++argi], "gate") == 0 ? 2 : 1;
         else if (strcmp(argv[argi], "-fixarma") == 0) opt_fixarma = 1;
         else if (strcmp(argv[argi], "-factortest") == 0) opt_factortest = 1;
+        else if (strcmp(argv[argi], "-echelon") == 0 && argi + 1 < argc &&
+                 strcmp(argv[argi + 1], "search") == 0) { argi++; ech_busca = 1; }
+        else if (strcmp(argv[argi], "-nmax") == 0 && argi + 1 < argc) ech_nmax = atoi(argv[++argi]);
+        else if (strcmp(argv[argi], "-criterion") == 0 && argi + 1 < argc &&
+                 (strcmp(argv[argi + 1], "SC") == 0 || strcmp(argv[argi + 1], "HQ") == 0))
+            ech_sc = (strcmp(argv[++argi], "SC") == 0);
         else if (strcmp(argv[argi], "-echelon") == 0 && argi + 1 < argc) {
             ech_arg = argv[++argi];  opt_route_v = 1;      /* la echelon va por la ruta V */
         }
@@ -2429,6 +2894,11 @@ int escalera_main(int argc, char *argv[])
         }
     }
     int want_diagcov = cx_diagcov;
+    if (ech_busca && (p != 0 || q != 0 || ech_nmax < 0 || ech_nmax > ESC_MAXLAG)) {
+        printf("ERROR: -echelon search: give 0 0 as cross orders, and -nmax between 0 and %d\n",
+               ESC_MAXLAG);
+        return 1;
+    }
     if (opt_route_v && opt_fixarma) {
         printf("ERROR: -route v with -fixarma: on route V the own ARMA is the vector's,\n"
                "       free by definition; there is no univariate ARMA to hold.\n");
@@ -2846,6 +3316,15 @@ int escalera_main(int argc, char *argv[])
         }
     }
     fit_free(&D);
+
+    /* [3a] -echelon search: pasada la puerta, la tabla de los indices, y nada
+       mas. No estima por maxima verosimilitud.                            */
+    if (ech_busca) {
+        rc = ech_search(outputv, ech_nmax, ech_sc);
+        printf("Full results written to %s\n", outfile);
+        fclose(outputv);
+        return rc ? 1 : 0;
+    }
 
     /* [3b] La ruta V: pasada la puerta, lo propio pasa a ser el AR(p)/MA(q)
        libre del vector, y lo demas del univariante, el factor de su fila. */

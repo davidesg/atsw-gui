@@ -212,8 +212,31 @@ every case both certify: IPC and WTI at (1,0), (1,1), (2,1) and (1,2);
 muskrat and mink at (1,0); IPI, IPC and WTI, with IPI's row factor, at
 (0,1,1). The parameter counts and the model without cross terms agree in
 every case tried. Where neither certifies (indices larger than the data
-ask for) the two stop at different points. The index search and the stage II
-start come next.
+ask for) the two stop at different points.
+
+**The index search (`-echelon search`)** is what makes a VARMA operative:
+with indices larger than the data ask for the model is over-parameterised
+again and no start saves it; with the right ones nearly any start will do.
+It is Lütkepohl and Poskitt's stages I and II, the port's `echelon.search`
+operation by operation: a long VAR(h) by least squares (h by AIC up to
+(log T)^1.5), whose residuals stand for the innovations; then, for each
+candidate n, least squares row by row and the criterion
+log|Σ(n)| + c_T dim(n)/T (SC by default), after one round of Hannan and
+Kavalieris' correction (the residuals recomputed from the model just
+fitted, its roots pulled inside). Every candidate up to 256, their two steps
+beyond. It gives the table and stops.
+- **The least squares are solved by singular values**, not by the normal
+  equations. In the candidates that are too large the regressors are nearly
+  collinear: the residuals are well determined but the coefficients are not,
+  and the roots and the correction come from the coefficients. With the
+  normal equations six of the sixteen candidates of IPC and WTI differed
+  from the port in the second decimal; by singular values, with numpy's
+  threshold, all agree.
+- Homologated with the port on six cases (two, three and four series; with
+  and without row factors; SC and HQ; every candidate and the two steps):
+  the same candidates, dimensions and choice, and every log|Σ| and criterion
+  to six decimals.
+The stage II start comes next.
 
 The diagonal system is then optimised. On route V it is the model without
 cross terms, the base of its LR. It is the seed of the full model: the

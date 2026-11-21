@@ -125,7 +125,7 @@ $(GIT_HASH_H): FORCE | $(BUILD_DIR)
 	 printf '#define DRVARMA_GIT "%s"\n' "$$h" > $@.tmp; \
 	 cmp -s $@.tmp $@ && rm -f $@.tmp || mv $@.tmp $@
 FORCE:
-$(BUILD_DIR)/drvarma.o $(BUILD_DIR)/escalera.o: $(GIT_HASH_H)
+$(BUILD_DIR)/drvarma.o $(BUILD_DIR)/escalera.o $(BUILD_DIR)/split.o: $(GIT_HASH_H)
 
 # Default target: the engine (the window is sim_gui, gui/sim)
 all: $(DRV_EXEC)

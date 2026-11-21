@@ -395,7 +395,7 @@ Its Hosking already uses k (`model.py`, `n_arma()`; the ladder counts the
 It must follow for the per-series Ljung-Box npar and for the Lutkepohl JB,
 or its byte-identical `.out` test against this binary will show these lines.
 
-## BUG-0001 — los .inp de `-split` no se leen si su cabecera es larga, y `split.o` guarda la versión vieja
+## BUG-0001 — los .inp de `-split` no se leen si su cabecera es larga, y `split.o` guarda la versión vieja (ARREGLADO)
 
 **Encontrado:** 2026-10-25, en la batería de la escalera
 (`tests/escalera/pruebas.sh`, 10c): «la escalera y la via .inp no llegan al
@@ -448,15 +448,17 @@ Siempre que `-split` reciba una ruta de origen larga, o que la versión sea
 lo bastante larga (árbol sucio, o más commits desde la etiqueta), de modo
 que la línea llegue a 89 caracteres.
 
-### Arreglo propuesto (no hecho)
+### Arreglo (2026-11-21)
 
 1. En fue no se toca nada (decisión del analista, 2026-10-25): el límite de
    88 caracteres por línea libre es parte del formato (fue BUG-0002).
-2. En `split.c:87`: no escribir texto de longitud libre en una línea que
-   fue lee con búfer fijo — sólo el nombre base del origen, y la versión en
-   una línea propia, o la línea recortada a menos de 89 caracteres.
-3. En `Makefile:141`: añadir `$(BUILD_DIR)/split.o` a los objetos que
-   dependen de `$(GIT_HASH_H)`.
+2. `split.c`: la línea lleva el nombre del origen sin su ruta, y va recortada
+   a 88 caracteres. Se arregla el escritor, no el formato.
+3. `Makefile`: `build/split.o` depende de `build/git_hash.h`, como
+   `drvarma.o` y `escalera.o`.
+
+El repro sale con 0: cabecera de 73 caracteres con la ruta corta y con la
+larga, y la escalera lee los ficheros.
 
 ### Reproducción
 

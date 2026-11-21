@@ -9,6 +9,24 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Added — `-route v`: the vector first, through the gate
+
+- Route V (Tiao and Box) used to mean specifications without univariate
+  models. It now goes through the same gate as route U: the univariate
+  models are the yardstick and give the mean, the deterministic terms and the
+  stationary series. Past the gate, each series' regular ARMA is replaced by
+  a free AR(p)/MA(q), so the whole VARMA(p,q) matrix is free, and its
+  seasonal and fixed-frequency factors multiply its whole row (the row factor
+  of the port's echelon form).
+- The LR is against the same model without cross terms. A note says when the
+  model does not contain a univariate's regular ARMA.
+- When the univariates' regular part is an AR(p) and there are no seasonal
+  factors, routes U and V give the same table. With a row factor and cross
+  terms, the VARMA(1,1) of IPI and WTI gives the port's number,
+  `Ladder(echelon=(1,1), own="free")`: −924.846133.
+- The own part starts at the univariate's polynomials when they fit, at zero
+  otherwise; the least-squares seed of the whole matrix is the next step.
+
 ### Added — `-det` and `-detbase`: which deterministic terms are estimated
 
 - `-redet` was all or nothing. `-det LIST` re-estimates only some of the

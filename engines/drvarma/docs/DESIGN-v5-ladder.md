@@ -140,7 +140,33 @@ re-estimated from the `.pre`:
   instead: it was re-estimated on a different sample, and moving is
   legitimate.
 
-The diagonal system is then optimised. It is the seed of the full model: the
+**Route V (`-route v`).** The school's rule holds on both routes: the
+univariate models first. They are the yardstick and give the initial
+conditions; the gate is that. Past the gate, the two routes differ only in
+what the own part is and how it is seeded:
+- **route U** (default): each series keeps its univariate ARMA; the cross
+  terms are added;
+- **route V** (the vector first, Tiao and Box): each series' *regular* ARMA is
+  replaced by a free AR(p)/MA(q), p and q the vector's orders, so the whole
+  VARMA(p,q) matrix is free. What is left of the univariate model, its
+  seasonal and fixed-frequency factors, multiplies its whole row, cross terms
+  included: F_a(B)[Φ(B)w]_a = G_a(B)[Θ(B)a]_a, the row factor of the port's
+  echelon form. The deterministic terms, the differences and the mean are the
+  gate's.
+- The own part starts at the univariate's regular polynomials when they fit
+  in p and q, at zero otherwise. (The least-squares seed of the whole matrix
+  comes next.)
+- A model with p below a univariate's regular AR order (or q below its MA
+  order) does not contain that univariate model: it is estimated, with a
+  note.
+- When every univariate's regular part is exactly an AR(p) and none has
+  seasonal factors, the two routes are the same model and give the same
+  table (the golden case of `tests/escalera`).
+- Homologated with the port on the VARMA(1,1) of IPI and WTI:
+  `Ladder(echelon=(1,1), own="free")`, logL −924.846133.
+
+The diagonal system is then optimised. On route V it is the model without
+cross terms, the base of its LR. It is the seed of the full model: the
 own models start there, and they are re-estimated jointly unless
 `-fixarma`. With `-start ols` the cross terms start at the original
 drvarma's least squares (`init_varma` brought to the ladder: the cross AR

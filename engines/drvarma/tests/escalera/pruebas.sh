@@ -461,6 +461,58 @@ grep -q "w0_IPC\[step 8 1990\]" "$TMP/i2.out" && ! grep -q "w0_IPC\[impulse 9 20
 "$BIN" "$MI" "$MW" 1 0 -det interv -irfboot 10 -o "$TMP/iy" > "$TMP/iy.log" 2>&1
 [ $? -ne 0 ] && bien "-irfboot con -det es un error" || falla "-irfboot acepta -det"
 
+# 10f. La ruta V (-route v): el vector primero, por la puerta. Pasada la
+#     puerta, el ARMA regular de cada serie es un AR(p)/MA(q) libre y sus
+#     factores estacionales multiplican la fila.
+diag() { awk '/logL diagonal/ {gsub(",", ""); print $3; exit}' "$1"; }
+suma() { awk '/^  SUM / {print $2; exit}' "$1"; }
+tabla() { sed -n '/ESTIMATED MODEL/,/^Exact log-likelihood/p' "$1"; }
+# caso golden: univariantes cuyo ARMA regular ES un AR(p), sin factores
+# estacionales. La V sustituye un AR(p) por un AR(p) libre: es la U.
+"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0          -o "$TMP/vu1" > /dev/null 2>&1
+"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0 -route v -o "$TMP/vv1" > /dev/null 2>&1
+tabla "$TMP/vu1.out" > "$TMP/vu1.t"; tabla "$TMP/vv1.out" > "$TMP/vv1.t"
+[ -s "$TMP/vu1.t" ] && cmp -s "$TMP/vu1.t" "$TMP/vv1.t" \
+    && bien "ruta V, caso golden (WTI y GS2, AR(1); VAR(1)): la misma tabla que la ruta U" \
+    || falla "ruta V, caso golden VAR(1): la tabla no es la de la U"
+"$BIN" "$MON/GS1_m01.pre" "$MON/FF_m03.pre" 3 0          -o "$TMP/vu3" > /dev/null 2>&1
+"$BIN" "$MON/GS1_m01.pre" "$MON/FF_m03.pre" 3 0 -route v -o "$TMP/vv3" > /dev/null 2>&1
+cerca "ruta V, caso golden (GS1 y FF, AR(3); VAR(3)): el logL de la ruta U" \
+    "$(ll "$TMP/vu3.out")" "$(ll "$TMP/vv3.out")" 1e-5
+# el factor de fila: el IPI es AR(3) x AR(1)_12. Con p = 3 la V sin
+# cruzados es el univariante (la suma de la puerta); con cruzados difiere de
+# la U, porque en la V el AR(1)_12 multiplica tambien los cruzados de su fila
+"$BIN" "$MON/IPI_m07.pre" "$MON/FF_m03.pre" 3 0          -o "$TMP/fu" > /dev/null 2>&1
+"$BIN" "$MON/IPI_m07.pre" "$MON/FF_m03.pre" 3 0 -route v -o "$TMP/fv" > /dev/null 2>&1
+cerca "ruta V con factor de fila: sin cruzados es la suma de la puerta" \
+    "$(suma "$TMP/fv.out")" "$(diag "$TMP/fv.out")" 1e-5
+python3 -c "
+import sys
+u, v = float(sys.argv[1]), float(sys.argv[2])
+sys.exit(0 if abs(u - v) > 0.5 else 1)" "$(ll "$TMP/fu.out")" "$(ll "$TMP/fv.out")" \
+    && grep -q "IPI .*AR(3) MA(0) .*AR 12  MA 0" "$TMP/fv.out" \
+    && bien "ruta V con factor de fila: con cruzados no es la U (el AR(1)_12 va en toda la fila)" \
+    || falla "ruta V con factor de fila: logL U $(ll "$TMP/fu.out"), V $(ll "$TMP/fv.out")"
+# el VARMA(1,1) del IPI y el WTI: el mismo numero que la forma echelon del
+# porte con indices iguales, Ladder(echelon=(1,1), own=\"free\") (13
+# parametros, logL -924.846133, sin cruzados -929.168188)
+"$BIN" "$MON/IPI_m07.pre" "$MON/WTI_m03.pre" 1 1 -route v -o "$TMP/v11" > /dev/null 2>&1
+cerca "ruta V, VARMA(1,1) con factor de fila: el logL del porte (echelon (1,1))" \
+    -924.846133 "$(ll "$TMP/v11.out")" 1e-5
+cerca "ruta V, VARMA(1,1): la V sin cruzados, la del porte" \
+    -929.168188 "$(diag "$TMP/v11.out")" 1e-5
+[ "$(np "$TMP/v11.out")" = 13 ] \
+    && grep -q "^Cross dynamics against the same model without cross terms" "$TMP/v11.out" \
+    && grep -q "^Univariate ARMA  : replaced by the vector's" "$TMP/v11.out" \
+    && grep -q "IPI's univariate model has a regular AR(3)" "$TMP/v11.out" \
+    && bien "ruta V: 13 parametros; dice contra que es el LR y que el AR(3) del IPI no cabe en p = 1" \
+    || falla "ruta V: la salida del VARMA(1,1) no dice lo que debe"
+"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0 -route v -fixarma -o "$TMP/ve" > "$TMP/ve.log" 2>&1
+[ $? -ne 0 ] && grep -q "no univariate ARMA to hold" "$TMP/ve.log" \
+    && bien "-route v con -fixarma es un error" || falla "-route v acepta -fixarma"
+"$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 0 0 -route v -o "$TMP/ve" > "$TMP/ve.log" 2>&1
+[ $? -ne 0 ] && bien "-route v con p = q = 0 es un error" || falla "-route v acepta p = q = 0"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

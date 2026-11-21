@@ -114,7 +114,18 @@ static int write_one(const MvInp *in, int j, const char *path, const char *src,
     fprintf(f, "************************************************\n");
     fprintf(f, "* Input file for program FUE                   *\n");
     fprintf(f, "************************************************\n");
-    fprintf(f, "* Split from %s by drvarma %s\n\n", src, DRVARMA_VERSION_FULL);
+    {   /* Una linea libre de la cabecera de fue no puede pasar de 88
+           caracteres: fue las cuenta con un fgets de 90 bytes, y una mas
+           larga cuenta por dos (fue BUG-0002; el limite es del formato).
+           Va el nombre del origen sin su ruta, y la linea recortada.     */
+        char cab[89];
+        const char *base = strrchr(src, '/');
+        const char *b2 = strrchr(src, '\\');
+        if (b2 != NULL && (base == NULL || b2 > base)) base = b2;
+        base = base ? base + 1 : src;
+        snprintf(cab, sizeof cab, "* Split from %s by drvarma %s", base, DRVARMA_VERSION_FULL);
+        fprintf(f, "%s\n\n", cab);
+    }
     fprintf(f, "** Frequency of time series: either 1(A), 4(Q) or 12(M):\n %d\n", s);
     fprintf(f, "** Number of observations and starting date of time series:\n");
     fprintf(f, " %d  %d %d %s\n", in->nobs, s > 1 ? in->start_sub : 1, in->start_year,

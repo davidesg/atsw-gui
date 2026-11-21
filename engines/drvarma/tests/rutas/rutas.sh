@@ -71,6 +71,7 @@ grep -aq 'OPTIMIZER STOPPED at the MA invertibility boundary' "$o" && est=WALL
 arr=zero
 grep -aq '^Start of the cross terms: ols' "$o" && arr=ols
 grep -aq '^Start of the cross terms: zero (the ols start was not admissible)' "$o" && arr=zero-caida
+grep -aq '^Start of the cross terms: echelon' "$o" && arr=echelon
 printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$k" "$rc" "${npar:--}" "${logl:--}" "$est" "${its:--}" "$arr" > "$d/$k.hecho"
 UNA
 
@@ -78,7 +79,9 @@ grep -v '^#' "$AQUI/casos.txt" | grep -v '^[[:space:]]*$' |
 while IFS='|' read -r sis ruta pq fich opc; do
     sis=$(echo $sis); ruta=$(echo $ruta); set -- $pq
     abs=""; for f in $fich; do abs="$abs $TESTS/$f"; done
-    for st in zero ols; do
+    otro=ols                 # la forma echelon se compara con su propia siembra
+    case "$opc" in *-echelon*) otro=echelon ;; esac
+    for st in zero $otro; do
         echo "$sis-$ruta-p$1q$2-$st $abs $1 $2 -start $st $opc"
     done
     echo "$sis-$ruta-p$1q$2-def $abs $1 $2 $opc"        # sin -start: el arranque por defecto
@@ -186,7 +189,7 @@ def propiedad(clave, cumple, texto):
         else: bien(clave)
     elif clave in ab: print(f'  {rotulo[clave]} {clave}: {texto}')
     else: falla(f'{clave}: {texto}')
-pat = re.compile(r'^(.*)-p(\d+)q(\d+)-(zero|ols|inp|def)$')
+pat = re.compile(r'^(.*)-p(\d+)q(\d+)-(zero|ols|echelon|inp|def)$')
 M = {}
 for k, v in N.items():
     s, p, q, st = pat.match(k).groups(); M[(s, int(p), int(q), st)] = v
@@ -195,17 +198,18 @@ for (s, p, q, st), v in sorted(M.items()):
         a, b = v['logl'], M[(s, p - 1, 0, st)]['logl']
         if a is not None and b is not None:
             propiedad(f'anida:{s}-{st}-p{p}', a >= b - tol, f'VAR({p}) {a:.6f} por debajo del VAR({p-1}) {b:.6f}')
-    if st == 'zero' and (s, p, q, 'ols') in M:
+    alt = 'ols' if (s, p, q, 'ols') in M else 'echelon'
+    if st == 'zero' and (s, p, q, alt) in M:
         tg = regla(s[:-2], p, q)[1] or tol
-        o = M[(s, p, q, 'ols')]; clave = f'arranques:{s}-p{p}q{q}'
+        o = M[(s, p, q, alt)]; clave = f'arranques:{s}-p{p}q{q}'
         if v['rc'] != o['rc'] or (v['logl'] is None) != (o['logl'] is None):
-            propiedad(clave, False, f"zero sale con {v['rc']} ({v['logl']}) y ols con {o['rc']} ({o['logl']})")
+            propiedad(clave, False, f"zero sale con {v['rc']} ({v['logl']}) y {alt} con {o['rc']} ({o['logl']})")
         elif v['logl'] is not None:
-            propiedad(clave, abs(v['logl'] - o['logl']) <= tg, f"zero {v['logl']:.6f} ({v['est']}, {v['its']} it.), ols {o['logl']:.6f} ({o['est']}, {o['its']} it.)")
+            propiedad(clave, abs(v['logl'] - o['logl']) <= tg, f"zero {v['logl']:.6f} ({v['est']}, {v['its']} it.), {alt} {o['logl']:.6f} ({o['est']}, {o['its']} it.)")
 # el arranque por defecto: nunca por debajo del mejor de los dos arranques
 for (s, p, q, st), v in sorted(M.items()):
     if st != 'def': continue
-    otros = [M[(s, p, q, a)]['logl'] for a in ('zero', 'ols') if (s, p, q, a) in M and M[(s, p, q, a)]['logl'] is not None]
+    otros = [M[(s, p, q, a)]['logl'] for a in ('zero', 'ols', 'echelon') if (s, p, q, a) in M and M[(s, p, q, a)]['logl'] is not None]
     if not otros: continue
     d = v['logl']
     propiedad(f'defecto:{s}-p{p}q{q}', d is not None and d >= max(otros) - tol,

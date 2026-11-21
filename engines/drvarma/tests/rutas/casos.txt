@@ -56,3 +56,13 @@ FF  | Vg | 1 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC
 FF  | Vg | 2 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -route v
 FF  | Vg | 3 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -route v
 FF  | Vg | 1 1 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -route v
+
+# La forma echelon (-echelon), con los indices que elige la busqueda
+# (-echelon search) o cercanos, donde los dos arranques certifican el mismo
+# optimo: cero y la siembra de la etapa II (-start echelon). Los numeros son
+# tambien los del porte. La clave lleva los indices en el nombre del sistema.
+IWe10   | E | 0 0 | escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre | -echelon 1,0
+IWe11   | E | 0 0 | escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre | -echelon 1,1
+MMe10   | E | 0 0 | ../../../lib/outvarma/datos/MUSKRAT_m03.pre ../../../lib/outvarma/datos/MINK_m02.pre | -echelon 1,0
+ICWe011 | E | 0 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre | -echelon 0,1,1
+FFe0101 | E | 0 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -echelon 0,1,0,1

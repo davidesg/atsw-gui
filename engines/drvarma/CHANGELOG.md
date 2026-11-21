@@ -9,6 +9,15 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Fixed — the header `-split` writes fits fue's format (BUG-0001)
+
+- `-split` wrote the source's whole path and the version on one free header
+  line. fue counts those lines with a 90-byte `fgets`, so a line of 89
+  characters or more counted as two and the ladder rejected the file it had
+  just written: with a long path, or with a `-dirty` version. The line now
+  carries the source's base name and is cut at 88 characters. `split.o` now
+  depends on the git hash, as the other two that print the version.
+
 ### Added — `-echelon`: the echelon form with given Kronecker indices
 
 - `-echelon n1,n2,…`, on route V: one Kronecker index per series. Row r has

@@ -33,7 +33,9 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
   same start, iterations and optimum wherever both certify). Not the
   default: with indices larger than the data ask for it can start far worse
   than zero.
-- Not yet: `-factortest` with unequal indices.
+- **`-factortest` with unequal indices and A₀**: the alternative is another
+  echelon form with the same A₀ and the rows without the factor. Homologated
+  with the port's `factor_test` on eight cases, one with an MA row factor.
 
 ### Added — `-route v`: the vector first, through the gate
 

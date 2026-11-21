@@ -1690,6 +1690,7 @@ static void v_factor_test(FILE *out, int p, int q)
 {
     static unsigned char sA[ESC_MAX + 1][ESC_MAXLAG + 1], sM[ESC_MAX + 1][ESC_MAXLAG + 1];
     static unsigned char oA[ESC_MAXLAG + 1][ESC_MAX + 1][ESC_MAX + 1], oM[ESC_MAXLAG + 1][ESC_MAX + 1][ESC_MAX + 1];
+    static unsigned char a0[ESC_MAX + 1][ESC_MAX + 1];
     int  m = n_ser, i, j, k, l, jj, dA = 0, dM = 0, hay = 0, f;
     Fit  A;
     real logL0, logL1, lr, pv;
@@ -1714,6 +1715,21 @@ static void v_factor_test(FILE *out, int p, int q)
     }
     if (!hay || p + dA > ESC_MAXLAG || q + dM > ESC_MAXLAG) return;
 
+    /* La forma echelon: las filas ANTES de A_0^-1. El ajuste guardo la forma
+       estandar, Phi = A_0^-1 Phi~: Phi~ = (I - C_0) Phi. La alternativa es
+       otra forma echelon con el mismo A_0, y lo que se libera son las
+       posiciones de esas filas.                                            */
+    if (ech_on) {
+        real c0[ESC_MAX + 1][ESC_MAX + 1];
+        for (i = 1; i <= m; i++)
+            for (j = 1; j <= m; j++) c0[i][j] = (i != j && free_a0(i, j)) ? cA0[i][j] : 0.0;
+        for (i = m; i >= 2; i--)                    /* de abajo arriba: usa filas aun sin tocar */
+            for (j = 1; j < i; j++) {
+                if (c0[i][j] == 0.0) continue;
+                for (k = 1; k <= ft_P; k++) for (l = 1; l <= m; l++) ft_phi[k][i][l] -= c0[i][j] * ft_phi[k][j][l];
+                for (k = 1; k <= ft_Q; k++) for (l = 1; l <= m; l++) ft_th[k][i][l]  -= c0[i][j] * ft_th[k][j][l];
+            }
+    }
     for (i = 1; i <= m; i++) { ft_soporte(i, 1, sA[i]); ft_soporte(i, 0, sM[i]); }
     for (k = 0; k <= ESC_MAXLAG; k++)
         for (i = 1; i <= m; i++)
@@ -1721,6 +1737,8 @@ static void v_factor_test(FILE *out, int p, int q)
                 oA[k][i][j] = (unsigned char)(k >= 1 && k <= p && i != j && free_ar(k, i, j));
                 oM[k][i][j] = (unsigned char)(k >= 1 && k <= q && i != j && free_ma(k, i, j));
             }
+    for (i = 1; i <= m; i++)
+        for (j = 1; j <= m; j++) a0[i][j] = (unsigned char)(i != j && free_a0(i, j));
     /* lo propio: un operador regular con los retardos que el producto alcanza */
     for (i = 1; i <= m; i++) {
         int   DA = v_reg_ar[i] + v_fac_ar[i], DM = v_reg_ma[i] + v_fac_ma[i];
@@ -1757,6 +1775,9 @@ static void v_factor_test(FILE *out, int p, int q)
                     if (sA[i][jj] && oA[l - jj][i][j]) la = 1;
                     if (sM[i][jj] && oM[l - jj][i][j]) lm = 1;
                 }
+                /* A_0 (= M_0) por el factor: el termino contemporaneo llega al retardo jj */
+                if (a0[i][j] && sA[i][l]) la = 1;
+                if (a0[i][j] && sM[i][l]) lm = 1;
                 cx_zar[l][i][j] = !la;  cx_zma[l][i][j] = !lm;
                 cAR[l][i][j] = (la && l <= ft_P) ? ft_phi[l][i][j] : 0.0;
                 cMA[l][i][j] = (lm && l <= ft_Q) ? ft_th[l][i][j]  : 0.0;
@@ -1775,6 +1796,13 @@ static void v_factor_test(FILE *out, int p, int q)
                     "  The rows without the factor do not reproduce the fitted model at its\n"
                     "  optimum (logL %.6f against %.6f%s): the test is not reported.\n",
                     logL0, ft_logL, i ? "; the point was rejected" : "");
+        return;
+    }
+    if (np1 == ft_npar) {                        /* el factor no alcanza ninguna posicion mas */
+        for (f = 0; f < 2; f++)
+            fprintf(f ? out : stdout,
+                    "  The rows with a factor have no own or cross term it could reach\n"
+                    "  beyond those of the model: there is nothing to test (0 df).\n");
         return;
     }
     fit_run(&A, 1);
@@ -3131,14 +3159,6 @@ int escalera_main(int argc, char *argv[])
         if (!((p == 0 && q == 0) || (p == nmax && q == nmax))) {
             printf("ERROR: -echelon: the cross orders are the largest index, %d: give 0 0\n", nmax);
             return 1;
-        }
-        if (opt_factortest) {
-            int igual = 1;
-            for (i = 2; i <= n_ser; i++) if (ech_n[i] != ech_n[1]) igual = 0;
-            if (!igual) {
-                printf("ERROR: -factortest with unequal Kronecker indices is not available yet\n");
-                return 1;
-            }
         }
         p = q = nmax;
         ech_on = 1;

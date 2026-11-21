@@ -24,8 +24,14 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
   factors, routes U and V give the same table. With a row factor and cross
   terms, the VARMA(1,1) of IPI and WTI gives the port's number,
   `Ladder(echelon=(1,1), own="free")`: −924.846133.
-- The own part starts at the univariate's polynomials when they fit, at zero
-  otherwise; the least-squares seed of the whole matrix is the next step.
+- **The seed of route V is the whole matrix**: least squares of the VAR(p)
+  give the diagonal and the cross terms (the original drvarma's
+  `init_varma`, whole), the MA starts at zero, and Q takes the variances of
+  the exact diagonal fit and the least-squares residuals' correlation. With a
+  row factor each row is fitted on the series filtered by its factor. It is
+  the default with q = 0, and `-start ols` asks for it. On the gas furnace
+  VAR(6) it is admissible where route U's cross-only seed is not; in every
+  case measured it reaches the same optimum as from zero.
 
 ### Added — `-det` and `-detbase`: which deterministic terms are estimated
 

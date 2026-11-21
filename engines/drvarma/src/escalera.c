@@ -942,6 +942,144 @@ static void start_ols(void)
     free_vector(mean, 1, m);
 }
 
+/* ------------------------------------------------------------------------- */
+/*  La siembra de la ruta V: TODA la matriz por minimos cuadrados.           */
+/*                                                                           */
+/*  En la V lo propio es del vector, asi que el arranque de drvarma original */
+/*  (init_varma) vale entero: los minimos cuadrados del VAR(p) dan la        */
+/*  diagonal y los cruzados. El MA, propio y cruzado, a cero, como alli.     */
+/*  Con factor de fila, la ecuacion de la fila a es                          */
+/*      F_a(B) w_a,t = SUM_k SUM_b Phi_k[a,b] F_a(B) w_b,t-k + G_a(B) a_a,t  */
+/*  y se ajusta sobre TODAS las series filtradas por (F_a/G_a)(B), el factor */
+/*  de ESA fila (valores previos a la muestra a cero, como la etapa II del   */
+/*  porte).                                                                  */
+/*  Q: las varianzas son las del ajuste diagonal exacto, la V sin cruzados   */
+/*  (lvar no se toca); las covarianzas, la correlacion de los residuos de    */
+/*  minimos cuadrados en esa escala, como start_ols en la U.                 */
+/*  Si elf no acepta el punto se vuelve a la V sin cruzados (lo propio a su  */
+/*  optimo diagonal, los cruzados a cero) y se dice.                         */
+/* ------------------------------------------------------------------------- */
+static void start_ols_v(void)
+{
+    int  m = act_m, p = cx_p, q = cx_q, n = n_stat, np = act_m * cx_p;
+    int  a, b, k, t, i, r, j, *ip, dmax = 0, t0, T, rechazado;
+    real *mean, **Z, **ZtZ, *rhs, **E, **S, **z, **ar0, **ma0;
+    Fit  chk;
+
+    for (a = 1; a <= m; a++) {
+        if (v_fac_ar[act[a]] > dmax) dmax = v_fac_ar[act[a]];
+    }
+    t0 = p + dmax + 1;  T = n - t0 + 1;
+    if (p < 1 || T <= np + 1) {
+        snprintf(start_used, sizeof start_used,
+                 "zero (no least squares: p = 0 or too few observations)");
+        return;
+    }
+    /* lo propio como esta (el optimo de la V sin cruzados), por si hay que volver */
+    ar0 = matrix(1, m, 0, p);  ma0 = matrix(1, m, 0, q > 0 ? q : 1);
+    for (a = 1; a <= m; a++) {
+        for (k = 1; k <= p; k++) ar0[a][k] = Tm[act[a]].Ar1[1][k];
+        for (k = 1; k <= q; k++) ma0[a][k] = Tm[act[a]].Ma1[1][k];
+    }
+    mean = vector(1, m);
+    for (a = 1; a <= m; a++) {
+        real s = 0.0;
+        for (t = 1; t <= n; t++) s += w[act[a]][t];
+        mean[a] = s / n;
+    }
+    z   = matrix(1, m, 1, n);
+    Z   = matrix(1, T, 1, np);
+    ZtZ = matrix(1, np, 1, np);
+    ip  = ivector(1, np);
+    rhs = vector(1, np);
+    E   = matrix(1, T, 1, m);
+    for (a = 1; a <= m; a++) {
+        struct Tusmodel M = v_parte(act[a], 0);
+        int   da = v_fac_ar[act[a]], dg = v_fac_ma[act[a]];
+        real *f = vector(0, da > 0 ? da : 1), *g = vector(0, dg > 0 ? dg : 1);
+        if (da > 0) expand_ar_factors(&M, f, da);
+        if (dg > 0) expand_ma_factors(&M, g, dg);
+        for (b = 1; b <= m; b++)                     /* (F_a/G_a)(B) de cada serie */
+            for (t = 1; t <= n; t++) {
+                real s = w[act[b]][t] - mean[b];
+                for (j = 1; j <= da && j < t; j++) s -= f[j] * (w[act[b]][t - j] - mean[b]);
+                for (j = 1; j <= dg && j < t; j++) s += g[j] * z[b][t - j];
+                z[b][t] = s;
+            }
+        free_vector(g, 0, dg > 0 ? dg : 1);  free_vector(f, 0, da > 0 ? da : 1);
+        for (r = 1; r <= T; r++)
+            for (k = 1; k <= p; k++)
+                for (b = 1; b <= m; b++) Z[r][(k - 1) * m + b] = z[b][t0 + r - 1 - k];
+        for (i = 1; i <= np; i++)
+            for (k = 1; k <= np; k++) {
+                real s = 0.0;
+                for (r = 1; r <= T; r++) s += Z[r][i] * Z[r][k];
+                ZtZ[i][k] = s;
+            }
+        ludcp(ZtZ, np, ip);
+        for (i = 1; i <= np; i++) {
+            real s = 0.0;
+            for (r = 1; r <= T; r++) s += Z[r][i] * z[a][t0 + r - 1];
+            rhs[i] = s;
+        }
+        lusol(ZtZ, rhs, np, ip);
+        for (r = 1; r <= T; r++) {
+            real s = z[a][t0 + r - 1];
+            for (i = 1; i <= np; i++) s -= Z[r][i] * rhs[i];
+            E[r][a] = s;
+        }
+        for (k = 1; k <= p; k++)
+            for (b = 1; b <= m; b++) {
+                real c = rhs[(k - 1) * m + b];
+                if (b == a) Tm[act[a]].Ar1[1][k] = c;
+                else if (free_ar(k, act[a], act[b])) cAR[k][act[a]][act[b]] = c;
+            }
+        for (k = 1; k <= q; k++) Tm[act[a]].Ma1[1][k] = 0.0;
+    }
+    S = matrix(1, m, 1, m);
+    for (a = 1; a <= m; a++)
+        for (b = 1; b <= m; b++) {
+            real s = 0.0;
+            for (r = 1; r <= T; r++) s += E[r][a] * E[r][b];
+            S[a][b] = s / T;
+        }
+    if (!cx_diagcov)
+        for (a = 2; a <= m; a++)
+            for (b = 1; b < a; b++) {
+                real qa = exp(lvar[act[a]]), qb = (b == 1) ? 1.0 : exp(lvar[act[b]]);
+                qcov[act[a]][act[b]] = S[a][b] / sqrt(S[a][a] * S[b][b]) * sqrt(qa * qb);
+            }
+
+    fit_run(&chk, 0);
+    rechazado = chk.ifault;
+    fit_free(&chk);                 /* antes de reponer (BUG-0006) */
+    if (rechazado) {
+        for (a = 1; a <= m; a++) {
+            for (k = 1; k <= p; k++) Tm[act[a]].Ar1[1][k] = ar0[a][k];
+            for (k = 1; k <= q; k++) Tm[act[a]].Ma1[1][k] = ma0[a][k];
+        }
+        for (k = 0; k <= ESC_MAXLAG; k++)
+            for (a = 0; a <= ESC_MAX; a++)
+                for (b = 0; b <= ESC_MAX; b++) cAR[k][a][b] = 0.0;
+        for (a = 0; a <= ESC_MAX; a++)
+            for (b = 0; b <= ESC_MAX; b++) qcov[a][b] = 0.0;
+        snprintf(start_used, sizeof start_used,
+                 "the model without cross terms (the ols start was not admissible)");
+    } else
+        snprintf(start_used, sizeof start_used, "ols, the whole matrix");
+
+    free_matrix(S, 1, m, 1, m);
+    free_matrix(E, 1, T, 1, m);
+    free_vector(rhs, 1, np);
+    free_ivector(ip, 1, np);
+    free_matrix(ZtZ, 1, np, 1, np);
+    free_matrix(Z, 1, T, 1, np);
+    free_matrix(z, 1, m, 1, n);
+    free_vector(mean, 1, m);
+    free_matrix(ma0, 1, m, 0, q > 0 ? q : 1);
+    free_matrix(ar0, 1, m, 0, p);
+}
+
 static void fit_free(Fit *F)
 {
     int ifault = 0, np = F->npar > 0 ? F->npar : 1;
@@ -2449,7 +2587,7 @@ int escalera_main(int argc, char *argv[])
                 for (b2 = 0; b2 <= ESC_MAX; b2++) qcov[a][b2] = 0.0;
         }
         if (opt_start_ols > 0 || (opt_start_ols < 0 && p > 0 && q == 0)) {
-            start_ols();
+            if (v_on) start_ols_v(); else start_ols();
             printf("Start of the cross terms: %s\n", start_used);
             fprintf(outputv, "Start of the cross terms: %s (%s: the original "
                              "drvarma's init_varma, least squares)\n", start_used,

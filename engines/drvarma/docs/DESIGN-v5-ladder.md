@@ -153,9 +153,20 @@ what the own part is and how it is seeded:
   included: F_a(B)[Φ(B)w]_a = G_a(B)[Θ(B)a]_a, the row factor of the port's
   echelon form. The deterministic terms, the differences and the mean are the
   gate's.
-- The own part starts at the univariate's regular polynomials when they fit
-  in p and q, at zero otherwise. (The least-squares seed of the whole matrix
-  comes next.)
+- **The seed is the whole matrix.** On route V the own part is the vector's,
+  so the original drvarma's start (`init_varma`) holds whole: least squares
+  of the VAR(p) give the diagonal and the cross terms, and the MA, own and
+  cross, starts at zero. With a row factor, row a is fitted on every series
+  filtered by that row's (F_a/G_a)(B). The variances of Q are those of the
+  exact diagonal fit (the model without cross terms); the covariances, the
+  least-squares residuals' correlation on that scale. It is the default with
+  q = 0 and `-start ols` asks for it; `-start zero` keeps the own part at
+  the univariate's regular polynomials when they fit (at zero otherwise) and
+  the cross terms at zero. A seed the likelihood rejects goes back to the
+  model without cross terms, and the output says so.
+- Measured: the same optimum as from zero in every case; on the gas furnace
+  VAR(6) the whole-matrix seed is admissible where route U's (cross terms
+  only, on the diagonal fit's own models) is not.
 - A model with p below a univariate's regular AR order (or q below its MA
   order) does not contain that univariate model: it is estimated, with a
   note.

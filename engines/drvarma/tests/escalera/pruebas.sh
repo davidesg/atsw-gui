@@ -620,9 +620,6 @@ cerca "echelon (0,1,1), IPI, IPC y WTI, con factor de fila: el logL del porte" \
 "$BIN" "$EI" "$EW" 1 0 -echelon 2,1 -o "$TMP/ex" > "$TMP/ex.log" 2>&1
 [ $? -ne 0 ] && bien "-echelon con ordenes cruzados que no son 0 0 ni el mayor indice es un error" \
     || falla "-echelon acepta p = 1 con indices 2,1"
-"$BIN" "$MON/IPI_m07.pre" "$EW" 0 0 -echelon 2,1 -factortest -o "$TMP/ex" > "$TMP/ex.log" 2>&1
-[ $? -ne 0 ] && bien "-factortest con indices desiguales: todavia no, y lo dice" \
-    || falla "-factortest con indices desiguales pasa"
 
 # 10i. -echelon search: la busqueda de los indices de Kronecker (etapas I y
 #     II de Lutkepohl y Poskitt). Los numeros son los de echelon.search del
@@ -686,6 +683,42 @@ cerca "-start echelon, (0,1,1) con factor de fila: el logL del porte" -835.73246
 "$BIN" "$EI" "$EW" 1 1 -route v -start echelon -o "$TMP/kx" > "$TMP/kx.log" 2>&1
 [ $? -ne 0 ] && grep -q "give -echelon" "$TMP/kx.log" \
     && bien "-start echelon sin -echelon es un error" || falla "-start echelon sin -echelon pasa"
+
+# 10k. -factortest con la forma echelon de indices desiguales y A_0. La
+#     alternativa es otra forma echelon con el mismo A_0 y las filas sin el
+#     factor. Los numeros son los de factor_test() del porte.
+"$BIN" "$EW" "$MON/IPI_m07.pre" 0 0 -echelon 1,0 -factortest -o "$TMP/fe1" > /dev/null 2>&1
+set -- $(lrf "$TMP/fe1.out")
+[ "${2:-}" = 1 ] && grep -q "AR0\[IPI<-WTI\]" "$TMP/fe1.out" \
+    && bien "-factortest, echelon (1,0) con A_0 y factor de fila: 1 grado de libertad" \
+    || falla "-factortest, echelon (1,0): g.l. ${2:-?}"
+cerca "-factortest, echelon (1,0): el LR del porte" 1.5851 "${1:-nan}" 1e-3
+"$BIN" "$EI" "$EW" "$MON/IPI_m07.pre" 0 0 -echelon 1,1,0 -factortest -o "$TMP/fe3" > /dev/null 2>&1
+set -- $(lrf "$TMP/fe3.out")
+[ "${2:-}" = 2 ] && bien "-factortest, echelon (1,1,0), tres series: 2 grados de libertad" \
+    || falla "-factortest, echelon (1,1,0): g.l. ${2:-?}"
+cerca "-factortest, echelon (1,1,0): el LR del porte" 0.9379 "${1:-nan}" 1e-3
+# un factor de fila MA: el IPI con un MA(1)_12 en vez de su AR(1)_12. A_0 por
+# el factor llega a los MA cruzados (M_0 = A_0).
+python3 - "$MON/IPI_m07.pre" "$TMP/IPI_ma12.inp" <<'PY'
+import sys
+L = open(sys.argv[1], errors="replace").read().split("\n")
+i = [k for k, l in enumerate(L) if "annual AR operators" in l][0]
+j = [k for k, l in enumerate(L) if "regular MA operators" in l][0]
+k = [k for k, l in enumerate(L) if "anual MA operators" in l][0]
+new = (L[:i] + ["** Number and orders of annual AR operators:", "0"] + L[j:k]
+       + ["** Number and orders of anual MA operators:", "1 1", "**", "-0.3 1"] + L[k + 2:])
+open(sys.argv[2], "w").write("\n".join(new))
+PY
+"$BIN" "$EW" "$TMP/IPI_ma12.inp" 0 0 -echelon 1,0 -factortest -o "$TMP/feg" > /dev/null 2>&1
+set -- $(lrf "$TMP/feg.out")
+[ "${2:-}" = 1 ] && bien "-factortest con un factor de fila MA y A_0: 1 grado de libertad" \
+    || falla "-factortest con factor MA: g.l. ${2:-?}"
+cerca "-factortest con un factor de fila MA: el LR del porte" 1.8973 "${1:-nan}" 1e-3
+"$BIN" "$MON/IPI_m07.pre" "$EW" 0 0 -echelon 0,1 -factortest -o "$TMP/fe0" > /dev/null 2>&1
+grep -q "there is nothing to test (0 df)" "$TMP/fe0.out" \
+    && bien "-factortest cuando la fila con factor no tiene terminos: nada que contrastar, y lo dice" \
+    || falla "-factortest con 0 g.l.: no lo dice"
 
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref

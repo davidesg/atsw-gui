@@ -176,6 +176,13 @@ what the own part is and how it is seeded:
   parameters. With an MA the model without the factor has the usual
   identification problem: the search may not certify an optimum, and the
   output then says the LR is a lower bound.
+- With the echelon form the alternative is another echelon form with the
+  same A₀: the rows are taken before A₀⁻¹ (Φ̃ = (I − C₀)Φ), and a
+  contemporaneous term times the factor reaches the factor's own lags, in
+  the AR and, since M₀ = A₀, in the MA. Homologated with the port's
+  `factor_test` on eight cases with unequal indices, A₀ and an MA row
+  factor: the same degrees of freedom and parameter counts in all, and the
+  same LR wherever both certify the fit.
 - Measured: the same optimum as from zero in every case; on the gas furnace
   VAR(6) the whole-matrix seed is admissible where route U's (cross terms
   only, on the diagonal fit's own models) is not.

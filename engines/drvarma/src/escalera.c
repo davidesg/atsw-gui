@@ -497,13 +497,121 @@ static void esc_names(char (*names)[ESC_NAMELEN])
 /* ------------------------------------------------------------------------- */
 /*  El cast: vector de parametros -> estructura VARMA                        */
 /* ------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------------- */
+/*  LA RUTA V (-route v): el vector primero, POR LA PUERTA                   */
+/*                                                                           */
+/*  La puerta es la de siempre: los univariantes tal cual, que dan la vara   */
+/*  de medir, la media, las deterministas y la serie estacionaria. Pasada,   */
+/*  el ARMA REGULAR de cada serie se sustituye por un AR(p)/MA(q) libre, con */
+/*  p y q los ordenes del vector: la matriz VARMA(p,q) entera es libre. Lo   */
+/*  que queda del univariante -- sus factores anuales y de frecuencia fija   */
+/*  -- multiplica la FILA entera, cruzados incluidos (el factor de fila de   */
+/*  Lutkepohl y Poskitt, como en la forma echelon del porte):                */
+/*      F_a(B) [Phi(B) w]_a = G_a(B) [Theta(B) a]_a                          */
+/*  La U y la V solo difieren en eso: que es lo propio y como se siembra.    */
+/*  Con el ajuste diagonal de despues (la V sin cruzados) como base del LR.  */
+/* ------------------------------------------------------------------------- */
+static int opt_route_v = 0;      /* -route v */
+static int v_on = 0;             /* la sustitucion ya esta hecha: el molde lleva el factor de fila */
+static int v_reg_ar[ESC_MAX + 1], v_reg_ma[ESC_MAX + 1];   /* grados regulares (tras sustituir) */
+static int v_fac_ar[ESC_MAX + 1], v_fac_ma[ESC_MAX + 1];   /* grados del factor de fila */
+static int v_uni_ar[ESC_MAX + 1], v_uni_ma[ESC_MAX + 1];   /* grados regulares del univariante */
+
+/* El modelo de la serie i con solo su parte regular (regular = 1) o solo el
+   resto, los factores anuales y de frecuencia fija (regular = 0): una copia
+   superficial con los otros factores a cero, para expandirla aparte.        */
+static struct Tusmodel v_parte(int i, int regular)
+{
+    struct Tusmodel M = Tm[i];
+    if (regular) { M.NumAr2 = M.NumMa2 = 0; M.NumAr1f = M.NumMa1f = 0; }
+    else         { M.NumAr1 = M.NumMa1 = 0; }
+    return M;
+}
+
+/* Un bloque regular (AR o MA) pasa a ser UN factor libre de orden k, con los
+   valores de c[1..k]. La forma es la del lector (read_arma_section).        */
+static void v_un_factor(int *Num, int **ord, real ***coef, int ***flag, int k, const real *c)
+{
+    int i, j;
+    for (i = 1; i <= *Num; i++) {
+        free_vector((*coef)[i], 0, (*ord)[i]);
+        free_ivector((*flag)[i], 0, (*ord)[i]);
+    }
+    if (*Num > 0) { free_ivector(*ord, 1, *Num); free(*coef + 1); free(*flag + 1); }
+    *Num = 0; *ord = NULL; *coef = NULL; *flag = NULL;
+    if (k <= 0) return;
+    *Num = 1;
+    *ord  = ivector(1, 1);  (*ord)[1] = k;
+    *coef = (real **)malloc(sizeof(real *)) - 1;
+    *flag = (int **)malloc(sizeof(int *)) - 1;
+    (*coef)[1] = vector(0, k);
+    (*flag)[1] = ivector(0, k);
+    (*coef)[1][0] = -1.0;  (*flag)[1][0] = 0;
+    for (j = 1; j <= k; j++) { (*coef)[1][j] = c[j]; (*flag)[1][j] = 1; }
+}
+
+/* La sustitucion. Lo propio arranca en los polinomios regulares del
+   univariante si caben en p (en q); si no, en cero.                         */
+static void v_sustituye(int p, int q)
+{
+    int i, k;
+    for (i = 1; i <= n_ser; i++) {
+        struct Tusmodel R = v_parte(i, 1), F = v_parte(i, 0);
+        int   da = total_ar_order(&R), dm = total_ma_order(&R);
+        real *ca = vector(0, p > da ? p : da), *cm = vector(0, q > dm ? q : dm);
+        for (k = 0; k <= (p > da ? p : da); k++) ca[k] = 0.0;
+        for (k = 0; k <= (q > dm ? q : dm); k++) cm[k] = 0.0;
+        if (da > 0) expand_ar_factors(&R, ca, da);
+        if (dm > 0) expand_ma_factors(&R, cm, dm);
+        if (da > p) for (k = 0; k <= da; k++) ca[k] = 0.0;
+        if (dm > q) for (k = 0; k <= dm; k++) cm[k] = 0.0;
+        v_uni_ar[i] = da;  v_uni_ma[i] = dm;
+        v_fac_ar[i] = total_ar_order(&F);  v_fac_ma[i] = total_ma_order(&F);
+        v_un_factor(&Tm[i].NumAr1, &Tm[i].p1, &Tm[i].Ar1, &Tm[i].Ia1, p, ca);
+        v_un_factor(&Tm[i].NumMa1, &Tm[i].q1, &Tm[i].Ma1, &Tm[i].Im1, q, cm);
+        v_reg_ar[i] = p;  v_reg_ma[i] = q;
+        ar_deg[i] = total_ar_order(&Tm[i]);
+        ma_deg[i] = total_ma_order(&Tm[i]);
+        free_vector(ca, 0, p > da ? p : da);
+        free_vector(cm, 0, q > dm ? q : dm);
+    }
+    v_on = 1;
+}
+
+/* La fila a de un polinomio matricial C(B) = I - SUM c_k B^k (k = 1..K, en
+   la convencion de elf) por su factor escalar F(B) = 1 - SUM f_j B^j
+   (j = 1..d). El resultado, en la misma convencion, ocupa hasta K + d.      */
+static void v_fila_por_factor(real ***c, int a, int m, int K, const real *f, int d)
+{
+    int  l, j, b;
+    real **n = matrix(1, K + d, 1, m);
+    for (l = 1; l <= K + d; l++)
+        for (b = 1; b <= m; b++) {
+            real s = (l <= K) ? c[l][a][b] : 0.0;
+            for (j = 1; j <= d && j <= l; j++) {
+                int  r = l - j;                    /* el retardo de C que toca */
+                real cr = (r == 0) ? (a == b ? 1.0 : 0.0) : (r <= K ? -c[r][a][b] : 0.0);
+                s += f[j] * cr;
+            }
+            n[l][b] = s;
+        }
+    for (l = 1; l <= K + d; l++)
+        for (b = 1; b <= m; b++) c[l][a][b] = n[l][b];
+    free_matrix(n, 1, K + d, 1, m);
+}
+
 static void orders(int *P, int *Q)
 {
     int a;
     *P = cx_p; *Q = cx_q;
     for (a = 1; a <= act_m; a++) {
-        if (ar_deg[act[a]] > *P) *P = ar_deg[act[a]];
-        if (ma_deg[act[a]] > *Q) *Q = ma_deg[act[a]];
+        int i = act[a], da = ar_deg[i], dm = ma_deg[i];
+        if (v_on) {              /* la fila entera por su factor */
+            da = (v_reg_ar[i] > cx_p ? v_reg_ar[i] : cx_p) + v_fac_ar[i];
+            dm = (v_reg_ma[i] > cx_q ? v_reg_ma[i] : cx_q) + v_fac_ma[i];
+        }
+        if (da > *P) *P = da;
+        if (dm > *Q) *Q = dm;
     }
     if (*P < 1) *P = 1;             /* elf exige p >= 1 */
 }
@@ -556,17 +664,21 @@ static void shootx_esc(real *x, struct Tvarma *armax, int *ifaultx, int firstx, 
        Phi(B) = I - SUM phi_k B^k.                                         */
     for (a = 1; a <= m; a++) {
         int i = act[a];
-        if (ar_deg[i] > 0) {
-            real *ph = vector(1, ar_deg[i]);
-            expand_ar_factors(&Tm[i], ph, ar_deg[i]);
-            for (k = 1; k <= ar_deg[i]; k++) armax->phi[k][a][a] = ph[k];
-            free_vector(ph, 1, ar_deg[i]);
+        /* en la ruta V la diagonal lleva solo lo regular; el resto del
+           univariante multiplica la fila mas abajo */
+        struct Tusmodel M = v_on ? v_parte(i, 1) : Tm[i];
+        int da = v_on ? v_reg_ar[i] : ar_deg[i], dm = v_on ? v_reg_ma[i] : ma_deg[i];
+        if (da > 0) {
+            real *ph = vector(1, da);
+            expand_ar_factors(&M, ph, da);
+            for (k = 1; k <= da; k++) armax->phi[k][a][a] = ph[k];
+            free_vector(ph, 1, da);
         }
-        if (ma_deg[i] > 0) {
-            real *th = vector(1, ma_deg[i]);
-            expand_ma_factors(&Tm[i], th, ma_deg[i]);
-            for (k = 1; k <= ma_deg[i]; k++) armax->theta[k][a][a] = th[k];
-            free_vector(th, 1, ma_deg[i]);
+        if (dm > 0) {
+            real *th = vector(1, dm);
+            expand_ma_factors(&M, th, dm);
+            for (k = 1; k <= dm; k++) armax->theta[k][a][a] = th[k];
+            free_vector(th, 1, dm);
         }
     }
     /* Fuera de la diagonal: la dinamica cruzada. */
@@ -578,6 +690,28 @@ static void shootx_esc(real *x, struct Tvarma *armax, int *ifaultx, int firstx, 
         for (a = 1; a <= m; a++)
             for (b = 1; b <= m; b++)
                 if (a != b && free_ma(k, act[a], act[b])) armax->theta[k][a][b] = cMA[k][act[a]][act[b]];
+
+    /* La ruta V: cada fila por su factor (lo anual y lo de frecuencia fija
+       del univariante).                                                    */
+    if (v_on)
+        for (a = 1; a <= m; a++) {
+            int i = act[a];
+            struct Tusmodel M = v_parte(i, 0);
+            if (v_fac_ar[i] > 0) {
+                real *f = vector(1, v_fac_ar[i]);
+                expand_ar_factors(&M, f, v_fac_ar[i]);
+                v_fila_por_factor(armax->phi, a, m, v_reg_ar[i] > cx_p ? v_reg_ar[i] : cx_p,
+                                  f, v_fac_ar[i]);
+                free_vector(f, 1, v_fac_ar[i]);
+            }
+            if (v_fac_ma[i] > 0) {
+                real *g = vector(1, v_fac_ma[i]);
+                expand_ma_factors(&M, g, v_fac_ma[i]);
+                v_fila_por_factor(armax->theta, a, m, v_reg_ma[i] > cx_q ? v_reg_ma[i] : cx_q,
+                                  g, v_fac_ma[i]);
+                free_vector(g, 1, v_fac_ma[i]);
+            }
+        }
 
     /* Q, normalizada con Q_11 = 1: est() concentra sigma2, y Q -> cQ es una
        direccion exactamente plana (Mauricio 1995, ec. 2.1).               */
@@ -1747,6 +1881,7 @@ void escalera_usage(const char *prog)
     printf("       %s A.pre B.pre [C.pre ...] p q [-diagcov] [-redet] [-fixarma]\n", prog);
     printf("                                  [-m method] [-o NAME] [-forecast H [-estwin N]]\n");
     printf("                                  [-irfboot N] [-det LIST] [-detbase file|gate]\n");
+    printf("                                  [-route u|v]\n");
     printf("                                  [-hessian fd|bfgs] [-lik elf|shea|both]\n");
     printf("                                  [-links \"A<-B,C<-A\"] [-zero \"AR1[A<-B],...\"]\n");
     printf("                                  [-start zero|ols]\n");
@@ -1755,6 +1890,12 @@ void escalera_usage(const char *prog)
     printf("       The VARMA keeps each model on its DIAGONAL; p and q are the orders of\n");
     printf("       the CROSS dynamics. p = q = 0 with -diagcov reproduces the univariates.\n");
     printf("  -diagcov : diagonal innovation covariance (default: full)\n");
+    printf("  -route   : u (default), the ladder: each series keeps its univariate ARMA\n"
+           "             and the cross terms are added. v, the vector first: past the\n"
+           "             gate, each series' regular ARMA is replaced by a free\n"
+           "             AR(p)/MA(q) -- the whole VARMA(p,q) matrix is free -- and its\n"
+           "             seasonal and fixed-frequency factors multiply its row. The LR\n"
+           "             is then against the same model without cross terms\n");
     printf("  -redet   : re-estimate the deterministic terms (default: fixed); it is -det all\n");
     printf("  -det LIST: re-estimate only some: all, none, a class (seasonal: cos sin\n"
            "             alter; calendar: easter; interv: impulse compimp step ramp;\n"
@@ -1845,6 +1986,7 @@ int escalera_main(int argc, char *argv[])
         return 1;
     }
     cx_diagcov = 0; opt_fixarma = 0; det_lista[0] = 0; det_base = 0; det_etapa = 1;
+    opt_route_v = 0; v_on = 0;
     est_fdhess = 1;          /* standard errors from the Hessian AT the optimum */
     for (argi += 2; argi < argc; argi++) {
         if      (strcmp(argv[argi], "-diagcov") == 0) cx_diagcov = 1;
@@ -1855,6 +1997,9 @@ int escalera_main(int argc, char *argv[])
                  (strcmp(argv[argi + 1], "file") == 0 || strcmp(argv[argi + 1], "gate") == 0))
             det_base = strcmp(argv[++argi], "gate") == 0 ? 2 : 1;
         else if (strcmp(argv[argi], "-fixarma") == 0) opt_fixarma = 1;
+        else if (strcmp(argv[argi], "-route") == 0 && argi + 1 < argc &&
+                 (strcmp(argv[argi + 1], "u") == 0 || strcmp(argv[argi + 1], "v") == 0))
+            opt_route_v = (strcmp(argv[++argi], "v") == 0);
         else if (strcmp(argv[argi], "-m") == 0 && argi + 1 < argc) met_esc = atoi(argv[++argi]);
         else if (strcmp(argv[argi], "-o") == 0 && argi + 1 < argc)
             snprintf(outname, sizeof outname, "%s", argv[++argi]);
@@ -1892,6 +2037,15 @@ int escalera_main(int argc, char *argv[])
         }
     }
     int want_diagcov = cx_diagcov;
+    if (opt_route_v && opt_fixarma) {
+        printf("ERROR: -route v with -fixarma: on route V the own ARMA is the vector's,\n"
+               "       free by definition; there is no univariate ARMA to hold.\n");
+        return 1;
+    }
+    if (opt_route_v && p == 0 && q == 0) {
+        printf("ERROR: -route v needs p or q above zero: it is the full VARMA(p,q).\n");
+        return 1;
+    }
     if (irfboot_n < 0 || (irfboot_n > 0 && det_lista[0] && strcmp(det_lista, "none") != 0)) {
         printf("ERROR: -irfboot N needs N >= 1, and not -redet or -det (the stationary\n"
                "       series are rebuilt from the data at each estimation)\n");
@@ -2059,6 +2213,10 @@ int escalera_main(int argc, char *argv[])
             FILE *f = i ? outputv : stdout;
             fprintf(f, "Program          : drvarma %s (ladder mode: .pre input)\n", DRVARMA_VERSION_FULL);
             fprintf(f, "Output File      : %s\n", outfile);
+            if (opt_route_v)
+                fprintf(f, "Model            : VARMA(%d,%d), route V: the whole matrix free, the "
+                           "univariates' seasonal factors on the rows\n", p, q);
+            else
             fprintf(f, "Model            : VARMA with univariate diagonals; cross orders p=%d q=%d\n", p, q);
             if (opt_links) {
                 int li, lj, first = 1;
@@ -2105,7 +2263,8 @@ int escalera_main(int argc, char *argv[])
                                                        "(%d estimated there, series by series)\n", ng);
                 else                        fprintf(f, "Deterministics   : fixed at the .pre\n");
             }
-            fprintf(f, "Univariate ARMA  : %s\n", opt_fixarma ? "fixed at the .pre" : "re-estimated jointly");
+            fprintf(f, "Univariate ARMA  : %s\n", opt_route_v ? "replaced by the vector's (route V)"
+                    : opt_fixarma ? "fixed at the .pre" : "re-estimated jointly");
             fprintf(f, "Estimation method: %d\n", met_esc);
             fprintf(f, "Likelihood       : %s\n", lik_label());
             fprintf(f, "Frequency        : %d\n", data_freq);
@@ -2237,6 +2396,35 @@ int escalera_main(int argc, char *argv[])
     }
     fit_free(&D);
 
+    /* [3b] La ruta V: pasada la puerta, lo propio pasa a ser el AR(p)/MA(q)
+       libre del vector, y lo demas del univariante, el factor de su fila. */
+    if (opt_route_v) {
+        int k2;
+        v_sustituye(p, q);
+        for (i = 0; i < 2; i++) {
+            FILE *f = i ? outputv : stdout;
+            fprintf(f, "=============================================================\n");
+            fprintf(f, "  ROUTE V: THE VECTOR FIRST\n");
+            fprintf(f, "  Past the gate, each series' regular ARMA is replaced by a free\n");
+            fprintf(f, "  AR(%d)/MA(%d), the vector's. Its seasonal and fixed-frequency\n", p, q);
+            fprintf(f, "  factors multiply its whole row, cross terms included.\n");
+            fprintf(f, "=============================================================\n");
+            fprintf(f, "  %-14s %22s %22s\n", "series", "univariate, regular", "row factor (degrees)");
+            for (k2 = 1; k2 <= n_ser; k2++)
+                fprintf(f, "  %-14s          AR(%d) MA(%d)           AR %d  MA %d\n", Ts[k2].name,
+                        v_uni_ar[k2], v_uni_ma[k2], v_fac_ar[k2], v_fac_ma[k2]);
+            for (k2 = 1; k2 <= n_ser; k2++) {
+                if (v_uni_ar[k2] > p)
+                    fprintf(f, "  Note: %s's univariate model has a regular AR(%d): this model,\n"
+                               "        with p = %d, does not contain it.\n", Ts[k2].name, v_uni_ar[k2], p);
+                if (v_uni_ma[k2] > q)
+                    fprintf(f, "  Note: %s's univariate model has a regular MA(%d): this model,\n"
+                               "        with q = %d, does not contain it.\n", Ts[k2].name, v_uni_ma[k2], q);
+            }
+            fprintf(f, "\n");
+        }
+    }
+
     /* [4] El diagonal OPTIMIZADO: la base del contraste y la semilla. */
     fit_run(&D, 1);
     if (D.ifault) {
@@ -2292,10 +2480,15 @@ int escalera_main(int argc, char *argv[])
         if (!is_diag) {
             real lr = 2.0 * (F.logL - logL_diag);
             real pv = 1.0 - chisq(lr > 0.0 ? lr : 0.0, ncross);
+            if (opt_route_v)
+                fprintf(outputv, "\nCross dynamics against the same model without cross terms (route V;\n"
+                                 "not against the univariate models, which are the yardstick):\n");
+            else
             fprintf(outputv, "\nCross dynamics against the diagonal system (the univariates):\n");
             fprintf(outputv, "  logL diagonal %.6f, logL full %.6f\n", logL_diag, F.logL);
             fprintf(outputv, "  LR = %.4f   df = %d   p-value = %.4f\n", lr, ncross, pv);
-            printf("LR against the univariates: %.4f (df %d, p = %.4f)\n", lr, ncross, pv);
+            printf("LR against the %s: %.4f (df %d, p = %.4f)\n",
+                   opt_route_v ? "model without cross terms" : "univariates", lr, ncross, pv);
         }
         print_sigma(outputv, &F);
         print_matrices(&F.vm);

@@ -103,7 +103,10 @@ anything cross is estimated, the diagonal gate checks that the joint cast
 reproduces the univariate models exactly, and stops the program if it does
 not. Deterministic terms stay fixed unless `-redet` (all of them) or
 `-det LIST` (a class, a series' class or single terms by name); `-detbase`
-says where the fixed ones stay (the file's values, or the gate's). The series
+says where the fixed ones stay (the file's values, or the gate's).
+`-route v` is the vector first (Tiao and Box), through the same gate: past
+it, each series' regular ARMA is replaced by a free AR(p)/MA(q), so the
+whole VARMA(p,q) matrix is free, and its seasonal factors multiply its row. The series
 must share their frequency and their last date (BUG-2). `-forecast H` forecasts
 every series in its level, and `-estwin N` adds fixed-parameter forecasts from
 every origin, with an out-of-sample evaluation: the univariate models (the

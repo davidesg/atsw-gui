@@ -48,3 +48,11 @@ FFs | V | 1 0 | rutas/data/monetario_v/IPI_v_p1q0.inp rutas/data/monetario_v/IPC
 # de atsw-cli al cambiar el arranque por defecto (#207).
 MM  | U | 2 0 | ../../../lib/outvarma/datos/MUSKRAT_m03.pre ../../../lib/outvarma/datos/MINK_m02.pre |
 MMz | U | 2 0 | ../../../lib/outvarma/datos/MUSKRAT_m03.pre ../../../lib/outvarma/datos/MINK_m02.pre | -zero AR2[MINK<-MUSKRAT]
+
+# La ruta V por la puerta (-route v): los univariantes del analista entran
+# como en la U; pasada la puerta, el ARMA regular de cada serie es un
+# AR(p)/MA(q) libre y su factor estacional multiplica la fila.
+FF  | Vg | 1 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -route v
+FF  | Vg | 2 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -route v
+FF  | Vg | 3 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -route v
+FF  | Vg | 1 1 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -route v

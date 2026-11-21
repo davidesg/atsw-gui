@@ -720,6 +720,36 @@ grep -q "there is nothing to test (0 df)" "$TMP/fe0.out" \
     && bien "-factortest cuando la fila con factor no tiene terminos: nada que contrastar, y lo dice" \
     || falla "-factortest con 0 g.l.: no lo dice"
 
+# 10l. -zero sobre lo propio, en la ruta V: phi_SERIE[B^k] y theta_SERIE[B^k].
+#     Es own_zeros del porte; los numeros son los suyos.
+"$BIN" "$EI" "$EW" 2 0 -route v                       -o "$TMP/z0" > /dev/null 2>&1
+"$BIN" "$EI" "$EW" 2 0 -route v -zero "phi_WTI[B^2]" -o "$TMP/z1" > /dev/null 2>&1
+[ "$(np "$TMP/z0.out")" = 12 ] && [ "$(np "$TMP/z1.out")" = 11 ] \
+    && grep -q "^Zero coefficients: phi_WTI\[B^2\]" "$TMP/z1.out" && ! grep -q "^  phi_WTI\[B^2\]" "$TMP/z1.out" \
+    && bien "-zero phi_WTI[B^2] en la ruta V: un parametro menos, fuera de la tabla, y la cabecera lo dice" \
+    || falla "-zero sobre lo propio: $(np "$TMP/z0.out") y $(np "$TMP/z1.out") parametros"
+python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) <= float(sys.argv[2]) + 1e-6 else 1)" \
+    "$(ll "$TMP/z1.out")" "$(ll "$TMP/z0.out")" \
+    && bien "-zero sobre lo propio: el modelo con el cero anida en el otro" \
+    || falla "-zero sobre lo propio: logL $(ll "$TMP/z1.out") por encima de $(ll "$TMP/z0.out")"
+"$BIN" "$EI" "$EW" 0 0 -echelon 2,1 -zero "phi_IPC[B^2],theta_IPC[B^1]" -o "$TMP/z2" > /dev/null 2>&1
+cerca "-zero sobre lo propio en la forma echelon (2,1): el logL del porte" -630.160565 "$(ll "$TMP/z2.out")" 1e-5
+[ "$(np "$TMP/z2.out")" = 14 ] && bien "-zero phi_IPC[B^2],theta_IPC[B^1]: 14 parametros, como el porte" \
+    || falla "-zero sobre lo propio, echelon (2,1): $(np "$TMP/z2.out") parametros"
+# con el contraste del factor de fila: el cero propio sigue a cero en la
+# alternativa (2 g.l.; el porte lo suelta y da 3: es un defecto suyo)
+"$BIN" "$MON/IPI_m07.pre" "$EW" 0 0 -echelon 1,1 -zero "theta_IPI[B^1]" -factortest -o "$TMP/z3" > /dev/null 2>&1
+cerca "-zero theta_IPI[B^1], echelon (1,1): el logL del porte" -925.559100 "$(ll "$TMP/z3.out")" 1e-5
+set -- $(lrf "$TMP/z3.out")
+[ "${2:-}" = 2 ] && bien "-factortest con un cero propio: 2 grados de libertad, el cero no se suelta" \
+    || falla "-factortest con un cero propio: g.l. ${2:-?}"
+"$BIN" "$EI" "$EW" 2 0 -zero "phi_WTI[B^2]" -o "$TMP/zx" > "$TMP/zx.log" 2>&1
+[ $? -ne 0 ] && grep -q "on route V" "$TMP/zx.log" \
+    && bien "-zero sobre lo propio en la ruta U es un error que dice por que" || falla "-zero sobre lo propio pasa en la ruta U"
+"$BIN" "$EI" "$EW" 2 0 -route v -zero "phi_WTI[B^3]" -o "$TMP/zx" > "$TMP/zx.log" 2>&1
+[ $? -ne 0 ] && grep -q "not an own coefficient of the model" "$TMP/zx.log" \
+    && bien "-zero sobre un retardo propio que no esta en el modelo es un error" || falla "-zero phi_WTI[B^3] pasa con p = 2"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

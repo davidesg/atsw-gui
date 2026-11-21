@@ -155,6 +155,12 @@ what the own part is and how it is seeded:
   included: F_a(B)[Φ(B)w]_a = G_a(B)[Θ(B)a]_a, the row factor of the port's
   echelon form. The deterministic terms, the differences and the mean are the
   gate's.
+- **Own coefficients can be held at zero** with `-zero "phi_X[B^k]"` or
+  `"theta_X[B^k]"`: on route V every coefficient is free, the own ones too,
+  and Tiao and Box's simplification is on all of them. The seeds leave them
+  at zero, stage II leaves them out of its least squares, and the row
+  factor's test keeps them at zero in its alternative. It is the port's
+  `own_zeros`, with the same numbers. On route U it is an error.
 - **The seed is the whole matrix.** On route V the own part is the vector's,
   so the original drvarma's start (`init_varma`) holds whole: least squares
   of the VAR(p) give the diagonal and the cross terms, and the MA, own and

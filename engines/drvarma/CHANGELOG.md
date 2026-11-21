@@ -9,6 +9,20 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Added — `-echelon`: the echelon form with given Kronecker indices
+
+- `-echelon n1,n2,…`, on route V: one Kronecker index per series. Row r has
+  its own AR(n_r)/MA(n_r); the indices fix which cross lags exist and which
+  contemporaneous terms (`AR0[r<-c]`, the lower-triangular A₀). Lütkepohl and
+  Poskitt's reversed echelon form, the identified VARMA. Equal indices are
+  the VARMA(n,n) of `-route v`.
+- Homologated with the port (`Ladder(echelon=n, own="free")`) to six
+  decimals wherever both certify the optimum: IPC and WTI at (1,0), (1,1),
+  (2,1), (1,2); muskrat and mink at (1,0); IPI, IPC and WTI at (0,1,1), with
+  a row factor.
+- Not yet: the index search, the stage II start, and `-factortest` with
+  unequal indices.
+
 ### Added — `-route v`: the vector first, through the gate
 
 - Route V (Tiao and Box) used to mean specifications without univariate

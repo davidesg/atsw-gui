@@ -585,6 +585,45 @@ grep -q "there is no" "$TMP/ftn.out" && grep -q "row factor to test" "$TMP/ftn.o
 "$BIN" "$MON/WTI_m03.pre" "$MON/GS2_m05.pre" 1 0 -factortest -o "$TMP/fte" > "$TMP/fte.log" 2>&1
 [ $? -ne 0 ] && bien "-factortest sin -route v es un error" || falla "-factortest sin -route v pasa"
 
+# 10h. -echelon: la forma echelon con los indices de Kronecker dados. Los
+#     numeros son los del porte, Ladder(echelon=n, own="free", start="zero"),
+#     en los casos en que los dos certifican el optimo.
+EI=$MON/IPC_m07.pre; EW=$MON/WTI_m03.pre
+ech() { "$BIN" "$EI" "$EW" 0 0 -echelon "$1" -o "$TMP/e$2" > "$TMP/e$2.log" 2>&1; }
+ech 1,0 10; ech 1,1 11; ech 2,1 21; ech 1,2 12
+cerca "echelon (1,0), IPC y WTI: el logL del porte" -638.329701 "$(ll "$TMP/e10.out")" 1e-5
+cerca "echelon (1,1): el logL del porte"            -630.843671 "$(ll "$TMP/e11.out")" 1e-5
+cerca "echelon (2,1): el logL del porte"            -629.155884 "$(ll "$TMP/e21.out")" 1e-5
+cerca "echelon (1,2): el logL del porte"            -628.703020 "$(ll "$TMP/e12.out")" 1e-5
+[ "$(np "$TMP/e10.out")" = 8 ] && [ "$(np "$TMP/e11.out")" = 12 ] && [ "$(np "$TMP/e21.out")" = 16 ] \
+    && [ "$(np "$TMP/e12.out")" = 15 ] \
+    && bien "echelon: 8, 12, 16 y 15 parametros, los del porte" \
+    || falla "echelon: parametros $(np "$TMP/e10.out") $(np "$TMP/e11.out") $(np "$TMP/e21.out") $(np "$TMP/e12.out")"
+# A_0: el termino contemporaneo r <- c existe solo si c < r y n_c > n_r
+grep -q "AR0\[WTI<-IPC\]" "$TMP/e21.out" && grep -q "AR0\[WTI<-IPC\]" "$TMP/e10.out" \
+    && ! grep -q "AR0\[" "$TMP/e12.out" && ! grep -q "AR0\[" "$TMP/e11.out" \
+    && bien "echelon: AR0[WTI<-IPC] en (2,1) y (1,0); ninguno en (1,2) ni en (1,1)" \
+    || falla "echelon: los terminos de A_0 no son los de la tabla de indices"
+# con los indices iguales es el VARMA(n,n) de la ruta V
+"$BIN" "$EI" "$EW" 1 1 -route v -o "$TMP/ev11" > /dev/null 2>&1
+cerca "echelon (1,1) es -route v 1 1" "$(ll "$TMP/ev11.out")" "$(ll "$TMP/e11.out")" 1e-5
+# tres series, con el factor de fila del IPI: (0,1,1)
+"$BIN" "$MON/IPI_m07.pre" "$EI" "$EW" 0 0 -echelon 0,1,1 -o "$TMP/e011" > /dev/null 2>&1
+cerca "echelon (0,1,1), IPI, IPC y WTI, con factor de fila: el logL del porte" \
+    -835.732462 "$(ll "$TMP/e011.out")" 1e-5
+[ "$(np "$TMP/e011.out")" = 19 ] && grep -q "^Model            : echelon form, Kronecker indices 0,1,1" "$TMP/e011.out" \
+    && bien "echelon (0,1,1): 19 parametros, y la cabecera dice los indices" \
+    || falla "echelon (0,1,1): $(np "$TMP/e011.out") parametros"
+"$BIN" "$EI" "$EW" 0 0 -echelon 1,1,0 -o "$TMP/ex" > "$TMP/ex.log" 2>&1
+[ $? -ne 0 ] && grep -q "give 2 Kronecker indices" "$TMP/ex.log" \
+    && bien "-echelon con otro numero de indices que de series es un error" || falla "-echelon acepta 3 indices para 2 series"
+"$BIN" "$EI" "$EW" 1 0 -echelon 2,1 -o "$TMP/ex" > "$TMP/ex.log" 2>&1
+[ $? -ne 0 ] && bien "-echelon con ordenes cruzados que no son 0 0 ni el mayor indice es un error" \
+    || falla "-echelon acepta p = 1 con indices 2,1"
+"$BIN" "$MON/IPI_m07.pre" "$EW" 0 0 -echelon 2,1 -factortest -o "$TMP/ex" > "$TMP/ex.log" 2>&1
+[ $? -ne 0 ] && bien "-factortest con indices desiguales: todavia no, y lo dice" \
+    || falla "-factortest con indices desiguales pasa"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

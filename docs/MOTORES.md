@@ -98,7 +98,7 @@ de los motores.
 | `tests/banco/banco.sh` | la vía `.inp` (obsoleta), byte a byte | `make check`, CI |
 | `tests/escalera/pruebas.sh` | la escalera: la puerta, las rutas, la forma echelon, los números del porte | `make check`, CI |
 | `lib/outvarma/run_test.sh` | el lector de la salida | `make check`, CI |
-| `tests/rutas/rutas.sh` | las rutas U y V, la forma echelon, los tres caminos del mismo modelo: unas 300 estimaciones, veinte minutos | a mano, **antes y después de todo cambio en el motor** |
+| `tests/rutas/rutas.sh` | las rutas U y V, la forma echelon, los tres caminos del mismo modelo: unas 340 estimaciones, veinticinco minutos | a mano, **antes y después de todo cambio en el motor** |
 
 ## 5. Los hermanos no son iguales
 

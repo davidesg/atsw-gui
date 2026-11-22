@@ -108,6 +108,9 @@ bloques son nuevos y hoy los ignora.
   porte: por traer al C.
 - Las pasadas siguientes de la búsqueda de índices, con el factor de fila
   reestimado en el conjunto: solo en el porte.
-- La batería de las rutas tiene 21 abiertos: los VARMA llenos con MA. No se
+- La batería de las rutas tiene 23 abiertos: los VARMA llenos con MA (21) y,
+  desde el 22-nov, el VARMA(1,1) por la ruta V de los sistemas con GS2 y GS3,
+  donde además el porte y el C no acaban en el mismo punto (pendiente de
+  estudio). No se
   cierran con un arranque; son el caso de uso de la forma echelon.
 - Un comentario de `src/drvarma.c` dice todavía «unchanged since 0.4.1».

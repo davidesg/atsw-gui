@@ -35,3 +35,14 @@ escalera:Svarma11-p2q1
 arranques:S3varma11-U-p1q1
 arranques:S3varma11-V-p1q1
 escalera:S3varma11-p1q1
+#
+# --- casos.txt, la ruta V por la puerta ---
+#
+# El VARMA(1,1) de los sistemas con GS2 y GS3: cero y ols acaban en puntos
+# distintos, tres de los cuatro en el muro de invertibilidad (GS2: cero
+# -1779,75, ols -1781,47; GS3: cero -1787,94, ols -1788,65). Es la misma
+# siembra del MA de arriba. En estos dos casos, ademas, el porte no acaba
+# donde el C desde cero (GS2 -1780,08; GS3 -1788,96) ni, en GS3, desde ols
+# (-1787,27): en el muro los dos motores no siguen el mismo camino.
+arranques:GS2-Vg-p1q1
+arranques:GS3-Vg-p1q1

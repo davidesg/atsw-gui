@@ -56,6 +56,21 @@ FF  | Vg | 1 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC
 FF  | Vg | 2 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -route v
 FF  | Vg | 3 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -route v
 FF  | Vg | 1 1 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/FF_m03.pre | -route v
+# Los otros tres tipos por la misma ruta: el sistema de origen de todo el
+# trabajo (el VAR(2) de GS1) y sus hermanos. Con ellos la bateria cubre lo
+# que sima estima por la ruta V (rodaje del 22-nov-2026).
+GS1 | Vg | 1 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS1_m01.pre | -route v
+GS1 | Vg | 2 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS1_m01.pre | -route v
+GS1 | Vg | 3 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS1_m01.pre | -route v
+GS1 | Vg | 1 1 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS1_m01.pre | -route v
+GS2 | Vg | 1 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS2_m05.pre | -route v
+GS2 | Vg | 2 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS2_m05.pre | -route v
+GS2 | Vg | 3 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS2_m05.pre | -route v
+GS2 | Vg | 1 1 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS2_m05.pre | -route v
+GS3 | Vg | 1 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS3_m02.pre | -route v
+GS3 | Vg | 2 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS3_m02.pre | -route v
+GS3 | Vg | 3 0 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS3_m02.pre | -route v
+GS3 | Vg | 1 1 | escalera/data/monetario/IPI_m07.pre escalera/data/monetario/IPC_m07.pre escalera/data/monetario/WTI_m03.pre escalera/data/monetario/GS3_m02.pre | -route v
 
 # La forma echelon (-echelon), con los indices que elige la busqueda
 # (-echelon search) o cercanos, donde los dos arranques certifican el mismo

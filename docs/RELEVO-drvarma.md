@@ -109,8 +109,10 @@ bloques son nuevos y hoy los ignora.
 - Las pasadas siguientes de la búsqueda de índices, con el factor de fila
   reestimado en el conjunto: solo en el porte.
 - La batería de las rutas tiene 23 abiertos: los VARMA llenos con MA (21) y,
-  desde el 22-nov, el VARMA(1,1) por la ruta V de los sistemas con GS2 y GS3,
-  donde además el porte y el C no acaban en el mismo punto (pendiente de
-  estudio). No se
+  desde el 22-nov, el VARMA(1,1) por la ruta V de los sistemas con GS2 y GS3.
+  Ahí se vio que el porte no acababa donde el C. La causa estaba en el porte
+  (invertía el MA(1) propio fuera de la región invertible, como el cast de
+  fue; este motor no lo hace) y está corregida en drvarma-python (BUG-0030):
+  los 64 casos monetarios coinciden en verosimilitud e iteraciones. No se
   cierran con un arranque; son el caso de uso de la forma echelon.
 - Un comentario de `src/drvarma.c` dice todavía «unchanged since 0.4.1».

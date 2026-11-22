@@ -41,8 +41,12 @@ escalera:S3varma11-p1q1
 # El VARMA(1,1) de los sistemas con GS2 y GS3: cero y ols acaban en puntos
 # distintos, tres de los cuatro en el muro de invertibilidad (GS2: cero
 # -1779,75, ols -1781,47; GS3: cero -1787,94, ols -1788,65). Es la misma
-# siembra del MA de arriba. En estos dos casos, ademas, el porte no acaba
-# donde el C desde cero (GS2 -1780,08; GS3 -1788,96) ni, en GS3, desde ols
-# (-1787,27): en el muro los dos motores no siguen el mismo camino.
+# siembra del MA de arriba. En estos casos se vio que el porte no acababa
+# donde el C; no era el muro: el porte invertia el MA(1) propio fuera de la
+# region invertible (la regla del cast de fue), que este motor no hace, y
+# ordenaba los parametros y calculaba la siembra ols con otra aritmetica
+# (drvarma-python BUG-0030). Corregido el porte, los 64 casos monetarios
+# (4 sistemas, 2 rutas, 4 ordenes, 2 arranques) dan la misma verosimilitud
+# al sexto decimal y las mismas iteraciones que esta referencia.
 arranques:GS2-Vg-p1q1
 arranques:GS3-Vg-p1q1

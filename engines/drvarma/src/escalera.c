@@ -2447,6 +2447,103 @@ static void print_param_table(FILE *f, Fit *F)
     free(names);
 }
 
+/* ------------------------------------------------------------------------- */
+/*  Los factores MA propios, cada uno leido solo (23-nov-2026).              */
+/*                                                                           */
+/*  La verosimilitud solo se evalua donde el operador MA del SISTEMA es      */
+/*  invertible (chekma, elf), como Mauricio (1995, sec. 3): la escalera no   */
+/*  toma el invertible de un coeficiente, porque en un sistema invertir un   */
+/*  elemento de Theta no es el mismo modelo (salvo series independientes).   */
+/*  Un factor MA propio puede quedar asi fuera del circulo unidad leido      */
+/*  solo: fue nunca estima un factor asi (toma el invertible en su cast).    */
+/*  Se dice, sin cambiar nada. Caso: rata almizclera y vison, VARMA(2,1),    */
+/*  ruta U, arranque cero: se para (sin punto mas bajo) con theta_MUSKRAT   */
+/*  = 1.5483, sin tocar el muro del sistema.                                 */
+/* ------------------------------------------------------------------------- */
+#define OWN_MA_MAXQ 64
+/* El mayor modulo de las raices inversas de 1 - c[1] z - ... - c[q] z^q.   */
+static real own_ma_modulus(const real *c, int q)
+{
+    real **a, *wr, *wi, mx = 0.0;
+    int  i, j;
+    if (q <= 0) return 0.0;
+    if (q == 1) return fabs(c[1]);
+    a = matrix(1, q, 1, q);  wr = vector(1, q);  wi = vector(1, q);
+    for (i = 1; i <= q; i++)
+        for (j = 1; j <= q; j++) a[i][j] = 0.0;
+    for (j = 1; j <= q; j++) a[1][j] = c[j];
+    for (i = 2; i <= q; i++) a[i][i - 1] = 1.0;
+    eigenqr(a, q, wr, wi);
+    for (i = 1; i <= q; i++) if (a[i][i] > mx) mx = a[i][i];
+    free_vector(wi, 1, q);  free_vector(wr, 1, q);  free_matrix(a, 1, q, 1, q);
+    return mx;
+}
+
+/* Cuantos factores MA propios quedan fuera (modulo >= 1 - MA_WALL_TOL); con
+   f != NULL, el bloque del .out; con aviso, una linea en pantalla.          */
+static int own_ma_outside(FILE *f, int aviso)
+{
+    int  a, k, j, n = 0, q;
+    real c[OWN_MA_MAXQ + 1], md;
+    char line[256], lista[1024];
+    lista[0] = '\0';
+    for (a = 1; a <= act_m; a++) {
+        struct Tusmodel *M = &Tm[act[a]];
+        const char *nm = Ts[act[a]].name;
+        for (int kind = 0; kind < 3; kind++) {
+            int nf = kind == 0 ? M->NumMa1 : kind == 1 ? M->NumMa2 : M->NumMa1f;
+            for (k = 1; k <= nf; k++) {
+                const char *what;
+                char coef[64] = "";
+                if (kind == 0) {
+                    q = M->q1[k]; if (q > OWN_MA_MAXQ) q = OWN_MA_MAXQ;
+                    for (j = 1; j <= q; j++) c[j] = M->Ma1[k][j];
+                    md = own_ma_modulus(c, q);
+                    what = "regular MA";
+                } else if (kind == 1) {
+                    q = M->q2[k]; if (q > OWN_MA_MAXQ) q = OWN_MA_MAXQ;
+                    for (j = 1; j <= q; j++) c[j] = M->Ma2[k][j];
+                    md = own_ma_modulus(c, q);   /* in B^s: outside iff >= 1 */
+                    what = "seasonal MA";
+                } else {
+                    real c2 = M->Ma1f[k][2];
+                    q = 2;
+                    md = c2 < 0.0 ? sqrt(-c2) : 0.0;
+                    what = "fixed-frequency MA";
+                    snprintf(coef, sizeof coef, "c2 = %.6f", c2);
+                }
+                if (md < 1.0 - MA_WALL_TOL) continue;
+                if (kind != 2 && q == 1)
+                    snprintf(coef, sizeof coef, "%s = %.6f", kind == 0 ? "theta" : "Theta", c[1]);
+                n++;
+                if (f) {
+                    if (n == 1)
+                        fprintf(f, "\nOWN MA FACTORS NOT INVERTIBLE, EACH READ ALONE:\n");
+                    snprintf(line, sizeof line, "%s(%d)", what, q);
+                    fprintf(f, "  %-14s %-22s %-20s inverse root modulus %.6f (%s)\n",
+                            nm, kind == 2 ? what : line, coef, md,
+                            md >= 1.0 + MA_WALL_TOL ? "beyond the unit circle"
+                                                     : "on the unit circle");
+                }
+                if (strlen(lista) + strlen(nm) + 32 < sizeof lista) {
+                    char it[64];
+                    snprintf(it, sizeof it, "%s%.40s (%.4f)", lista[0] ? ", " : "", nm, md);
+                    strcat(lista, it);
+                }
+            }
+        }
+    }
+    if (n > 0 && f)
+        fprintf(f, "  The likelihood is evaluated only where the MA operator of the SYSTEM\n"
+                   "  is invertible, so this is a point of the joint model: each own factor\n"
+                   "  is one block of that operator, not a univariate model. Read alone it\n"
+                   "  is not invertible -- fue never estimates such a factor -- and it is\n"
+                   "  not to be read or reported as one.\n");
+    if (n > 0 && aviso)
+        printf("WARNING: own MA factor(s) not invertible read alone: %s\n", lista);
+    return n;
+}
+
 static void print_sigma(FILE *f, Fit *F)
 {
     int a, b, m = F->vm.m;
@@ -3619,6 +3716,7 @@ int escalera_main(int argc, char *argv[])
             printf("LR against the %s: %.4f (df %d, p = %.4f)\n",
                    opt_route_v ? "model without cross terms" : "univariates", lr, ncross, pv);
         }
+        own_ma_outside(outputv, 1);
         print_sigma(outputv, &F);
         print_matrices(&F.vm);
         print_roots(&F.vm);

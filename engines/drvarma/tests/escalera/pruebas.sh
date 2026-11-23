@@ -750,6 +750,26 @@ set -- $(lrf "$TMP/z3.out")
 [ $? -ne 0 ] && grep -q "not an own coefficient of the model" "$TMP/zx.log" \
     && bien "-zero sobre un retardo propio que no esta en el modelo es un error" || falla "-zero phi_WTI[B^3] pasa con p = 2"
 
+# 10m. los factores MA propios, cada uno leido solo. La escalera no toma el
+# invertible de un coeficiente (en un sistema no es el mismo modelo): un
+# factor propio puede acabar fuera del circulo, y el .out lo dice. Rata
+# almizclera y vison, VARMA(2,1), ruta U, desde cero: se para sin tocar el
+# muro del sistema (sin punto mas bajo, termcode 3) con
+# theta_MUSKRAT = 1,5483; desde ols, en el muro, sin factor propio fuera.
+MM="../../lib/outvarma/datos/MUSKRAT_m03.pre ../../lib/outvarma/datos/MINK_m02.pre"
+"$BIN" $MM 2 1 -start zero -o "$TMP/ow" > "$TMP/ow.log" 2>&1
+cerca "un MA propio fuera: el logL no cambia por avisarlo" -551.715772 "$(ll "$TMP/ow.out")" 1e-5
+grep -aq "^OWN MA FACTORS NOT INVERTIBLE, EACH READ ALONE:" "$TMP/ow.out" \
+    && grep -aq "MUSKRAT .*theta = 1.5482.*beyond the unit circle" "$TMP/ow.out" \
+    && bien "el .out dice el factor MA propio fuera del circulo, con su modulo" \
+    || falla "el .out no dice el MA propio de MUSKRAT fuera del circulo"
+grep -aq "^WARNING: own MA factor(s) not invertible read alone: MUSKRAT (1.5483)" "$TMP/ow.log" \
+    && bien "la pantalla lo avisa en una linea" || falla "la pantalla no avisa del MA propio"
+"$BIN" $MM 2 1 -start ols -o "$TMP/ow2" > "$TMP/ow2.log" 2>&1
+! grep -aq "OWN MA FACTORS NOT INVERTIBLE" "$TMP/ow2.out" && ! grep -aq "^WARNING: own MA" "$TMP/ow2.log" \
+    && bien "sin factor propio fuera, ni el .out ni la pantalla dicen nada" \
+    || falla "aviso de MA propio donde no lo hay"
+
 # 11. la regresion de la salida de la 5.0
 REF=$AQUI/ref
 filtro() { grep -av '^Program          : \|^Output File      : \|^  \[[0-9]*\] \|^Full results written to \|^Forecasts written to \|^Recursive forecasts written to ' "$1"; }

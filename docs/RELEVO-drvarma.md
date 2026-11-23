@@ -136,12 +136,14 @@ fue; ya no.
 
 **Pendiente en el motor, por orden:**
 
-1. *Avisar cuando un MA propio acaba fuera de (−1, 1)* (aprobado el 23-nov).
-   Puede pasar: visón y rata almizclera, VARMA(2,1), ruta U, arranque cero,
-   «convergió» con θ_MUSKRAT = 1,5483 y logL −551,7158; desde ols, −545,5623
-   en el muro. El operador del sistema es invertible, pero se lee como un
-   modelo univariante no invertible dado por convergido. La salida debe
-   decirlo; el porte y sima, con ella. No cambia ningún número.
+1. *Avisar cuando un MA propio acaba fuera de (−1, 1)* (aprobado el 23-nov;
+   hecho: el bloque «OWN MA FACTORS NOT INVERTIBLE, EACH READ ALONE» del
+   `.out` y una línea en pantalla). Puede pasar: visón y rata almizclera,
+   VARMA(2,1), ruta U, arranque cero: el optimizador se para sin tocar el
+   muro del sistema (sin punto más bajo) con θ_MUSKRAT = 1,5483 y logL
+   −551,7158; desde ols, −545,5623 en el muro. El operador del sistema es
+   invertible, pero ese factor, leído solo, no lo es. No cambia ningún
+   número; el porte y sima lo dicen igual.
 2. *Estudio aparte:* si la escalera debe impedir que un factor MA(1) que
    viene de un modelo univariante salga del círculo. Cambiaría resultados:
    estudio, C con toda la batería, hermanos y porte (`docs/MOTORES.md`).

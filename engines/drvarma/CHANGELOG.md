@@ -9,6 +9,23 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Added — the own MA factors, each read alone
+
+- The ladder does not take the invertible form of a coefficient: the
+  likelihood is evaluated only where the MA operator of the SYSTEM is
+  invertible (Mauricio 1995, sec. 3), and in a system inverting one element
+  of Theta is not the same model. So an own MA factor can end outside the
+  unit circle read alone, which fue never estimates (fue takes the
+  invertible in its cast, a rule of the univariate model).
+- When it happens the `.out` says so in a block, `OWN MA FACTORS NOT
+  INVERTIBLE, EACH READ ALONE`, factor by factor with its inverse-root
+  modulus, and the screen in one line (`WARNING: own MA factor(s) not
+  invertible read alone: ...`). Nothing else changes: no number, no stop.
+- Witness: muskrat and mink, VARMA(2,1), route U, from zero: the optimizer
+  stops (no lower point) with theta_MUSKRAT = 1.5483, logL −551.715772; from
+  ols it stops on the wall at −545.562324 with no own factor outside.
+  `tests/escalera/pruebas.sh` section 10m.
+
 ### Added — `-zero` on own coefficients, on route V
 
 - `-zero "phi_WTI[B^2]"` or `"theta_IPC[B^1]"` holds an own coefficient at

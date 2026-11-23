@@ -91,6 +91,15 @@ The **full** model (no diagonal flags) captures cross-series dependencies.
 - **Multivariate residual diagnostics** — Hosking portmanteau Q and multivariate
   Jarque–Bera (normality).
 - **Inverse roots** — of |Φ(B)|; all moduli < 1 ⇒ stationary.
+- **Own MA factors not invertible, each read alone** (the ladder, 5.0) —
+  printed only when it happens. The likelihood is evaluated only where the
+  MA operator of the *system* is invertible; the ladder does not take the
+  invertible form of a coefficient, because in a system inverting one
+  element of Θ is another model. So an own factor (a series' MA(1), its
+  seasonal MA, a fixed-frequency MA) can end outside the unit circle read
+  alone. It is a point of the joint model, not a univariate model, and is
+  not to be read as one (fue never estimates such a factor): try another
+  start or another model.
 - **Per-series residual diagnostics** — summary stats, ACF/PACF, Q.
 
 > Note on convergence: with the default `-scale 100` the optimiser normally stops

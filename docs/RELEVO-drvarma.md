@@ -144,9 +144,14 @@ fue; ya no.
    −551,7158; desde ols, −545,5623 en el muro. El operador del sistema es
    invertible, pero ese factor, leído solo, no lo es. No cambia ningún
    número; el porte y sima lo dicen igual.
-2. *Estudio aparte:* si la escalera debe impedir que un factor MA(1) que
-   viene de un modelo univariante salga del círculo. Cambiaría resultados:
-   estudio, C con toda la batería, hermanos y porte (`docs/MOTORES.md`).
+2. *Decidido (24-nov): la escalera no impide que un factor MA propio salga
+   del círculo.* Medido sobre la batería de rutas entera con un binario de
+   prueba que lo rechazaba: 16 de 342 estimaciones acaban con un factor
+   propio fuera, todas en el muro del sistema; la restricción no cambia las
+   otras 326 y, donde muerde, mueve la verosimilitud en los dos sentidos
+   (−5,40 a +3,13), sin sacar ninguna del muro; en un sistema simulado, lo
+   mejor de los arranques empeora 1,98. No es una propiedad del modelo: la
+   región admisible es la del operador MA del sistema. Queda el aviso.
 3. La referencia de la batería de las rutas no se ha regenerado entera: los
    hechos de GS1–3 por la V se añadieron de una pasada filtrada.
 4. Lo de la sección 6 que sigue abierto: `cross="residual"` y las pasadas

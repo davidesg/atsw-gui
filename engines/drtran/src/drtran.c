@@ -3255,10 +3255,82 @@ static void identify_network(real **a, int n, int m, FILE *out)
 }
 
 /* -------------------------------------------------------------------------- */
+/*  start_q_admissible -- LA Q DE PARTIDA TIENE QUE SER UNA COVARIANZA (BUG-75).
+ *
+ *  Q va relativa a la serie 1: Q[1][1] = 1, Q[i][i] = var_i/var_1, y un
+ *  q[i,j] del .cns esta en esas unidades. Un q fijado con |q[i,j]| mayor que
+ *  sqrt(Q[i][i] Q[j][j]) deja una Q que no es definida positiva: elf no puede
+ *  evaluar la verosimilitud ni en el punto de partida, est() vuelve sin una
+ *  sola iteracion y el .out escribia logL = 0, una tabla con errores tipicos 0
+ *  y seguia hasta morir en el grafico. Aqui se comprueba antes de estimar y,
+ *  si no lo es, se dice el rango admisible de cada q y en que unidades va.
+ *  Devuelve 1 si la Q de partida es definida positiva, 0 si no.            */
+static int start_q_admissible(real *x, FILE *out)
+{
+    real  q[MAX_SER + 1][MAX_SER + 1], L[MAX_SER + 1][MAX_SER + 1];
+    real *xf = expand_params(x);
+    int   i, j, k, ok = 1;
+    char  nm[40];
+
+    for (i = 1; i <= n_ser; i++)
+        for (j = 1; j <= n_ser; j++) q[i][j] = 0.0;
+    q[1][1] = 1.0;
+    for (i = 2; i <= n_ser; i++) {
+        int sl;
+        snprintf(nm, sizeof nm, "log(var%d/var1)", i);
+        sl = find_slot(nm);
+        q[i][i] = sl ? exp(xf[sl]) : 1.0;
+        if (!isfinite(q[i][i]) || q[i][i] <= 0.0) ok = 0;
+    }
+    for (i = 2; i <= n_ser; i++)
+        for (j = 1; j < i; j++) {
+            int sl;
+            snprintf(nm, sizeof nm, "q[%d,%d]", i, j);
+            sl = find_slot(nm);
+            q[i][j] = q[j][i] = sl ? xf[sl] : 0.0;
+        }
+
+    /* Cholesky: Q = L L' con pivotes positivos <=> Q definida positiva */
+    for (j = 1; ok && j <= n_ser; j++) {
+        real d = q[j][j];
+        for (k = 1; k < j; k++) d -= L[j][k] * L[j][k];
+        if (!(d > 0.0)) { ok = 0; break; }
+        L[j][j] = sqrt(d);
+        for (i = j + 1; i <= n_ser; i++) {
+            real s = q[i][j];
+            for (k = 1; k < j; k++) s -= L[i][k] * L[j][k];
+            L[i][j] = s / L[j][j];
+        }
+    }
+    if (ok) return 1;
+
+    fprintf(out,
+"\nError: the starting innovation covariance Q is not positive definite, so the\n"
+"likelihood cannot be evaluated even at the starting point. Nothing is estimated.\n"
+"Q is RELATIVE TO SERIES 1 (%s, the first file): Q[1,1] = 1 and\n"
+"Q[i,i] = var_i/var_1, so a q[i,j] in the .cns is in units of var_1 and its\n"
+"meaning depends on the order of the files. A q[i,j] must satisfy\n"
+"|q[i,j]| < sqrt(Q[i,i] Q[j,j]); at the starting point:\n",
+            Ts[1].name ? Ts[1].name : "?");
+    for (i = 2; i <= n_ser; i++)
+        for (j = 1; j < i; j++) {
+            real lim = sqrt(q[i][i] * q[j][j]);
+            if (q[i][j] == 0.0) continue;
+            fprintf(out, "  q[%d,%d] = %-12g  admissible: |q| < %-10.4g  (correlation %+.3f)%s\n",
+                    i, j, q[i][j], lim, q[i][j] / lim,
+                    fabs(q[i][j]) >= lim ? "   <- outside" : "");
+        }
+    for (i = 2; i <= n_ser; i++)
+        fprintf(out, "  Q[%d,%d] = var%d/var1 = %g\n", i, i, i, q[i][i]);
+    fprintf(out,
+"Free the q[i,j] (q[i,j] = free) or give a value inside the range.\n");
+    return 0;
+}
+
 /* estimate_and_report: estima por ML exacta e informa                         */
 /* -------------------------------------------------------------------------- */
-static void estimate_and_report(real *x, int npar, int fc_horizon,
-                                const char *yname)
+static int estimate_and_report(real *x, int npar, int fc_horizon,
+                               const char *yname)
 {
     struct Tvarma varma1;
     real  *dev   = vector(1, npar);
@@ -3276,6 +3348,22 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
     est(shootx, npar, x, dev, cov, maxits, nrits,
         gradtol, steptol, varma1.xitol, a_est,
         &varma1.sigma2, &varma1.logelf, &ifault);
+
+    /* BUG-75: si la verosimilitud no se pudo evaluar ni en el punto de
+       partida, est() vuelve sin iterar y con ifault; no hay modelo que
+       informar. Antes se escribia logL = 0 y una tabla con errores tipicos 0,
+       y se seguia hasta el grafico (segfault). Se sale con rc != 0.      */
+    if (ifault != 0 && opt_iters == 0 && (opt_termcode < 1 || opt_termcode > 5)) {
+        const char *msg =
+"\nError: the likelihood cannot be evaluated at the starting point (ifault = %d):\n"
+"the starting values are not an admissible model. Nothing is estimated.\n";
+        fprintf(outputv, msg, ifault);
+        fprintf(stderr,  msg, ifault);
+        free_vector(dev, 1, npar);
+        free_matrix(cov, 1, npar, 1, npar);
+        free_matrix(a_est, 1, n_stat, 1, n_ser);
+        return 1;
+    }
 
     {
         const char *why, *verdict;
@@ -3657,6 +3745,7 @@ static void estimate_and_report(real *x, int npar, int fc_horizon,
     free_matrix(a_est, 1, n_stat, 1, n_ser);
     free_matrix(cov, 1, npar, 1, npar);
     free_vector(dev, 1, npar);
+    return 0;
 }
 
 /* Parsea "1,0,2" en arr[1..n]. Un solo valor se replica a todas las entradas. */
@@ -4110,7 +4199,16 @@ int main(int argc, char *argv[])
         for (i = 1; i <= n_slot; i++)
             if (slot_kind[i] == SLOT_FREE) x[free_of_slot[i]] = xs[i];
 
-        estimate_and_report(x, n_free, fc_horizon, argv[optind]);
+        if (!start_q_admissible(x, outputv)) {     /* BUG-75 */
+            fflush(stdout);
+            start_q_admissible(x, stderr);
+            fclose(outputv);
+            return 12;
+        }
+        if (estimate_and_report(x, n_free, fc_horizon, argv[optind]) != 0) {
+            fclose(outputv);
+            return 12;
+        }
 
         free_vector(x, 1, n_free);
         free_vector(xs, 1, n_slot);

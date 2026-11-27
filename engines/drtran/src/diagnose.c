@@ -343,7 +343,11 @@ void AnalyzeOneSeries(real *res, int nobs, int idx, int freq) {
  *  (its AR and MA factors), which the Ljung-Box of that residual subtracts
  *  from its degrees of freedom (drvec BUG-42, item 3).  NULL subtracts
  *  nothing.                                                                  */
-void diagnose(struct Tvarma *varma, int freq, const int *npar_ser) {
+/*  begtime/begyear: the date of the first residual (BUG-86).  They were 1/1,
+ *  and the .out dated the residuals "from 1/1 to 11/18" and its minimum "at
+ *  9/7"; drvarma already dated them from the start of the sample.          */
+void diagnose(struct Tvarma *varma, int freq, int begtime, int begyear,
+              const int *npar_ser) {
     int m = varma->m;
     int n = varma->n;
     int i, j, lags;
@@ -364,8 +368,8 @@ void diagnose(struct Tvarma *varma, int freq, const int *npar_ser) {
         s1.data = res1;
         s1.nobs = n;
         s1.freq = freq;              /* la frecuencia real de la serie (4=Q, 12=M) */
-        s1.begtime = 1;
-        s1.begyear = 1;
+        s1.begtime = begtime;        /* la fecha del primer residuo (BUG-86) */
+        s1.begyear = begyear;
         s1.name = "residuals";
 
         fprintf(outputv, "\n--- Residual series a[%d] ---\n", i);

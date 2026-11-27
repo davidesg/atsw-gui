@@ -2162,8 +2162,8 @@ typedef struct {
 } Legado;
 
 /* LA CABECERA DEL .out: «Output (Y) : ruta» y una «Input (Xj) : ruta» por
-   entrada, en el orden en que drtran las recibio (drtran.c, cabecera del
-   .out). Devuelve cuantas rutas, o -1 si no se lee.                    */
+   entrada (o, con una red -n, una «File k : ruta» por fichero), en el orden
+   en que drtran las recibio (drtran.c, cabecera del .out). Devuelve cuantas rutas, o -1 si no se lee.                    */
 static int lee_cabecera( const char *out, char rutas[][PR_RUTA], int max )
 {
     gchar  *c = NULL, **l;
@@ -2178,8 +2178,11 @@ static int lee_cabecera( const char *out, char rutas[][PR_RUTA], int max )
         {
         const char *dos;
 
+        /* Con -n drtran escribe «File k : ruta» en vez de Output/Input
+           (BUG-74): la salida la dice la red, no el orden.              */
         if ( !g_str_has_prefix( l[i], "Output (Y)" ) &&
-             !g_str_has_prefix( l[i], "Input  (X" ) ) continue;
+             !g_str_has_prefix( l[i], "Input  (X" ) &&
+             !g_str_has_prefix( l[i], "File " ) ) continue;
         if ( ( dos = strchr( l[i], ':' ) ) == NULL ) continue;
         if ( n >= max ) { n = max + 1; break; }
         snprintf( rutas[n], PR_RUTA, "%s", dos + 1 );

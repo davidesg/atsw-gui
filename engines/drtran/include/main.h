@@ -201,7 +201,8 @@ void ccf( struct Tseries *ser1, struct Tseries *ser2, int lags, real *corr );
 real ChiTestC( real *corr, int lags, int nobs );
 /* Hosking with k = 0, for the identification; the rest: lib/diagmv/diagmv.h */
 void hosking_test(real **res, int nobs, int m, int s, real *Q, real *pval);
-void diagnose(struct Tvarma *varma, int freq, const int *npar_ser);
+void diagnose(struct Tvarma *varma, int freq, int begtime, int begyear,
+              const int *npar_ser);
 
 void test_last_lag_significance(real *x, real **cov, int npar,
                                 int m, int p, int q,

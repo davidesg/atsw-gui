@@ -3621,8 +3621,38 @@ static int estimate_and_report(real *x, int npar, int fc_horizon,
             fprintf(outputv, "\n");
             {
                 int *np = diag_npar_ser();
-                diagnose(&vdiag, Ts[1].freq, np);
+                int  ry, rs;
+                /* el primer residuo es la observacion 1 + ornsop, como en
+                   write_residuals (BUG-86)                               */
+                ObsToDate(Ts[1].begyear, Ts[1].begtime, 1 + Tm[1].ornsop,
+                          Ts[1].freq, &ry, &rs);
+                diagnose(&vdiag, Ts[1].freq, rs, ry, np);
                 free(np);
+            }
+            /* BUG-87: una media FIJADA (por el .pre, o con -M) se respeta
+               --es una decision del analista--, pero con d + D > 0 es una
+               deriva fijada, y si la media de los residuos de esa serie es
+               significativa, la deriva falta. Se dice; no se cambia nada. */
+            for (i = 1; i <= n_ser; i++) {
+                real *r, mr, se, tr;
+                if (!fix_mu[i] || Tm[i].nrdiff + Tm[i].nadiff <= 0) continue;
+                r = vector(1, n_stat);
+                for (t = 1; t <= n_stat; t++) r[t] = vdiag.a[t][i];
+                mr = Mean(r, n_stat);
+                se = Stdev(r, n_stat) / sqrt((real) n_stat);
+                free_vector(r, 1, n_stat);
+                tr = se > 0.0 ? mr / se : 0.0;
+                if (fabs(tr) > 2.0) {
+                    const char *nm = Ts[i].name ? Ts[i].name : "?";
+                    const char *msg =
+"\nWARNING: series %d (%s): the residual mean is significant (%g, t = %.2f)\n"
+"         with mu FIXED at %g (by the .pre, or -M) and d + D = %d:\n"
+"         the drift may be missing. Free mu in the .pre (or drop -M) and compare.\n";
+                    int dd = Tm[i].nrdiff + Tm[i].nadiff;
+                    fprintf(outputv, msg, i, nm, (double) mr, (double) tr,
+                            (double) mu[i], dd);
+                    printf(msg, i, nm, (double) mr, (double) tr, (double) mu[i], dd);
+                }
             }
             fprintf(outputv, "\n--- Multivariate diagnostics (Hosking + JB) ---\n");
             /* Los residuos, a un fichero, si se pidieron.
@@ -3940,9 +3970,19 @@ int main(int argc, char *argv[])
     printf("See the file COPYING for details.\n");
     printf("Non-final version. May contain errors. Please report.\n\n");
     printf("Model                  : %s\n", model_name);
-    printf("Output (Y)             : %s\n", argv[optind]);
-    for (j = 1; j <= n_inp; j++)
-        printf("Input  (X%d)            : %s\n", j, argv[optind + j]);
+    /* BUG-74: con -n la salida la dice la red, no el orden de los ficheros:
+       rotular el primero «Output (Y)» contradecia la red. Sin -n el primero
+       SI es la salida y la cabecera no cambia.                            */
+    if (net_file != NULL) {
+        for (j = 0; j <= n_inp; j++)
+            printf("File %d                 : %s\n", j + 1, argv[optind + j]);
+        printf("Network                : %s (outputs and inputs as it says)\n",
+               net_file);
+    } else {
+        printf("Output (Y)             : %s\n", argv[optind]);
+        for (j = 1; j <= n_inp; j++)
+            printf("Input  (X%d)            : %s\n", j, argv[optind + j]);
+    }
     printf("Results file           : %s\n", outfile_path);
     if (prewhiten_only)
         printf("Method                 : prewhitening only (no estimation)\n");
@@ -4083,10 +4123,21 @@ int main(int argc, char *argv[])
     fprintf(outputv, "Copyright (C) 1995-2026 A.B. Treadway, J.A. Mauricio & D.E. Guerrero\n");
     fprintf(outputv, "Free software under the GNU GPL v2 or later; NO WARRANTY.\n\n");
     fprintf(outputv, "Model            : %s\n", model_name);
-    fprintf(outputv, "Series           : %d (1 output + %d input(s))\n", n_ser, n_inp);
-    fprintf(outputv, "Output (Y)       : %s\n", argv[optind]);
-    for (j = 1; j <= n_inp; j++)
-        fprintf(outputv, "Input  (X%d)      : %s\n", j, argv[optind + j]);
+    if (net_file != NULL) {        /* BUG-74: la red, no el orden de los ficheros */
+        fprintf(outputv, "Series           : %d (a network of %d link(s), from %s)\n",
+                n_ser, n_link, net_file);
+        for (j = 0; j <= n_inp; j++)
+            fprintf(outputv, "File %d           : %s\n", j + 1, argv[optind + j]);
+        for (j = 1; j <= n_link; j++)
+            fprintf(outputv, "Network          : %s <- %s\n",
+                    Ts[lnk[j].out].name ? Ts[lnk[j].out].name : "?",
+                    Ts[lnk[j].inp].name ? Ts[lnk[j].inp].name : "?");
+    } else {
+        fprintf(outputv, "Series           : %d (1 output + %d input(s))\n", n_ser, n_inp);
+        fprintf(outputv, "Output (Y)       : %s\n", argv[optind]);
+        for (j = 1; j <= n_inp; j++)
+            fprintf(outputv, "Input  (X%d)      : %s\n", j, argv[optind + j]);
+    }
     fprintf(outputv, "Frequency        : %d\n", Ts[1].freq);
     fprintf(outputv, "Start            : %d %d\n", Ts[1].begtime, Ts[1].begyear);
     fprintf(outputv, "Observations     : %d (raw %d)\n\n", n_stat, Ts[1].nobs);

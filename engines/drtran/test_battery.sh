@@ -2394,6 +2394,52 @@ RC75=$?
     && pass "q[2,1] = 0.01, dentro del rango: estima y converge" \
     || fail "q[2,1] = 0.01, dentro del rango: rc = $RC75"
 
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 20. BUG-74 y BUG-86: la cabecera con una red y las fechas de los residuos ──"
+echo "   Con -n la salida la dice la red, no el orden de los ficheros: la cabecera"
+echo "   escribe «File k» y la red, no «Output (Y)» al primero. Y los residuos"
+echo "   del .out van fechados desde el inicio de la muestra, no desde 1/1."
+echo ""
+DAG74="$TMPDIR/b74.dag"; printf 'ES_CPI <- WTI   0 0 1\n' > "$DAG74"
+$DRTRAN "$WORK/WTI_ar1.pre" "$WORK/ES_CPI_m10.pre" -n "$DAG74" -o "$TMPDIR/b74.out" > /dev/null 2>&1
+CAB74=$(sed -n '1,/^Frequency/p' "$TMPDIR/b74.out")
+echo "$CAB74" | grep -q "^Output (Y)" \
+    && fail "con -n la cabecera sigue rotulando un fichero como Output (Y)" \
+    || pass "con -n la cabecera no rotula la salida por el orden de los ficheros"
+echo "$CAB74" | grep -qE "^Network +: ES_CPI <- WTI" && echo "$CAB74" | grep -qE "^File 1 +: .*WTI_ar1.pre" \
+    && pass "con -n la cabecera lista los ficheros y la red (ES_CPI <- WTI)" \
+    || fail "con -n la cabecera no lista los ficheros y la red"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$TMPDIR/b74s.out" > /dev/null 2>&1
+grep -qE "^Output \(Y\) +: .*ES_CPI_m10.pre" "$TMPDIR/b74s.out" \
+    && pass "sin -n la cabecera no cambia (Output (Y) = el primer fichero)" \
+    || fail "sin -n la cabecera ha cambiado"
+R86=$(grep -m1 "observations: from" "$TMPDIR/b74.out")
+case "$R86" in
+    *"from 1/1 "*) fail "los residuos van fechados desde 1/1 ($R86)" ;;
+    *"from 2/2002 to 12/2019"*) pass "los residuos van fechados desde el inicio de la muestra ($R86)" ;;
+    *) fail "fechas de los residuos inesperadas ($R86)" ;;
+esac
+
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 21. BUG-87: mu fijada con d + D > 0 y una media residual significativa ──"
+echo "   Lo fijado en el .pre se respeta, pero con d + D > 0 es una deriva fijada:"
+echo "   si la media de los residuos es significativa, se avisa de que falta."
+echo ""
+# awk, no sed: el sed de BSD (macOS) no acepta '{n;s/.../}' sin ';' final
+awk 'f && / 1$/ {print "0.000000 0"; f=0; next} {f=0} /Mean parameter \(mu\):/ {f=1} {print}' \
+    "$WORK/ES_CPI_m10.pre" > "$TMPDIR/ES_mu0.pre"
+$DRTRAN "$TMPDIR/ES_mu0.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$TMPDIR/b87.out" > /dev/null 2>&1
+grep -q "fixed by .pre" "$TMPDIR/b87.out" \
+    && grep -q "WARNING: series 1 (ES_CPI): the residual mean is significant" "$TMPDIR/b87.out" \
+    && pass "mu fijada a 0 con d = 1 y media residual significativa: avisa" \
+    || fail "mu fijada a 0 con d = 1 y media residual significativa: no avisa"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$TMPDIR/b87l.out" > /dev/null 2>&1
+grep -q "the residual mean is significant" "$TMPDIR/b87l.out" \
+    && fail "con mu libre avisa de la media residual" \
+    || pass "con mu libre no avisa"
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

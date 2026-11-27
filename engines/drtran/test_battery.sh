@@ -2365,6 +2365,35 @@ $DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -0 -l nope -o "$TMPDIR/shea_b
 [ $? -ne 0 ] && pass "-l with an unknown value is an error" \
              || fail "-l with an unknown value is accepted"
 
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 19. BUG-75: un q[i,j] fijado que deja Q no definida positiva ──"
+echo "   Q va relativa a la serie 1 (Q[1,1] = 1, Q[2,2] = var2/var1). Con el WTI"
+echo "   primero Q[2,2] ~ 1e-3 y |q[2,1]| > ~0.03 es imposible. Antes: logL = 0,"
+echo "   una tabla con errores tipicos 0 y segfault. Ahora: se rechaza antes de"
+echo "   estimar, con el rango admisible, rc = 12 y sin tabla."
+echo ""
+CQ75="$TMPDIR/b75.cns"; printf 'q[2,1] = 1\n' > "$CQ75"
+$DRTRAN "$WORK/WTI_ar1.pre" "$WORK/ES_CPI_m10.pre" -b 0 -r 0 -s 1 -c "$CQ75" \
+    -o "$TMPDIR/b75.out" > /dev/null 2> "$TMPDIR/b75.err"
+RC75=$?
+[ $RC75 -eq 12 ] && pass "q[2,1] = 1 imposible: rc = 12" \
+                 || fail "q[2,1] = 1 imposible: rc = $RC75 (se esperaba 12)"
+grep -q "not positive definite" "$TMPDIR/b75.err" && grep -q "RELATIVE TO SERIES 1" "$TMPDIR/b75.err" \
+    && grep -q "<- outside" "$TMPDIR/b75.err" \
+    && pass "el mensaje dice el rango admisible y que q va relativa a la serie 1" \
+    || fail "el mensaje no explica el rechazo"
+{ grep -q "Estimated Parameters" "$TMPDIR/b75.out" || grep -q "Log-likelihood" "$TMPDIR/b75.out"; } \
+    && fail "el .out sigue escribiendo una tabla o una logL" \
+    || pass "el .out no escribe ni tabla ni logL"
+printf 'q[2,1] = 0.01\n' > "$CQ75"
+$DRTRAN "$WORK/WTI_ar1.pre" "$WORK/ES_CPI_m10.pre" -b 0 -r 0 -s 1 -c "$CQ75" \
+    -o "$TMPDIR/b75ok.out" > /dev/null 2>&1
+RC75=$?
+[ $RC75 -eq 0 ] && grep -q "CONVERGENCE OBTAINED" "$TMPDIR/b75ok.out" \
+    && pass "q[2,1] = 0.01, dentro del rango: estima y converge" \
+    || fail "q[2,1] = 0.01, dentro del rango: rc = $RC75"
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

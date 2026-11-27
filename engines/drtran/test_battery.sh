@@ -2421,6 +2421,23 @@ case "$R86" in
     *) fail "fechas de los residuos inesperadas ($R86)" ;;
 esac
 
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 21. BUG-87: mu fijada con d + D > 0 y una media residual significativa ──"
+echo "   Lo fijado en el .pre se respeta, pero con d + D > 0 es una deriva fijada:"
+echo "   si la media de los residuos es significativa, se avisa de que falta."
+echo ""
+sed -E '/\*\* Mean parameter \(mu\):/{n;s/^[^ ]+ 1$/0.000000 0/}' "$WORK/ES_CPI_m10.pre" > "$TMPDIR/ES_mu0.pre"
+$DRTRAN "$TMPDIR/ES_mu0.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$TMPDIR/b87.out" > /dev/null 2>&1
+grep -q "fixed by .pre" "$TMPDIR/b87.out" \
+    && grep -q "WARNING: series 1 (ES_CPI): the residual mean is significant" "$TMPDIR/b87.out" \
+    && pass "mu fijada a 0 con d = 1 y media residual significativa: avisa" \
+    || fail "mu fijada a 0 con d = 1 y media residual significativa: no avisa"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$TMPDIR/b87l.out" > /dev/null 2>&1
+grep -q "the residual mean is significant" "$TMPDIR/b87l.out" \
+    && fail "con mu libre avisa de la media residual" \
+    || pass "con mu libre no avisa"
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

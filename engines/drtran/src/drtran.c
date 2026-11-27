@@ -3629,6 +3629,31 @@ static int estimate_and_report(real *x, int npar, int fc_horizon,
                 diagnose(&vdiag, Ts[1].freq, rs, ry, np);
                 free(np);
             }
+            /* BUG-87: una media FIJADA (por el .pre, o con -M) se respeta
+               --es una decision del analista--, pero con d + D > 0 es una
+               deriva fijada, y si la media de los residuos de esa serie es
+               significativa, la deriva falta. Se dice; no se cambia nada. */
+            for (i = 1; i <= n_ser; i++) {
+                real *r, mr, se, tr;
+                if (!fix_mu[i] || Tm[i].nrdiff + Tm[i].nadiff <= 0) continue;
+                r = vector(1, n_stat);
+                for (t = 1; t <= n_stat; t++) r[t] = vdiag.a[t][i];
+                mr = Mean(r, n_stat);
+                se = Stdev(r, n_stat) / sqrt((real) n_stat);
+                free_vector(r, 1, n_stat);
+                tr = se > 0.0 ? mr / se : 0.0;
+                if (fabs(tr) > 2.0) {
+                    const char *nm = Ts[i].name ? Ts[i].name : "?";
+                    const char *msg =
+"\nWARNING: series %d (%s): the residual mean is significant (%g, t = %.2f)\n"
+"         with mu FIXED at %g (by the .pre, or -M) and d + D = %d:\n"
+"         the drift may be missing. Free mu in the .pre (or drop -M) and compare.\n";
+                    int dd = Tm[i].nrdiff + Tm[i].nadiff;
+                    fprintf(outputv, msg, i, nm, (double) mr, (double) tr,
+                            (double) mu[i], dd);
+                    printf(msg, i, nm, (double) mr, (double) tr, (double) mu[i], dd);
+                }
+            }
             fprintf(outputv, "\n--- Multivariate diagnostics (Hosking + JB) ---\n");
             /* Los residuos, a un fichero, si se pidieron.
              *

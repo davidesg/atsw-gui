@@ -2427,7 +2427,9 @@ echo "── 21. BUG-87: mu fijada con d + D > 0 y una media residual significat
 echo "   Lo fijado en el .pre se respeta, pero con d + D > 0 es una deriva fijada:"
 echo "   si la media de los residuos es significativa, se avisa de que falta."
 echo ""
-sed -E '/\*\* Mean parameter \(mu\):/{n;s/^[^ ]+ 1$/0.000000 0/}' "$WORK/ES_CPI_m10.pre" > "$TMPDIR/ES_mu0.pre"
+# awk, no sed: el sed de BSD (macOS) no acepta '{n;s/.../}' sin ';' final
+awk 'f && / 1$/ {print "0.000000 0"; f=0; next} {f=0} /Mean parameter \(mu\):/ {f=1} {print}' \
+    "$WORK/ES_CPI_m10.pre" > "$TMPDIR/ES_mu0.pre"
 $DRTRAN "$TMPDIR/ES_mu0.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$TMPDIR/b87.out" > /dev/null 2>&1
 grep -q "fixed by .pre" "$TMPDIR/b87.out" \
     && grep -q "WARNING: series 1 (ES_CPI): the residual mean is significant" "$TMPDIR/b87.out" \

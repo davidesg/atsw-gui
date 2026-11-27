@@ -2394,6 +2394,33 @@ RC75=$?
     && pass "q[2,1] = 0.01, dentro del rango: estima y converge" \
     || fail "q[2,1] = 0.01, dentro del rango: rc = $RC75"
 
+# ─────────────────────────────────────────────────────────────────────────
+echo ""
+echo "── 20. BUG-74 y BUG-86: la cabecera con una red y las fechas de los residuos ──"
+echo "   Con -n la salida la dice la red, no el orden de los ficheros: la cabecera"
+echo "   escribe «File k» y la red, no «Output (Y)» al primero. Y los residuos"
+echo "   del .out van fechados desde el inicio de la muestra, no desde 1/1."
+echo ""
+DAG74="$TMPDIR/b74.dag"; printf 'ES_CPI <- WTI   0 0 1\n' > "$DAG74"
+$DRTRAN "$WORK/WTI_ar1.pre" "$WORK/ES_CPI_m10.pre" -n "$DAG74" -o "$TMPDIR/b74.out" > /dev/null 2>&1
+CAB74=$(sed -n '1,/^Frequency/p' "$TMPDIR/b74.out")
+echo "$CAB74" | grep -q "^Output (Y)" \
+    && fail "con -n la cabecera sigue rotulando un fichero como Output (Y)" \
+    || pass "con -n la cabecera no rotula la salida por el orden de los ficheros"
+echo "$CAB74" | grep -qE "^Network +: ES_CPI <- WTI" && echo "$CAB74" | grep -qE "^File 1 +: .*WTI_ar1.pre" \
+    && pass "con -n la cabecera lista los ficheros y la red (ES_CPI <- WTI)" \
+    || fail "con -n la cabecera no lista los ficheros y la red"
+$DRTRAN "$WORK/ES_CPI_m10.pre" "$WORK/WTI_ar1.pre" -b 0 -r 0 -s 1 -o "$TMPDIR/b74s.out" > /dev/null 2>&1
+grep -qE "^Output \(Y\) +: .*ES_CPI_m10.pre" "$TMPDIR/b74s.out" \
+    && pass "sin -n la cabecera no cambia (Output (Y) = el primer fichero)" \
+    || fail "sin -n la cabecera ha cambiado"
+R86=$(grep -m1 "observations: from" "$TMPDIR/b74.out")
+case "$R86" in
+    *"from 1/1 "*) fail "los residuos van fechados desde 1/1 ($R86)" ;;
+    *"from 2/2002 to 12/2019"*) pass "los residuos van fechados desde el inicio de la muestra ($R86)" ;;
+    *) fail "fechas de los residuos inesperadas ($R86)" ;;
+esac
+
 echo "============================================"
 echo -e "  RESULTADO: ${GREEN}$PASS PASS${NC}, ${RED}$FAIL FAIL${NC}"
 echo "============================================"

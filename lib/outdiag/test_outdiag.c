@@ -133,11 +133,17 @@ int main( int argc, char **argv )
     * leyendo el veredicto sino inventandolo.                            */
    ok( od_no_adecuados( &d ) == 2,
        "DOS enlaces no son adecuados -- y se ven como tales" );
-   ok( d.e[0].adecuado == 1, "  el 1 (EI) si lo es, p = 0.9896" );
+   /* Los grados de libertad de la transferencia cuentan solo los pesos
+    * LIBRES (BUG-73 de drtran-python): en el .cns del m6 los enlaces 1, 3 y
+    * 4 llevan un peso atado a los otros, que no es un grado de libertad. El
+    * 3 paso de Q(13) a Q(14) y su p de 0.0128 a 0.0198; el 2 no lleva
+    * ninguno y no cambia.                                                */
+   ok( d.e[0].adecuado == 1, "  el 1 (EI) si lo es, p = 0.9943" );
    ok( d.e[1].adecuado == 0, "  el 2 (EC) NO, p = 0.0253" );
-   ok( d.e[2].adecuado == 0, "  el 3 (EU) NO, p = 0.0128" );
+   ok( d.e[2].adecuado == 0, "  el 3 (EU) NO, p = 0.0198" );
    okf( d.e[1].transfer.p, 0.0253, 1e-4, "  la p del 2" );
-   okf( d.e[2].transfer.p, 0.0128, 1e-4, "  la p del 3" );
+   okf( d.e[2].transfer.p, 0.0198, 1e-4, "  la p del 3" );
+   ok( d.e[2].transfer.df == 14, "  con 14 gl: el peso atado ya no se descuenta" );
 
    /* Y la exogeneidad va por separado: los cuatro la pasan. Son dos
     * diagnosticos opuestos y se arreglan de forma opuesta.              */

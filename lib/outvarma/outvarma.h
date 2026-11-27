@@ -76,8 +76,12 @@ typedef struct {
    int           hay;
    OvPuertaSerie s[OV_MAX_SER];
    int           ns;
-   double        suma, conjunta, diferencia;
+   double        suma, conjunta, diferencia;   /* NAN si no se evaluo  */
    int           pasa;
+   int           no_evaluada;  /* el sistema diagonal no se pudo evaluar en
+                                  los optimos univariantes (drvarma BUG-0009) */
+   char          pared[256];   /* entonces, los MA propios en la pared de
+                                  invertibilidad: "y2 (1.0000), ..."        */
 } OvPuerta;
 
 typedef enum {

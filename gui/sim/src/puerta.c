@@ -250,6 +250,18 @@ void puerta_refresca( Sim *m )
                            "PUERTA SUPERADA: el sistema diagonal reproduce los univariantes "
                            "(suma %.6f, conjunta %.6f, diferencia %.2g).",
                            g->suma, g->conjunta, g->diferencia );
+        else if (g->no_evaluada && g->pared[0])
+            sim_veredicto( P->ver_puerta, SIM_ROJO,
+                           "LA PUERTA FALLA: el sistema diagonal no se pudo evaluar en los "
+                           "óptimos univariantes, y un factor MA propio está en la pared de "
+                           "invertibilidad: %s. Revisa ese modelo en fue: una raíz MA en el "
+                           "círculo unidad suele ser una diferencia de más o un factor común.",
+                           g->pared );
+        else if (g->no_evaluada)
+            sim_veredicto( P->ver_puerta, SIM_ROJO,
+                           "LA PUERTA FALLA: el sistema diagonal no se pudo evaluar en los "
+                           "óptimos univariantes, y nada de lo que se construya encima se "
+                           "puede creer. Revisa los modelos de fue." );
         else
             sim_veredicto( P->ver_puerta, SIM_ROJO,
                            "LA PUERTA FALLA (diferencia %.3g): el cast conjunto no reproduce "

@@ -9,6 +9,23 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Fixed — the gate says when the diagonal system could not be evaluated (BUG-0009)
+
+- The gate printed "joint diagonal 0.000000" and a difference the size of
+  the sum when the joint likelihood failed, and blamed the cast. It now says
+  "not evaluated" with the reason and, when an own MA factor of a univariate
+  optimum sits on the invertibility wall, names it: that is the model to
+  reconsider. Only the report changes.
+
+### Fixed — `-deseason` in the right phase from any starting subperiod (BUG-0008)
+
+- The seasonal dummies were estimated in the phase of the first observation
+  and subtracted in the phase of the calendar, so a series that did not start
+  at subperiod 1 had its pattern removed shifted by `start_sub - 1` periods:
+  the adjustment added seasonal variance, silently. They are now rotated into
+  calendar phase, as the Python port already did. Series starting at
+  subperiod 1 do not change.
+
 ### Added — the own MA factors, each read alone
 
 - The ladder does not take the invertible form of a coefficient: the

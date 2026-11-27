@@ -2480,8 +2480,9 @@ static real own_ma_modulus(const real *c, int q)
 }
 
 /* Cuantos factores MA propios quedan fuera (modulo >= 1 - MA_WALL_TOL); con
-   f != NULL, el bloque del .out; con aviso, una linea en pantalla.          */
-static int own_ma_outside(FILE *f, int aviso)
+   f != NULL, el bloque del .out; con aviso, una linea en pantalla; con
+   out != NULL, la lista ("serie (modulo), ...") copiada ahi (BUG-0009).   */
+static int own_ma_outside(FILE *f, int aviso, char *out, size_t nout)
 {
     int  a, k, j, n = 0, q;
     real c[OWN_MA_MAXQ + 1], md;
@@ -2541,6 +2542,7 @@ static int own_ma_outside(FILE *f, int aviso)
                    "  not to be read or reported as one.\n");
     if (n > 0 && aviso)
         printf("WARNING: own MA factor(s) not invertible read alone: %s\n", lista);
+    if (out && nout > 0) snprintf(out, nout, "%s", lista);
     return n;
 }
 
@@ -3541,6 +3543,14 @@ int escalera_main(int argc, char *argv[])
     {
         int pass = (D.ifault == 0) &&
                    fabs(logL_gate - sum_uni) <= GATE_TOL * (1.0 + fabs(sum_uni));
+        /* BUG-0009: when the joint diagonal cannot be evaluated (D.ifault) the
+           gate said "joint diagonal 0.000000" and a difference of the size of
+           the SUM, and blamed the cast. Say that it failed, and why when the
+           likely cause is in sight: an own MA factor of a univariate optimum
+           on the invertibility wall, which elf accepts for one series and can
+           refuse in the system. Only the report changes.                    */
+        char wall[1024] = "";
+        int n_wall = D.ifault ? own_ma_outside(NULL, 0, wall, sizeof wall) : 0;
         for (i = 0; i < 2; i++) {
             FILE *f = i ? outputv : stdout;
             int k;
@@ -3556,9 +3566,24 @@ int escalera_main(int argc, char *argv[])
                         move[k] <= PRE_MOVE ? "" : n_trim[k] > 0 ? "  <- trimmed sample"
                                                                  : "  <- not an optimum");
             fprintf(f, "  %-14s %16.6f\n", "SUM", sum_uni);
-            fprintf(f, "  %-14s %16.6f\n", "joint diagonal", logL_gate);
-            fprintf(f, "  %-14s %16.3g\n", "difference", logL_gate - sum_uni);
+            if (D.ifault)
+                fprintf(f, "  %-14s %16s  (%s, code %d)\n", "joint diagonal",
+                        "not evaluated", fault_msg(D.ifault), D.ifault);
+            if (D.ifault && n_wall > 0)          /* lib/outvarma reads it */
+                fprintf(f, "  %-14s %s\n", "MA on the wall", wall);
+            if (!D.ifault) {
+                fprintf(f, "  %-14s %16.6f\n", "joint diagonal", logL_gate);
+                fprintf(f, "  %-14s %16.3g\n", "difference", logL_gate - sum_uni);
+            }
             fprintf(f, "  GATE: %s\n", pass ? "PASSED" : "FAILED");
+            if (n_wall > 0)
+                fprintf(f, "  Note: the diagonal system could not be evaluated at the univariate\n"
+                           "        optima, and an own MA factor sits on the invertibility wall\n"
+                           "        (inverse root modulus >= 1 - %.0e): %s.\n"
+                           "        Alone it passes; in the system the likelihood refused the point.\n"
+                           "        An MA root on the unit circle is a univariate model to\n"
+                           "        reconsider (over-differencing, a common factor).\n",
+                        MA_WALL_TOL, wall);
             for (k = 1; k <= n_ser; k++)
                 if (move[k] > PRE_MOVE && n_trim[k] > 0)
                 {
@@ -3586,10 +3611,20 @@ int escalera_main(int argc, char *argv[])
                 }
             fprintf(f, "\n");
         }
-        if (!pass) {
+        if (!pass && n_wall > 0)
+            printf("ERROR: the diagonal gate failed: the diagonal system could not be evaluated\n"
+                   "       at the univariate optima (%s), and an own MA factor is on the\n"
+                   "       invertibility wall: %s. Reconsider that univariate model.\n",
+                   fault_msg(D.ifault), wall);
+        else if (!pass && D.ifault)
+            printf("ERROR: the diagonal gate failed: the diagonal system could not be\n"
+                   "       evaluated at the univariate optima (%s). Nothing on top of it\n"
+                   "       can be trusted.\n", fault_msg(D.ifault));
+        else if (!pass)
             printf("ERROR: the diagonal gate failed (difference %.3g). The joint cast does\n"
                    "       not reproduce the univariate models; nothing on top of it can be\n"
                    "       trusted.\n", logL_gate - sum_uni);
+        if (!pass) {
             fit_free(&D);
             fclose(outputv);
             return 5;
@@ -3716,7 +3751,7 @@ int escalera_main(int argc, char *argv[])
             printf("LR against the %s: %.4f (df %d, p = %.4f)\n",
                    opt_route_v ? "model without cross terms" : "univariates", lr, ncross, pv);
         }
-        own_ma_outside(outputv, 1);
+        own_ma_outside(outputv, 1, NULL, 0);
         print_sigma(outputv, &F);
         print_matrices(&F.vm);
         print_roots(&F.vm);

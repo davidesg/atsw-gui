@@ -80,26 +80,27 @@ void deseasonalize_raw(real **raw, int nobs, int m, int s, int start_sub,
                     do_des ? " (adjusted)" : " (kept as is)");
 
         if (ok && do_des) {
-            /* ------------------------------------------------------------------
-             * BUG (CRITICAL, NOT fixed here) — wrong phase when start_sub != 1.
-             * `harmonic_regression_differenced_basis` above takes no start_sub:
-             * its design matrix is built from t = i + d + 1, so `level` below is
-             * indexed by OFFSET FROM THE START of the series. It is then applied
-             * in ABSOLUTE subperiod phase, `(i + start_sub - 1) % s`. The two
-             * agree only when start_sub == 1; otherwise the pattern is subtracted
-             * shifted by start_sub-1 months and the adjustment ADDS seasonal
-             * variance instead of removing it. Entirely silent.
-             * See BUGS.md for root cause, reproduction and the one-loop rotation
-             * that fixes it. Already fixed in the Python port (deseason.py).
-             * ------------------------------------------------------------------ */
-            /* Level seasonal dummies via the A0 transform (sum-to-zero). */
-            double *level = transform_harmonics_to_dummies_general(coeffs, NULL, s);
+            /* Level seasonal dummies via the A0 transform (sum-to-zero).
+             * BUG-0008: `harmonic_regression_differenced_basis` takes no
+             * start_sub; its design is built from t = i + d + 1, so `level_rel`
+             * is indexed by OFFSET FROM THE START of the series. Rotate it into
+             * absolute-subperiod indexing, the phase every user of `dummies`
+             * reads it in (the subtraction below, the tail past -estwin and the
+             * re-seasonalized forecasts in drvarma.c). Otherwise, for start_sub
+             * != 1, the pattern is subtracted shifted by start_sub - 1 periods
+             * and the adjustment ADDS seasonal variance. With start_sub == 1 the
+             * rotation is the identity. The port does the same (deseason.py). */
+            double *level_rel = transform_harmonics_to_dummies_general(coeffs, NULL, s);
+            double *level = (double *) malloc((size_t) s * sizeof(double));
+            for (int p = 0; p < s; p++)
+                level[(p + start_sub - 1) % s] = level_rel[p];
             for (int p = 0; p < s; p++) dummies[j][p] = level[p];
             for (int i = 0; i < nobs; i++) {
                 int period = (i + start_sub - 1) % s;
                 raw[i + 1][j] -= level[period];
             }
             free(level);
+            free(level_rel);
         }
 
         if (hac) gsl_matrix_free(hac);

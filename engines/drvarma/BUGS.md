@@ -1,6 +1,6 @@
 # Known bugs — drvarma (C)
 
-## BUG (CRITICAL) — seasonal adjustment uses the wrong phase when the series does not start at subperiod 1
+## BUG-0008 (CRITICAL) — seasonal adjustment uses the wrong phase when the series does not start at subperiod 1 (ARREGLADO)
 
 **Found:** 2026-07-28, while building the multiart MCP over the Python port and
 running the WTI → CPI pass-through exercise.
@@ -9,6 +9,8 @@ running the WTI → CPI pass-through exercise.
 **Caller affected:** `src/drvarma.c:356` — i.e. the main executable, not only the GUI.
 **Same defect in the Python port:** `drvarma/src/drvarma/deseason.py`
 (fixed there; see `drvarma/TODO.md` and `drvarma/tests/test_regression_bugs.py`).
+**Fixed:** 2026-11-28, with the rotation below, as in the port (drvarma-python
+BUG-0001, which recorded that the C still had it). Numbered BUG-0008 then.
 
 ### Symptom
 
@@ -101,6 +103,19 @@ the 12 subperiods in turn, and assert that the recovered dummies match the true
 pattern every time. The existing tests only ever exercise `start_sub = 1`, which is
 exactly the case that works. See
 `drvarma/tests/test_regression_bugs.py::test_deseason_recovers_known_pattern_at_any_start_sub`.
+
+### Validation (2026-11-28)
+
+`bugs/BUG-0008-repro/repro.py`: IPC_ES (log, d = 1, AR(1) with mean,
+2002-2019) with `-deseason force -forecast 12`, once from January (216
+observations) and once without the first one, from February (215). The
+monthly rate of the re-seasonalized forecast levels, 1/2020 to 12/2020:
+before the fix the February profile is the January one shifted by a month
+(largest gap 61 % of its range); after it they agree to 0.001 points. Exits 1
+while open, 0 when fixed.
+
+The battery's `-deseason` cases all start in January, where the rotation is
+the identity: their references do not move.
 
 ---
 
@@ -724,3 +739,54 @@ mueve en la rehomologación.
 `bugs/BUG-0007-repro/repro.py` (con `NIVEL100.inp`). Sale con 1 mientras la
 escalera quede por debajo del `.inp`, con 0 cuando coincidan y con 2 si el
 caso no vale. Con el arreglo sale con 0: −3620.221054 por los dos caminos.
+
+---
+
+## BUG-0009 — si el sistema diagonal no se puede evaluar, la puerta da «joint diagonal 0.000000» y culpa al cast; no dice que hay un MA propio en la pared (ARREGLADO)
+
+**Encontrado:** 2026-10-11 en el porte (drvarma-python BUG-0020, el estudio
+de los ajustes de la forma echelon); en el C, 2026-11-28, con el mismo caso.
+**Dónde:** `src/escalera.c`, la puerta ([3]).
+
+### Síntoma
+
+El sistema (2,2,1) del estudio echelon, réplica 45, con las
+especificaciones de la ruta V. El óptimo univariante de y2 acaba con un MA(2)
+de raíz inversa 0,99995: dentro de la tolerancia de `chekma`, así que pasa, y
+`elf` lo acepta solo. El sistema diagonal de las tres series, evaluado en
+esos óptimos, falla en `elf` (ifault 3, la Cholesky de `mtmp0`). La puerta
+decía:
+
+```
+  joint diagonal         0.000000
+  difference             1.26e+03
+  GATE: FAILED
+ERROR: the diagonal gate failed (difference 1.26e+03). The joint cast does
+       not reproduce the univariate models; ...
+```
+
+Un 0 que no es una verosimilitud y una diferencia del tamaño de la suma; y la
+causa a la vista, el MA de y2 en la pared, sin nombrar. El porte decía lo
+mismo con `nan`.
+
+### Arreglo (2026-11-28)
+
+Solo el informe, en los dos motores. Con `D.ifault` la puerta escribe
+«joint diagonal  not evaluated (motivo, código)» en vez del 0 y de la
+diferencia. Si además algún factor MA propio de los óptimos univariantes está
+en la pared (`own_ma_outside`, módulo ≥ 1 − `MA_WALL_TOL`), una nota y el
+ERROR lo nombran: «an own MA factor is on the invertibility wall: y2
+(1.0000). Reconsider that univariate model», y el bloque de la puerta
+lleva la línea «MA on the wall  y2 (1.0000)». `lib/outvarma` la lee
+(`no_evaluada`, `pared`; conjunta y diferencia quedan en NAN, no en 0), SIM
+la dice en su veredicto en vez de «LA PUERTA FALLA (diferencia 0)», y
+`atsw-cli` la lleva en su JSON. La causa numérica (por qué la
+Cholesky conjunta falla donde la de una serie no) no se toca: es `elf`, un
+motor probado, y un MA en la pared ya es un modelo que revisar.
+
+### Reproducción
+
+`bugs/BUG-0009-repro/repro.py` (con `y1.inp`, `y2.inp`, `y3.inp`). Sale con 1
+mientras la puerta no diga que el diagonal no se evaluó ni nombre el MA de y2,
+con 0 cuando lo dice. `lib/outvarma/run_test.sh` corre el mismo caso
+(`noeval.out`) y comprueba lo que lee.

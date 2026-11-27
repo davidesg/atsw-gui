@@ -17,7 +17,7 @@ Del `.out` se leen:
 | | qué |
 |---|---|
 | la cabecera | p, q, los enlaces, Σ completa o diagonal, si los deterministas y los ARMA univariantes van fijos o se reestiman, la ventana común, y la tabla de modelos univariantes con su `.pre` |
-| **la puerta** | por serie, la logL, σ² y cuánto se movió del `.pre`, con la razón: la muestra recortada por la ventana común, o «no es un óptimo» (un `.inp`); la suma, la conjunta, la diferencia y si pasa |
+| **la puerta** | por serie, la logL, σ² y cuánto se movió del `.pre`, con la razón: la muestra recortada por la ventana común, o «no es un óptimo» (un `.inp`); la suma, la conjunta, la diferencia y si pasa; si el sistema diagonal no se pudo evaluar, `no_evaluada` y los MA propios en la pared (`pared`), con conjunta y diferencia en NAN (drvarma BUG-0009) |
 | el optimizador | convergió, se paró, o **se paró en la pared MA** (no es un óptimo aunque salgan números); o la estimación falló |
 | los parámetros | nombre, estimación, error típico, t y p, tal cual |
 | la LR | el sistema contra el diagonal (los univariantes) |
@@ -43,6 +43,7 @@ formateado, que es frágil por naturaleza. La defensa es la de `outdiag`:
 - el mismo con `-estwin`, con su `.recursive`;
 - un VARMA(1,1) con un solo enlace, que se para en la pared MA;
 - la puerta con un `.pre` retocado, que ya no es un óptimo.
+- la puerta que no puede evaluar el sistema diagonal (drvarma BUG-0009: el MA de y2 en la pared).
 
 Lo corre la batería de drvarma (`engines/drvarma/tests/run_tests.sh`): si el
 formato cambia, se sabe el mismo día. Lo que se exige son sobre todo hechos

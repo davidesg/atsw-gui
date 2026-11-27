@@ -844,6 +844,8 @@ void prewhiten_and_identify(int j, FILE *outputv)
 /*   - CCF significativa en k <  0  ->  RETROALIMENTACION: X no es exogena y   */
 /*                                      el modelo de una entrada no es valido  */
 /* -------------------------------------------------------------------------- */
+static int link_npar_free(int j);
+
 static void transfer_adequacy(real **a, int n, int j, FILE *out,
                               real *p_transfer, real *p_exog)
 {
@@ -906,8 +908,13 @@ static void transfer_adequacy(real **a, int n, int j, FILE *out,
     for (k = 1; k <= nlags; k++) if (fabs(cneg[k + 1]) > threshold) nsig_neg++;
 
     /* Portmanteau sobre los retardos k >= 0 (incluye el contemporaneo).
-       Grados de libertad: nº de correlaciones menos los parametros de nu(B). */
-    npar_tr = (s >= 0 ? s + 1 : 0) + r;
+       Grados de libertad: nº de correlaciones menos los parametros LIBRES de
+       nu(B). Un peso fijado, compartido o atado por el .cns no se estima y no
+       es un grado de libertad (BUG-73 de drtran-python): contar la forma
+       nominal (s + 1) + r hacia la adecuacion mas liberal cuanto mas se poda
+       el numerador. */
+    npar_tr = link_npar_free(j);
+    if (npar_tr < 0) npar_tr = (s >= 0 ? s + 1 : 0) + r;
     Q  = ChiTestC(cpos, nlags + 1, n);
     df = (nlags + 1) - npar_tr;
     if (df < 1) df = 1;
@@ -2787,6 +2794,25 @@ static int *diag_npar_ser(void)
             n[s]++;
     }
     return n;
+}
+
+/* link_npar_free — los parametros LIBRES de la transferencia del enlace j:
+ * las ranuras omega<j>[k] y delta<j>[k] que el optimizador estima (BUG-73).
+ * -1 si la tabla de slots aun no existe (el que llama cae a la forma nominal). */
+static int link_npar_free(int j)
+{
+    char po[24], pd[24];
+    int  i, k = 0;
+
+    if (n_slot <= 0) return -1;
+    snprintf(po, sizeof po, "omega%d[", j);
+    snprintf(pd, sizeof pd, "delta%d[", j);
+    for (i = 1; i <= n_slot; i++) {
+        if (slot_kind[i] != SLOT_FREE) continue;
+        if (strncmp(slot_name[i], po, strlen(po)) == 0 ||
+            strncmp(slot_name[i], pd, strlen(pd)) == 0) k++;
+    }
+    return k;
 }
 
 static void warn_contemp_collinear(FILE *out)

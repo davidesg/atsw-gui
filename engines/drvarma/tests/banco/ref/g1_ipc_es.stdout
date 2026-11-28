@@ -14,12 +14,12 @@ Starting harmonic regression (differenced basis): n=215, s=12, d=1, harmonics=11
 Attempting HAC computation with 3 lags
 === CÁLCULO HAC SIMPLIFICADO Y ESTABLE ===
 n=215, p=12, max_lags=3
-Norma de matriz S: 2.375201e+00
-Norma de matriz HAC: 1.101320e-04
+Norma de matriz S: 2.726016e-04
+Norma de matriz HAC: 1.343674e-08
 ✅ CÁLCULO HAC COMPLETADO
 
-✅ Harmonic regression (differenced basis) completed: F=64.5799 (p=0.0000), R²=0.7777
-  Series 1: F=64.580, p=0.0000, R2=0.778 -> SEASONAL (adjusted)
+✅ Harmonic regression (differenced basis) completed: F=68.4030 (p=0.0000), R²=0.7875
+  Series 1: F=68.403, p=0.0000, R2=0.788 -> SEASONAL (adjusted)
 Frequency        : 12
 Start            : 1 2002
 Box-Cox lambda   : 0
@@ -30,24 +30,24 @@ Series: 1, Observations: 215 (raw 216)
 Number of parameters: 5
 
 --- Initial x (before two-step) ---
-  x[1] = 0.154016
-  x[2] = 0.420915
-  x[3] = -0.0953164
-  x[4] = 0.0487612
+  x[1] = 0.154759
+  x[2] = 0.435588
+  x[3] = -0.109519
+  x[4] = 0.0924373
   x[5] = 1
 --- fin Initial x (before two-step) ---
 
 --- Final x (before estimation) ---
-  x[1] = 0.154016
-  x[2] = 0.420915
-  x[3] = -0.0953164
-  x[4] = 0.0487612
+  x[1] = 0.154759
+  x[2] = 0.435588
+  x[3] = -0.109519
+  x[4] = 0.0924373
   x[5] = 1
 --- fin Final x (before estimation) ---
-   0  F: 1.0000000000   step: 0.178315
-   1  F: 0.9999992341   step: 0.226112
-   2  F: 0.9999985911   step: 0.441690
-   3  F: 0.9999983396   step: 0.481382
-   4  F: 0.9999983268   step: 1.000000
-   5 F: 0.9999983268
+   0  F: 1.0000000000   step: 0.394008
+   1  F: 0.9999961189   step: 0.223796
+   2  F: 0.9999958623   step: 0.139370
+   3  F: 0.9999957907   step: 1.000000
+   4  F: 0.9999957692   step: 1.000000
+   5 F: 0.9999957660
 Forecasts written to IPC_ES.forecast

@@ -281,11 +281,25 @@ int main(int argc, char *argv[])
         trans_lambda = in.lambda;  trans_d = in.d;  trans_D = in.D;
         real **raw = in.raw;
 
-        /* Optional harmonic seasonal adjustment on the RAW levels (-deseason).
-           Same tested algorithm as the GUI; estimated on first differences,
-           level dummies subtracted from the levels.  Dummies are kept in
-           seasonal_dummies for later re-seasonalization of the forecasts. */
+        /* Optional harmonic seasonal adjustment (-deseason).  BUG-0003: the
+           order is Box-Cox -> d=1 -> deseasonalization, as art and the port:
+           the pattern is estimated on the differences of the Box-Cox series
+           (the log for lambda=0, where a multiplicative pattern is additive)
+           and subtracted on that scale, then the series goes back to levels
+           so the rest of the pipeline is unchanged.  Dummies are kept in
+           seasonal_dummies, on the Box-Cox scale WITHOUT the rescale factor,
+           for the re-seasonalization of the forecasts (on that scale too). */
         if (do_deseason) {
+            for (int t = 1; t <= nobs_raw; t++)
+                for (j = 1; j <= nser; j++) {
+                    if (trans_lambda != 1.0 && raw[t][j] <= 0.0) {
+                        printf("ERROR: %s: non-positive value incompatible with Box-Cox "
+                               "lambda=%g (use lambda=1 for untransformed data)\n",
+                               inputf, trans_lambda);
+                        exit(1);
+                    }
+                    raw[t][j] = boxcox_fwd(raw[t][j], trans_lambda);
+                }
             seasonal_dummies = (real **) malloc((nser + 1) * sizeof(real *));
             for (j = 1; j <= nser; j++)
                 seasonal_dummies[j] = (real *) malloc(data_freq * sizeof(real));
@@ -304,6 +318,9 @@ int main(int argc, char *argv[])
                     int period = (t + data_start_sub - 2) % data_freq;
                     raw[t][j] -= seasonal_dummies[j][period];
                 }
+            for (int t = 1; t <= nobs_raw; t++)
+                for (j = 1; j <= nser; j++)
+                    raw[t][j] = boxcox_inv(raw[t][j], trans_lambda);
         }
 
         /* Apply Box-Cox + regular/seasonal differencing -> stationary datamat */
@@ -575,11 +592,13 @@ int main(int argc, char *argv[])
             }
             real sd_y = sqrt(v_lvl[l][i][i]);                 /* sd on scale*BC */
             cf[i][l] = trans_scale * boxcox_fwd(level_fc[i][l], trans_lambda);
-            level_raw[i][l] = level_fc[i][l] + dseas;
-            low_raw[i][l]  = boxcox_inv((cf[i][l] - 1.96 * sd_y) / trans_scale,
-                                        trans_lambda) + dseas;
-            high_raw[i][l] = boxcox_inv((cf[i][l] + 1.96 * sd_y) / trans_scale,
-                                        trans_lambda) + dseas;
+            /* BUG-0003: the dummy goes back on the Box-Cox scale */
+            level_raw[i][l] = boxcox_inv(boxcox_fwd(level_fc[i][l], trans_lambda)
+                                         + dseas, trans_lambda);
+            low_raw[i][l]  = boxcox_inv((cf[i][l] - 1.96 * sd_y) / trans_scale
+                                        + dseas, trans_lambda);
+            high_raw[i][l] = boxcox_inv((cf[i][l] + 1.96 * sd_y) / trans_scale
+                                        + dseas, trans_lambda);
         }
 
     // Escribir resultados en un archivo .forecast
@@ -687,7 +706,11 @@ int main(int argc, char *argv[])
                             dseas = seasonal_dummies[kk][period];
                         }
                         fprintf(frec, "%d/%d %s %d %.6f\n",
-                                osub, oper, series_names[kk], l, lvle[kk][l] + dseas);
+                                osub, oper, series_names[kk], l,
+                                (do_deseason && seasonal_dummies)
+                                ? boxcox_inv(boxcox_fwd(lvle[kk][l], trans_lambda)
+                                             + dseas, trans_lambda)
+                                : lvle[kk][l]);
                     }
             }
             free_matrix(lvle, 1, nser, 1, H);

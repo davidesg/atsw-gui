@@ -71,7 +71,7 @@ the regular AR and MA orders. Results are written to `file.out` (and
 | `-lik elf\|shea\|both` | the likelihood: Mauricio's AS 311 (default), Shea's AS 242, or elf checked against Shea |
 | `-hessian fd\|bfgs` | standard errors from fdhess at the optimum (default) or from the BFGS Hessian |
 | `-twostep` | two-step (Hannan–Rissanen) initialization (only with q>0) |
-| `-deseason [auto\|force]` | harmonic seasonal adjustment of the raw series (auto = only significant series; default mode auto) |
+| `-deseason [auto\|force]` | harmonic seasonal adjustment on the Box-Cox scale: Box-Cox, then d=1, then the harmonics (auto = only significant series; default mode auto) |
 | `-scale factor` | rescale the series after Box-Cox (**default 100**); improves the conditioning of the convergence criteria; forecasts are inverted back to original units. On this path the Box-Cox is (y^λ − 1)/λ also with λ = 1 (y − 1); the ladder uses fue's, refactor·y |
 | `-forecast N` | forecast N periods ahead → `file.forecast` |
 | `-estwin N` | estimate parameters on the first N raw observations, then write `file.recursive` with **fixed-parameter** forecasts from every origin to the end of the data (use with `-forecast`); enables out-of-sample comparison across origins without re-estimating |

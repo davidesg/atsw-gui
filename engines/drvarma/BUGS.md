@@ -790,3 +790,51 @@ motor probado, y un MA en la pared ya es un modelo que revisar.
 mientras la puerta no diga que el diagonal no se evaluó ni nombre el MA de y2,
 con 0 cuando lo dice. `lib/outvarma/run_test.sh` corre el mismo caso
 (`noeval.out`) y comprueba lo que lee.
+
+## BUG-0010 — `-deseason` estima y resta el patrón estacional en NIVELES, antes del log de Box-Cox (ARREGLADO)
+
+**Encontrado:** 2026-07-28 en el porte (drvarma-python BUG-0003, el ejercicio
+del pass-through del petróleo); arreglado allí el 2026-10-04 con la decisión
+del analista (el log primero, como art). En el C, 2026-11-28.
+**Dónde:** `src/drvarma.c` ([2], la lectura; la previsión y la previsión
+recursiva), `src/deseason.c`.
+
+### Síntoma
+
+El orden era d=1 → desestacionalización → log: los armónicos se estimaban
+sobre la diferencia de los niveles en bruto, las dummies se restaban de los
+niveles y se sumaban como cantidades fijas a la previsión en niveles. Un
+patrón multiplicativo solo es aditivo en logaritmos: en niveles su amplitud
+crece con la serie y una dummy por mes no puede seguirla. Además, con las
+dummies en niveles, la tasa anual de la previsión reestacionalizada no queda
+libre de ellas; en logs se cancelan exactamente.
+
+`bugs/BUG-0010-repro/repro.py`: una serie sintética con un patrón
+multiplicativo conocido (±3 %) sobre una tendencia del 1 % mensual (de 97 a
+852). Las tasas mensuales de la previsión reestacionalizada deben ser los
+cambios del patrón. Con el orden viejo el mayor error era el 37 % de su
+amplitud; con el nuevo, el 3 %.
+
+### Arreglo (2026-11-28)
+
+Box-Cox → d=1 → desestacionalización, como art y el porte. `drvarma.c`
+pasa la serie a la escala de Box-Cox (sin el factor de escala; rechaza un
+valor no positivo con λ ≠ 1 con el mismo error que la transformación), llama
+a `deseasonalize_raw` (que trabaja en la escala que se le dé), resta las
+dummies de la cola de `-estwin` en esa escala y devuelve la serie a niveles,
+así que el resto no cambia. La previsión, sus bandas y la previsión
+recursiva suman la dummy en la escala de Box-Cox y deshacen la
+transformación. Con λ = 1 la escala es x − 1 y no cambia nada.
+
+**Validación.** El repro sale con 0. En el banco cambian sus 11 casos con
+`-deseason` y ninguno más; la referencia se regenera a propósito. El porte
+con el motor compilado da, en los casos de muestra completa, la misma
+log-verosimilitud, las mismas estimaciones y las mismas iteraciones, y la
+misma previsión línea a línea. Los errores estándar fdhess difieren hasta un
+2,5 % en algún caso: es el redondeo de la regresión armónica (GSL frente a
+numpy, ~1e-15), que en ese caso mueve el fdhess lo mismo que una
+perturbación de los datos de 1e-13 (medido en el porte).
+
+**Queda aparte:** la decisión `auto` (qué serie se ajusta). El C usa la F de
+MCO; el porte, la F HAC de art (art BUG-0206). En los casos del banco
+deciden igual. Llevar la HAC al C es otro cambio.

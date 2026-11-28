@@ -39,5 +39,10 @@ corre rec    $M $K 2 0 -forecast 4 -estwin 48
 corre pared  $M $K 1 1 -diagcov -links "MUSKRAT<-MINK"
 corre noopt  MUSKX.inp $K 0 0 -diagcov
 corre boot   $M $K 2 0 -irfboot 30
+# drvarma BUG-0009: la puerta no puede evaluar el diagonal; sale con 5.
+cp "$LIB/../engines/drvarma/bugs/BUG-0009-repro/"y[123].inp "$W/"
+"$BIN" y1.inp y2.inp y3.inp 0 0 -o noeval > noeval.log 2>&1
+rc=$?
+[ $rc -eq 5 ] || { echo "FALLA: drvarma (BUG-0009) -o noeval salio con $rc, no con 5"; tail -5 noeval.log; exit 1; }
 
 "$W/test_outvarma" "$W"

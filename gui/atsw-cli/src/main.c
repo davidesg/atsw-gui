@@ -2336,7 +2336,9 @@ static int caso_puerta( const char *path, const char *caso )
         js_par( t, "caso", caso ); g_string_append( t, ", " );
         g_string_append_printf( t, "\"pasa\": %s, \"nobs\": %d, ", o->puerta.pasa ? "true" : "false", o->nobs );
         js_num( t, "suma", o->puerta.suma ); g_string_append( t, ", " );
-        js_num( t, "conjunta", o->puerta.conjunta ); g_string_append( t, ", \"series\": [" );
+        js_num( t, "conjunta", o->puerta.conjunta ); g_string_append( t, ", " );
+        g_string_append_printf( t, "\"no_evaluada\": %s, ", o->puerta.no_evaluada ? "true" : "false" );
+        js_par( t, "pared", o->puerta.pared ); g_string_append( t, ", \"series\": [" );
         for ( i = 0; i < o->puerta.ns; i++ )
             {
             const OvPuertaSerie *x = &o->puerta.s[i];

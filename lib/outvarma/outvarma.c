@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "outvarma.h"
 
@@ -127,7 +128,15 @@ static const char *lee_puerta( const char *p, VarmaOut *v )
       p = q;
       if ( empieza( s, "GATE:" ) ) { g->pasa = strstr( s, "PASSED" ) != NULL; break; }
       if ( empieza( s, "SUM " ) )            { sscanf( s + 3, "%lf", &g->suma ); continue; }
-      if ( empieza( s, "joint diagonal" ) )  { sscanf( s + 14, "%lf", &g->conjunta ); continue; }
+      if ( empieza( s, "joint diagonal" ) ) {
+         if ( strstr( s, "not evaluated" ) ) {          /* drvarma BUG-0009 */
+            g->no_evaluada = 1;
+            g->conjunta = g->diferencia = NAN;
+         } else
+            sscanf( s + 14, "%lf", &g->conjunta );
+         continue;
+      }
+      if ( empieza( s, "MA on the wall" ) ) { copia( g->pared, sizeof g->pared, sb( s + 14 ) ); continue; }
       if ( empieza( s, "difference" ) )      { sscanf( s + 10, "%lf", &g->diferencia ); continue; }
       if ( empieza( s, "series " ) ) continue;
       if ( sscanf( s, "%63s %lf %lf %lf", nom, &a, &b, &c ) == 4 && g->ns < OV_MAX_SER ) {

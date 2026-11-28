@@ -10,6 +10,8 @@
  *   rec.out        2 0 -forecast 4 -estwin 48 (+ rec.recursive)
  *   pared.out      1 1 -diagcov -links "MUSKRAT<-MINK" para en la pared MA
  *   noopt.out      0 0 -diagcov con un .pre retocado:  «no es un optimo»
+ *   noeval.out     0 0, el caso de drvarma BUG-0009: el diagonal no se
+ *                  puede evaluar y el MA de y2 esta en la pared
  *
  * Lo que se exige son sobre todo HECHOS DE FORMA (cuantos parametros, que
  * series, que la puerta pasa, que las bandas rodean al nivel, que el .out y
@@ -258,6 +260,20 @@ static void noopt( const char *dir )
    ok( v.puerta.pasa, "la puerta pasa igual: el cast es el mismo" );
 }
 
+/* drvarma BUG-0009: la puerta falla porque el sistema diagonal no se pudo
+   evaluar; ni conjunta ni diferencia son numeros, y la pared se lee.     */
+static void noeval( const char *dir )
+{
+   printf( "noeval.out\n" );
+   ok( ov_parse_file( en( dir, "noeval.out" ), &v ) == 0, "es un .out de la escalera" );
+   ok( v.puerta.hay && v.puerta.ns == 3, "la puerta, con sus tres series" );
+   ok( !v.puerta.pasa, "la puerta falla" );
+   ok( v.puerta.no_evaluada, "el sistema diagonal no se evaluo" );
+   ok( isnan( v.puerta.conjunta ) && isnan( v.puerta.diferencia ),
+       "ni la conjunta ni la diferencia son numeros" );
+   ok( strncmp( v.puerta.pared, "y2 (", 4 ) == 0, "el MA de y2, en la pared" );
+}
+
 /* -irfboot: el .irfboot, leido por los nombres de las series; la banda del
    95 % abraza la respuesta estimada casi siempre (con 30 replicas se pide
    en la mayoria de las celdas, no en todas).                            */
@@ -296,6 +312,7 @@ int main( int argc, char **argv )
    rec( argv[1] );
    pared( argv[1] );
    noopt( argv[1] );
+   noeval( argv[1] );
    boot( argv[1] );
    printf( "outvarma: %d fallos\n", fallos );
    return fallos ? 1 : 0;

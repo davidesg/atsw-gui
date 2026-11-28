@@ -35,7 +35,7 @@ The codebase is C (C99), 1-based indexing throughout, with `real` = `double`
 | `src/diagnose.c` | Residual diagnostics (summary, ACF/PACF; the multivariate tests are `lib/diagmv`'s), Wald hypothesis tests, impulse responses and FEVD. **`gui/sim` compiles this file and `nlatools.c`**: a change here changes sim_gui. |
 | `src/forecast.c` | `forecast_model()` (point forecasts + error variances, supports an origin offset `b`), `forecast_level_variances()`. |
 | `src/transform.c` | `transform_series()` (Box-Cox + differencing → stationary matrix) and `integrate_forecast()` (invert differencing + Box-Cox), for the `.inp` path: (y^λ − 1)/λ also at λ = 1. The ladder uses fue's transform (`lib/prewhiten`), refactor·y at λ = 1. |
-| `src/deseason.c` | `deseasonalize_raw()` — harmonic seasonal adjustment on the differenced basis; returns level dummies for re-seasonalising forecasts. |
+| `src/deseason.c` | `deseasonalize_raw()` — harmonic seasonal adjustment on the differenced basis, on whatever scale it is given (drvarma.c gives it the Box-Cox series); returns the dummies on that scale for re-seasonalising forecasts. |
 | `src/volatility.c` | Conditional volatility (exponential / moving window). |
 | `include/main.h` | Core types (`real`, `struct Tvarma`, `struct Tseries`) and most prototypes. |
 | `gui/seasonal_detection.c` | The harmonic seasonal detection of `-deseason auto`, compiled into the engine. The GTK front-end was retired (2026-11-06); the window is `gui/sim`. |
@@ -61,7 +61,7 @@ used by the diagnostics/plot routines.
 1. **Parse CLI** → global flags (`global_p/q`, `global_diag_*`, `global_include_mean`,
    `trans_lambda/scale/d/D`, `do_deseason`, `forecast_horizon`, `g_estwin`, …).
 2. **Read `.inp`** (raw levels).
-3. **`deseasonalize_raw()`** (optional) → seasonal dummies subtracted from levels.
+3. **`deseasonalize_raw()`** (optional) → on the Box-Cox series (BUG-0010: Box-Cox → d=1 → deseasonalization), the dummies subtracted there and the series taken back to levels.
 4. **`transform_series()`** → `datamat` (the stationary `w`), plus `bc_series`
    (Box-Cox levels, kept to integrate forecasts back).
 5. **`calc_nparametrs()`**, **`init_varma()`** (OLS-based starting values;

@@ -16,7 +16,9 @@
 /*  (preprocess_series_levels / get_seasonal_dummies in drvarma_gui.c):   */
 /*    - estimate the seasonal harmonics on the first differences (d=1),   */
 /*    - recover the LEVEL seasonal dummies via the A0 transform,          */
-/*    - subtract them from the level series.                              */
+/*    - subtract them from the series.                                    */
+/*  It works on whatever scale it is given: drvarma.c hands it the        */
+/*  Box-Cox series (BUG-0003: Box-Cox -> d=1 -> deseasonalization).       */
 /*  Reuses the tested routines declared in seasonal_detection.h.          */
 /***************************************************************************/
 

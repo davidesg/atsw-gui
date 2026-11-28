@@ -9,6 +9,20 @@ Versions up to 0.4 were maintained as directory snapshots (`drvarma_v.01` …
 
 ## [5.0.0] — unreleased
 
+### Changed — `-deseason` works on the Box-Cox scale (BUG-0010)
+
+- The seasonal pattern was estimated on the differences of the raw levels,
+  subtracted in levels and added back to the level forecasts, and only then
+  came the Box-Cox log. A multiplicative pattern on a trending series is
+  additive only in logs, so the adjustment was at the wrong scale. The order
+  is now Box-Cox → d=1 → deseasonalization, as art and the Python port
+  (its BUG-0003): the dummies are estimated and subtracted on the Box-Cox
+  scale (without the rescale factor) and the forecasts, their bands and the
+  recursive forecasts are re-seasonalized there. With λ = 1 nothing changes;
+  with λ = 0 every `-deseason` number moves. `tests/banco/ref` regenerated
+  for its 11 `-deseason` cases, deliberately; the other cases are unchanged
+  byte for byte.
+
 ### Fixed — the gate says when the diagonal system could not be evaluated (BUG-0009)
 
 - The gate printed "joint diagonal 0.000000" and a difference the size of
